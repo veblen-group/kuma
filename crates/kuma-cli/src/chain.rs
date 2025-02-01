@@ -1,0 +1,35 @@
+use std::str::FromStr;
+
+use alloy_chains::{self, NamedChain};
+use color_eyre::eyre::{self, Context, eyre};
+use serde::{Deserialize, Serialize};
+use tycho_common::models as tycho_models;
+
+// TODO: impl Eq with just the name for simplicity?
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub(crate) struct Chain {
+    pub(crate) name: tycho_models::Chain,
+    pub(crate) metadata: alloy_chains::Chain,
+    pub(crate) rpc_url: String,
+    pub(crate) tycho_url: String,
+}
+
+impl Chain {
+    pub fn new(name: &str, rpc_url: &str, tycho_url: &str) -> eyre::Result<Self> {
+        let name = tycho_models::Chain::from_str(name)
+            .wrap_err("failed to parse chain name into tycho::models::Chain")?;
+        let metadata = match name {
+            tycho_models::Chain::Ethereum => alloy_chains::Chain::from(NamedChain::Mainnet),
+            tycho_models::Chain::Base => alloy_chains::Chain::from(NamedChain::Base),
+            tycho_models::Chain::Unichain => alloy_chains::Chain::from(NamedChain::Unichain),
+            _ => return Err(eyre!("unsupported chain {}", name)),
+        };
+
+        Ok(Self {
+            name,
+            metadata,
+            rpc_url: rpc_url.to_string(),
+            tycho_url: tycho_url.to_string(),
+        })
+    }
+}
