@@ -1,0 +1,28 @@
+[package]
+name = "kumad"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy = { workspace = true }
+alloy-primitives = { workspace = true }
+binance = { workspace = true }
+color-eyre = { workspace = true }
+figment = { workspace = true, features = ["env"] }
+futures = { workspace = true }
+humantime = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+taplo = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-stream = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = [
+    "env-filter",
+    "once_cell",
+    "tracing",
+] }
+uniswap-sdk-core = { workspace = true }
+uniswap-v3-sdk = { workspace = true, features = ["extensions"] }
