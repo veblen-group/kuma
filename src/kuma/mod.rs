@@ -5,25 +5,43 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
-use crate::config::Config;
+use crate::{binance_collector, config::Config};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
+    binance: binance_collector::Handle,
 }
 
 impl Kuma {
     pub(super) fn new(_cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
+        let binance = binance_collector::Builder {
+            shutdown_token: shutdown_token.clone(),
+            markets: vec!["btcusdt@bookTicker".to_string()],
+        }
+        .build();
+
         // TODO: initialize components here
-        Ok(Self { shutdown_token })
+        Ok(Self {
+            shutdown_token,
+            binance,
+        })
     }
 
     pub(super) async fn run(self) -> eyre::Result<()> {
+        let timer = tokio::time::sleep(Duration::from_secs(3));
+        tokio::pin!(timer);
+
         let reason: eyre::Result<&str> = {
             loop {
                 select! {
                     biased;
 
                     () = self.shutdown_token.cancelled() => break Ok("received shutdown signal"),
+
+                    _ = &mut timer => {
+                        info!("timer tick");
+                        self.shutdown_token.cancel();
+                    }
 
                     // TODO: add components here
                 }
@@ -50,5 +68,6 @@ impl Kuma {
         };
 
         // TODO: handle running subtasks here
+        let _ = self.binance.shutdown().await;
     }
 }

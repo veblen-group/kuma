@@ -9,7 +9,7 @@ use config::Config;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-mod binance;
+mod binance_collector;
 pub mod config;
 mod kuma;
 pub mod telemetry;
