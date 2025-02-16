@@ -13,6 +13,7 @@ mod binance_collector;
 pub mod config;
 mod kuma;
 pub mod telemetry;
+mod uniswap_collector;
 
 /// The [`Kuma`] service returned by [`Kuma::spawn`].
 pub struct Kuma {

@@ -5,11 +5,12 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
-use crate::{binance_collector, config::Config};
+use crate::{binance_collector, config::Config, uniswap_collector};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
     binance: binance_collector::Handle,
+    uniswap: uniswap_collector::Handle,
 }
 
 impl Kuma {
@@ -20,9 +21,14 @@ impl Kuma {
         }
         .build();
 
+        let uniswap = uniswap_collector::Builder {
+            shutdown_token: shutdown_token.clone(),
+        }
+        .build();
         // TODO: initialize components here
         Ok(Self {
             shutdown_token,
+            uniswap,
             binance,
         })
     }
@@ -39,8 +45,8 @@ impl Kuma {
                     () = self.shutdown_token.cancelled() => break Ok("received shutdown signal"),
 
                     _ = &mut timer => {
-                        info!("timer tick");
-                        self.shutdown_token.cancel();
+                        // info!("timer tick");
+                        // self.shutdown_token.cancel();
                     }
 
                     // TODO: add components here
@@ -69,5 +75,6 @@ impl Kuma {
 
         // TODO: handle running subtasks here
         let _ = self.binance.shutdown().await;
+        let _ = self.uniswap.shutdown().await;
     }
 }

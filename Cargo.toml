@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+alloy = "0.11.1"
+alloy-primitives = "0.8.21"
 binance = "0.21.0"
 color-eyre = "0.6.3"
 figment = { version = "0.10.19", features = ["env"] }
@@ -11,6 +13,7 @@ futures = "0.3.31"
 humantime = "2.1.0"
 serde = { version = "1.0.217", features = ["derive"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "signal"] }
+tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = [
@@ -18,3 +21,5 @@ tracing-subscriber = { version = "0.3.19", features = [
     "once_cell",
     "tracing",
 ] }
+uniswap-sdk-core = "3.6.0"
+uniswap-v3-sdk = {version = "3.6.1", features = ["extensions"]}
