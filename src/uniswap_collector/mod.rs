@@ -20,16 +20,16 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 use uniswap_sdk_core::{prelude::*, token};
-use uniswap_v3_sdk::prelude::sdk_core::prelude::{CurrencyAmount, U256, WETH9};
+use uniswap_v3_sdk::prelude::sdk_core::prelude::{U256, WETH9};
 use uniswap_v3_sdk::prelude::*;
 
 const MAINNET_RPC_WS: &str = "https://ethereum-rpc.publicnode.com";
 const POLL_INTERVAL: Duration = Duration::from_secs(5); // Fetch price every 5s
 
-struct PoolFuture {
-    future: Pin<
+struct PoolFut {
+    inner: Pin<
         Box<
             dyn Future<
                     Output = Result<
@@ -41,32 +41,28 @@ struct PoolFuture {
     >,
 }
 
-impl PoolFuture {
+impl PoolFut {
     fn new<T: Provider + 'static>(client: T, wbtc: Address, weth: Address) -> Self {
-        let future = async move {
-            Pool::<EphemeralTickMapDataProvider>::from_pool_key_with_tick_data_provider(
-                1,
-                FACTORY_ADDRESS,
-                wbtc,
-                weth,
-                FeeAmount::LOW,
-                client,
-                None,
-            )
-            .await
-        };
+        let future = Pool::<EphemeralTickMapDataProvider>::from_pool_key_with_tick_data_provider(
+            1,
+            FACTORY_ADDRESS,
+            wbtc,
+            weth,
+            FeeAmount::LOW,
+            client,
+            None,
+        );
         Self {
-            future: Box::pin(future),
+            inner: Box::pin(future),
         }
     }
 }
 
-impl Future for PoolFuture {
+impl Future for PoolFut {
     type Output = Result<Pool<EphemeralTickMapDataProvider>, uniswap_v3_sdk::error::Error>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.future) };
-        inner.poll(cx)
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.inner.poll_unpin(cx)
     }
 }
 
@@ -128,7 +124,7 @@ impl Worker {
         let mut timer = interval(POLL_INTERVAL);
         let mut pool_task: Fuse<
             JoinHandle<Result<Pool<EphemeralTickMapDataProvider>, uniswap_v3_sdk::error::Error>>,
-        > = tokio::task::spawn(PoolFuture::new(client.clone(), wbtc, weth)).fuse();
+        > = tokio::task::spawn(PoolFut::new(client.clone(), wbtc, weth)).fuse();
 
         loop {
             tokio::select! {
@@ -136,10 +132,10 @@ impl Worker {
                     info!("Uniswap worker shutting down");
                     break;
                 }
-                _ = timer.tick() => {
+                _ = timer.tick(), if pool_task.is_terminated() => {
                     info!("timer ticked");
                     // restart the pool task
-                    pool_task = tokio::task::spawn(PoolFuture::new(
+                    pool_task = tokio::task::spawn(PoolFut::new(
                         client.clone(),
                         wbtc,
                         weth,
