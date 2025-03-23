@@ -1,14 +1,18 @@
 use alloy::{
-    providers::{fillers::FillProvider, Provider, ProviderBuilder},
+    providers::{Provider, ProviderBuilder},
     transports::http::reqwest::Url,
 };
-use color_eyre::eyre::{self, Context as _};
+
 use futures::{
-    future::{Fuse, FusedFuture as _},
-    FutureExt,
+    future::{Fuse, FusedFuture as _, FutureExt as _},
+    Future,
 };
-use futures::{Stream, StreamExt};
-use std::{str::FromStr, sync::Arc};
+use std::{
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+    task::{Context, Poll},
+};
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -23,6 +27,48 @@ use uniswap_v3_sdk::prelude::*;
 
 const MAINNET_RPC_WS: &str = "https://ethereum-rpc.publicnode.com";
 const POLL_INTERVAL: Duration = Duration::from_secs(5); // Fetch price every 5s
+
+struct PoolFuture {
+    future: Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Pool<EphemeralTickMapDataProvider>,
+                        uniswap_v3_sdk::error::Error,
+                    >,
+                > + Send,
+        >,
+    >,
+}
+
+impl PoolFuture {
+    fn new<T: Provider + 'static>(client: T, wbtc: Address, weth: Address) -> Self {
+        let future = async move {
+            Pool::<EphemeralTickMapDataProvider>::from_pool_key_with_tick_data_provider(
+                1,
+                FACTORY_ADDRESS,
+                wbtc,
+                weth,
+                FeeAmount::LOW,
+                client,
+                None,
+            )
+            .await
+        };
+        Self {
+            future: Box::pin(future),
+        }
+    }
+}
+
+impl Future for PoolFuture {
+    type Output = Result<Pool<EphemeralTickMapDataProvider>, uniswap_v3_sdk::error::Error>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let inner = unsafe { self.map_unchecked_mut(|s| &mut s.future) };
+        inner.poll(cx)
+    }
+}
 
 pub(super) struct Builder {
     pub(super) shutdown_token: CancellationToken,
@@ -77,71 +123,48 @@ impl Worker {
         let provider = ProviderBuilder::new().on_http(Url::from_str(MAINNET_RPC_WS).unwrap());
         let client = Arc::new(provider);
 
-        let wbtc = token!(1, "2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", 8, "WBTC");
-        let weth = WETH9::on_chain(1).unwrap();
-
-        let mut interval = interval(POLL_INTERVAL);
+        let wbtc = token!(1, "2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", 8, "WBTC").address();
+        let weth = WETH9::on_chain(1).unwrap().address();
+        let mut timer = interval(POLL_INTERVAL);
         let mut pool_task: Fuse<
             JoinHandle<Result<Pool<EphemeralTickMapDataProvider>, uniswap_v3_sdk::error::Error>>,
-        > = Fuse::terminated();
+        > = tokio::task::spawn(PoolFuture::new(client.clone(), wbtc, weth)).fuse();
 
         loop {
             tokio::select! {
-                biased;
                 _ = self.shutdown_token.cancelled() => {
-                    debug!("Shutting down Uniswap worker...");
+                    info!("Uniswap worker shutting down");
                     break;
                 }
-                res = &mut pool_task, if !pool_task.is_terminated() => {
-                    match res {
-                        Ok(Ok(pool)) => {
-                            if let Err(e) = self.fetch_price(&wbtc, &weth, pool).await {
-                                error!(%e, "Failed to fetch price");
+                _ = timer.tick() => {
+                    info!("timer ticked");
+                    // restart the pool task
+                    pool_task = tokio::task::spawn(PoolFuture::new(
+                        client.clone(),
+                        wbtc,
+                        weth,
+                    )).fuse();
+                }
+                // Only poll if the future has not terminated
+                join_result = &mut pool_task, if !pool_task.is_terminated() => {
+                    match join_result {
+                        Ok(pool) => {
+                            match pool {
+                                Ok(pool) => {
+                                    let price = pool.token0_price().to_significant(5, None);
+                                    info!("Price: {:?}", price);
+                                },
+                                Err(e) => {
+                                    info!("Pool failed: {:?}", e);
+                                }
                             }
                         }
-                        Ok(Err(e)) => error!(%e, "Failed to get Uniswap V3 pool"),
-                        Err(e) => error!(%e, "Task join error"),
-                    }
-                }
-                _ = interval.tick(), if pool_task.is_terminated() => {
-                    pool_task = tokio::spawn({
-                        let client = client.clone();
-                        let wbtc = wbtc.clone();
-                        let weth = weth.clone();
-                        async move {
-                            Pool::<EphemeralTickMapDataProvider>::from_pool_key_with_tick_data_provider(
-                                1,
-                                FACTORY_ADDRESS,
-                                wbtc.address(),
-                                weth.address(),
-                                FeeAmount::LOW,
-                                client.clone(),
-                                None
-                            ).await
+                        Err(e) => {
+                            info!("Task failed: {:?}", e);
                         }
-                    }).fuse();
+                    }
                 }
             }
         }
-    }
-
-    async fn fetch_price(
-        &self,
-        wbtc: &Token,
-        weth: &Token,
-        pool: Pool<EphemeralTickMapDataProvider>,
-    ) -> eyre::Result<()> {
-        let amount_in = CurrencyAmount::from_raw_amount(wbtc.clone(), 100_000_000)?;
-
-        if let Ok(local_amount_out) = pool.get_output_amount(&amount_in, None) {
-            let local_amount_out = local_amount_out.quotient();
-            info!("New Uniswap V3 price: {:?}", local_amount_out);
-
-            self.sender
-                .send(U256::from_big_int(local_amount_out))
-                .await?;
-        }
-
-        Ok(())
     }
 }
