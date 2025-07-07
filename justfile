@@ -13,7 +13,6 @@ run:
 
 default_lang := 'all'
 
-
 # Format
 #########
 [doc("
@@ -26,26 +25,14 @@ _fmt-all:
   @just _fmt-rust
   @just _fmt-toml
 
-@_lint-all:
-  -just _lint-rust
-  -just _lint-toml
-  -just _lint-md
-
 [no-exit-message]
 _fmt-rust:
-  cargo +nightly-2024-10-03 fmt --all
-
-[no-exit-message]
-_lint-rust:
   just _lint-rust-fmt
   just _lint-rust-clippy
-  just _lint-rust-clippy-custom
-  just _lint-rust-clippy-tools
-  just _lint-rust-dylint
 
 [no-exit-message]
 _lint-rust-fmt:
-  cargo +nightly-2024-10-03 fmt --all -- --check
+  cargo +nightly fmt --all -- --check
 
 [no-exit-message]
 _lint-rust-clippy:
@@ -56,30 +43,5 @@ _lint-rust-clippy:
           --deny warnings
 
 [no-exit-message]
-_lint-rust-clippy-custom:
-  cargo +nightly-2024-10-03 clippy --all-targets --all-features \
-          -p tracing_debug_field \
-          -- --warn clippy::pedantic --deny warnings
-
-[no-exit-message]
-_lint-rust-clippy-tools:
-  cargo clippy --manifest-path tools/protobuf-compiler/Cargo.toml \
-          --all-targets --all-features \
-          -- --warn clippy::pedantic --deny warnings
-
-[no-exit-message]
-_lint-rust-dylint:
-  cargo dylint --all --workspace
-
-[no-exit-message]
 _fmt-toml:
-  taplo format
-
-[no-exit-message]
-_lint-toml:
   taplo format --check
-
-[no-exit-message]
-_lint-md:
-  markdownlint-cli2
-

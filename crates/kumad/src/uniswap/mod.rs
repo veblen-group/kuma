@@ -100,6 +100,11 @@ impl Handle {
             error!(%e, "Uniswap worker task failed");
         }
     }
+
+    pub fn get_curr_price(&self) -> f64 {
+        // TODO: use watch for curr_price from worker task
+        0.0
+    }
 }
 
 pub(super) struct Worker {
@@ -126,6 +131,9 @@ impl Worker {
             JoinHandle<Result<Pool<EphemeralTickMapDataProvider>, uniswap_v3_sdk::error::Error>>,
         > = tokio::task::spawn(PoolFut::new(client.clone(), wbtc, weth)).fuse();
 
+        // TODO: use watch channel?
+        let mut curr_price = None;
+
         loop {
             tokio::select! {
                 _ = self.shutdown_token.cancelled() => {
@@ -149,6 +157,7 @@ impl Worker {
                                 Ok(pool) => {
                                     let price = pool.token0_price().to_significant(5, None);
                                     info!("Price: {:?}", price);
+                                    curr_price = Some(price);
                                 },
                                 Err(e) => {
                                     info!("Pool failed: {:?}", e);

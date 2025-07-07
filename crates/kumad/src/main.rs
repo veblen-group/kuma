@@ -1,14 +1,14 @@
 use std::process::ExitCode;
 
 use color_eyre::eyre::{self, eyre};
-use kuma::{
+use kumad::{
+    Kuma,
     config::{self, Config},
     telemetry::{self, init_subscriber},
-    Kuma,
 };
 use tokio::{
     select,
-    signal::unix::{signal, SignalKind},
+    signal::unix::{SignalKind, signal},
 };
 use tracing::{error, info, instrument, warn};
 

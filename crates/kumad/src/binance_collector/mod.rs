@@ -58,6 +58,10 @@ impl Handle {
 
         Ok(())
     }
+
+    pub fn get_curr_price(&self) -> f64 {
+        0.0
+    }
 }
 
 pub(super) struct Worker {
@@ -77,6 +81,7 @@ impl Worker {
                         // TODO: add handlers for specific events
                         WebsocketEvent::BookTicker(raw) => {
                             debug!(?raw, "raw bookticker event");
+                            // TODO: clean up into domain object
                             let bt = book_ticker::BookTicker::from_binance_websocket_event(raw);
                             debug!(?bt, "bookticker");
                         }

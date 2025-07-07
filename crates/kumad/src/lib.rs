@@ -9,11 +9,12 @@ use config::Config;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-mod binance_collector;
+mod binance;
 pub mod config;
 mod kuma;
+mod signals;
 pub mod telemetry;
-mod uniswap_collector;
+mod uniswap;
 
 /// The [`Kuma`] service returned by [`Kuma::spawn`].
 pub struct Kuma {

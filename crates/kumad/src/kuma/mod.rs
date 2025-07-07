@@ -5,23 +5,24 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
-use crate::{binance_collector, config::Config, uniswap_collector};
+use crate::{binance, config::Config, uniswap};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
-    binance: binance_collector::Handle,
-    uniswap: uniswap_collector::Handle,
+    binance: binance::Handle,
+    uniswap: uniswap::Handle,
 }
 
 impl Kuma {
     pub(super) fn new(_cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
-        let binance = binance_collector::Builder {
+        let binance = binance::Builder {
             shutdown_token: shutdown_token.clone(),
             markets: vec!["btcusdt@bookTicker".to_string()],
+            rpc_url: String::from("TODO"),
         }
         .build();
 
-        let uniswap = uniswap_collector::Builder {
+        let uniswap = uniswap::Builder {
             shutdown_token: shutdown_token.clone(),
         }
         .build();
