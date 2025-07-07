@@ -22,7 +22,6 @@ pub(crate) struct Builder {
     pub(crate) api_key: String,
     pub(crate) add_tvl_threshold: f64,
     pub(crate) remove_tvl_threshold: f64,
-    pub(crate) no_tls: bool,
     pub(crate) chain_info: ChainInfo,
     pub(crate) tokens: HashMap<Bytes, Token>,
 }
@@ -52,7 +51,7 @@ impl Builder {
             .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)
             .exchange::<UniswapV3State>("pancakeswap_v3", tvl_filter.clone(), None);
 
-        let protocol_stream = protocol_stream
+        let protocol_stream_builder = protocol_stream
             .auth_key(Some(api_key))
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
@@ -62,17 +61,11 @@ impl Builder {
         // let handle = Handle::new();
         let worker_handle = tokio::task::spawn(async {
             // TODO: should  i move this into the worker?
-            let protocol_stream = protocol_stream
-                .await
-                .build()
-                .await
-                .wrap_err("failed building protocol stream")?;
-
             let worker = Worker {
                 // TODO: do i really wanna get rid of these?
                 // uri: Uri::from_str(&url).expect("invalid uri"),
                 // api_key: api_key.clone(),
-                protocol_stream: Box::pin(protocol_stream),
+                protocol_stream_builder: Box::pin(protocol_stream_builder),
                 tokens: tokens,
             };
 

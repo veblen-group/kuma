@@ -12,6 +12,7 @@ use tycho_common::{Bytes, models::Chain};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Token configurations
+    // TODO: this should be a HashMap<Bytes, Token> or something like that
     pub tokens: HashMap<String, TokenConfig>,
 
     /// Chain configurations (deserialized from string map to Chain map)

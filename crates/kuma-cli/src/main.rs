@@ -100,7 +100,6 @@ async fn main() -> ExitCode {
         api_key: "your_api_key".to_string(),
         add_tvl_threshold: 0.0,
         remove_tvl_threshold: 0.0,
-        no_tls: false,
         chain_info: chain_info.clone(),
         tokens: chain_tokens.clone(),
     }

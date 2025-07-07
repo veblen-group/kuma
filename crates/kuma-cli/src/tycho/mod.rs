@@ -4,13 +4,11 @@
 use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre;
-use futures::Stream;
+use color_eyre::eyre::WrapErr as _;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tycho_common::Bytes;
-use tycho_simulation::{
-    evm::decoder::StreamDecodeError, models::Token, protocol::models::BlockUpdate,
-};
+use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
 
 use crate::chain::ChainInfo;
 
@@ -61,14 +59,24 @@ impl Handle {
 }
 
 struct Worker {
-    protocol_stream: Pin<Box<dyn Stream<Item = Result<BlockUpdate, StreamDecodeError>> + Send>>,
+    protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
     tokens: HashMap<Bytes, Token>,
     // - channel writers
 }
 
 impl Worker {
     pub async fn run(self) -> eyre::Result<()> {
-        unimplemented!("connect to stream and feed into asset specific streams");
+        let Self {
+            protocol_stream_builder,
+            tokens,
+        } = self;
+
+        let protocol_stream = protocol_stream_builder
+            .await
+            .build()
+            .await
+            .wrap_err("failed building protocol stream")?;
+
         // connect to stream
         // let mut protocol_stream = protocol_stream
         //     .auth_key(Some(tycho_api_key.clone()))
@@ -79,5 +87,6 @@ impl Worker {
         //     .await
         //     .expect("Failed building protocol stream");
         // reap from stream and feed into each channel
+        Ok(())
     }
 }
