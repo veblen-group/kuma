@@ -2,7 +2,7 @@ use std::pin::Pin;
 
 use color_eyre::eyre;
 
-use crate::tycho::ChainSpecificAssetState;
+use crate::state_update::ChainSpecificAssetState;
 
 mod builder;
 

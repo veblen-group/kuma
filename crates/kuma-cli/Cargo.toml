@@ -26,4 +26,7 @@ tycho-execution = "0.100.1"
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.116.0", features = [
     "evm",
 ] }
-tycho-common = "0.71.4"
+tycho-common = "0.70.9"
+
+[dev-dependencies]
+serde_yaml = "0.9.34"

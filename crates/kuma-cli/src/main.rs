@@ -3,11 +3,13 @@ use std::{collections::HashMap, process::ExitCode};
 use clap::{Parser, Subcommand};
 use tracing::info;
 use tracing_subscriber::{self, EnvFilter};
+use tycho_common::{Bytes, models::Chain};
 use tycho_simulation::models::Token;
 
 mod assets;
 mod chain;
 mod config;
+mod state_update;
 mod strategies;
 mod tycho;
 
@@ -65,10 +67,7 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
-    // create chain -> token map
-
-    // let tokens: HashMap<String, Token> = HashMap::new();
-    let tokens: HashMap<String, Vec<Token>> = config
+    let tokens: HashMap<Chain, HashMap<Bytes, Token>> = config
         .chains
         .keys()
         .map(|chain| {
@@ -78,11 +77,14 @@ async fn main() -> ExitCode {
                     .tokens
                     .iter()
                     .map(|(symbol, token_config)| {
-                        Token::new(
-                            &token_config.addresses[chain],
-                            token_config.decimals,
-                            &symbol,
-                            token_config.transfer_gas.into(),
+                        (
+                            token_config.addresses[chain].clone(),
+                            Token::new(
+                                &token_config.addresses[chain].to_string(),
+                                token_config.decimals,
+                                &symbol,
+                                token_config.transfer_gas.into(),
+                            ),
                         )
                     })
                     .collect(),
@@ -91,6 +93,18 @@ async fn main() -> ExitCode {
         .collect();
 
     // set up tycho stream for each chain
+    let (chain, chain_info) = config.chains.iter().next().expect("missing chain config");
+    let chain_tokens = tokens.get(chain).expect("missing tokens for chain");
+    let tycho_stream = tycho::Builder {
+        url: "https://api.tycho.xyz".to_string(),
+        api_key: "your_api_key".to_string(),
+        add_tvl_threshold: 0.0,
+        remove_tvl_threshold: 0.0,
+        no_tls: false,
+        chain_info: chain_info.clone(),
+        tokens: chain_tokens.clone(),
+    }
+    .build();
 
     let cli = Cli::parse();
     match &cli.command {

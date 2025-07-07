@@ -21,7 +21,8 @@ impl Clone for ChainSpecificAssetState {
     fn clone(&self) -> Self {
         let rx = self.tx.subscribe();
         Self {
-            asset: self.asset.clone(),
+            asset_a: self.asset_a.clone(),
+            asset_b: self.asset_b.clone(),
             tx: self.tx.clone(),
             rx: BroadcastStream::new(rx),
         }
@@ -33,7 +34,7 @@ impl Stream for ChainSpecificAssetState {
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         // TODO: what else?
-        let block_update = self.rx.poll_next_unpin(cx);
+        let _block_update = self.rx.poll_next_unpin(cx);
 
         unimplemented!("transform block_update into asset_state_update")
     }

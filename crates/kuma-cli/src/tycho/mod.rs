@@ -1,28 +1,28 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
 //! TODO: move this to a simulation submodule and add an execution submodule for the encoder
 //! and submission stuff?
-use std::pin::Pin;
+use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre;
 use futures::Stream;
-use http::Uri;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
-use tycho_simulation::{models::Token, protocol::models::BlockUpdate};
+use tycho_common::Bytes;
+use tycho_simulation::{
+    evm::decoder::StreamDecodeError, models::Token, protocol::models::BlockUpdate,
+};
 
-use crate::{chain::ChainInfo, tycho};
+use crate::chain::ChainInfo;
 
-pub(crate) use tycho::state_update::ChainSpecificAssetState;
-
+pub(crate) use builder::Builder;
 mod builder;
-mod state_update;
 
-struct Handle {
+pub(crate) struct Handle {
     chain_info: ChainInfo,
     shutdown_token: CancellationToken,
-    join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
-    asset_a_state_stream: ChainSpecificAssetState,
-    asset_b_state_stream: ChainSpecificAssetState,
+    worker_handle: tokio::task::JoinHandle<eyre::Result<()>>,
+    // asset_a_state_stream: ChainSpecificAssetState,
+    // asset_b_state_stream: ChainSpecificAssetState,
 }
 
 impl Handle {
@@ -30,43 +30,39 @@ impl Handle {
         chain_info: ChainInfo,
         shutdown_token: CancellationToken,
         join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
-        asset_a_state_stream: ChainSpecificAssetState,
-        asset_b_state_stream: ChainSpecificAssetState,
+        // asset_a_state_stream: ChainSpecificAssetState,
+        // asset_b_state_stream: ChainSpecificAssetState,
     ) -> Self {
         Self {
             chain_info,
             shutdown_token,
-            join_handle,
-            asset_a_state_stream,
-            asset_b_state_stream,
+            worker_handle: join_handle,
+            // asset_a_state_stream,
+            // asset_b_state_stream,
         }
     }
 
     pub(crate) async fn shutdown(self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
-        if let Err(e) = self.join_handle.await {
+        if let Err(e) = self.worker_handle.await {
             error!(chain=?self.chain_info, "Tycho simulation stream worker failed: {}", e);
             return Err(e.into());
         }
         Ok(())
     }
 
-    pub(crate) async fn asset_a_state_stream(&self) -> ChainSpecificAssetState {
-        self.asset_a_state_stream.clone()
-    }
+    // pub(crate) async fn asset_a_state_stream(&self) -> ChainSpecificAssetState {
+    //     self.asset_a_state_stream.clone()
+    // }
 
-    pub(crate) async fn asset_b_state_stream(&self) -> ChainSpecificAssetState {
-        self.asset_b_state_stream.clone()
-    }
+    // pub(crate) async fn asset_b_state_stream(&self) -> ChainSpecificAssetState {
+    //     self.asset_b_state_stream.clone()
+    // }
 }
 
 struct Worker {
-    uri: Uri,
-    api_key: String,
-    protocol_stream: Pin<Box<dyn Stream<Item = BlockUpdate> + Send>>,
-    // - api key
-    // - token map
-    // - protocol stream
+    protocol_stream: Pin<Box<dyn Stream<Item = Result<BlockUpdate, StreamDecodeError>> + Send>>,
+    tokens: HashMap<Bytes, Token>,
     // - channel writers
 }
 
