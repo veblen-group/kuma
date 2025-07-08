@@ -30,3 +30,4 @@ tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.
 tycho-common = "0.71.4"
 num-bigint = "0.4.6"
 mockall = "0.13.1"
+proptest = "1.4.0"

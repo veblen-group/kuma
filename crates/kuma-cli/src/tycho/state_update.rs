@@ -12,10 +12,10 @@ use crate::strategies::TradeAmounts;
 
 #[derive(Debug)]
 pub(crate) struct ChainSpecificAssetState {
-    asset_a: Token,
-    asset_b: Token,
-    tx: broadcast::Sender<AssetStateUpdate>,
-    rx: BroadcastStream<AssetStateUpdate>,
+    pub(crate) asset_a: Token,
+    pub(crate) asset_b: Token,
+    pub(crate) tx: broadcast::Sender<AssetStateUpdate>,
+    pub(crate) rx: BroadcastStream<AssetStateUpdate>,
     // TODO: store all_pools or something
 }
 
