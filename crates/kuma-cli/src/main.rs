@@ -1,16 +1,15 @@
-use std::{collections::HashMap, process::ExitCode};
+use std::{process::ExitCode, str::FromStr};
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{self, Context};
-use tracing::info;
-use tracing_subscriber::{self, EnvFilter};
-use tycho_common::Bytes;
-use tycho_simulation::models::Token;
-
-use crate::{
-    chain::{Chain, parse_chain_assets},
-    config::{ChainConfig, Config},
+use color_eyre::eyre::{self, Context as _, eyre};
+use tokio::{
+    select,
+    signal::unix::{SignalKind, signal},
 };
+use tracing::{error, info};
+use tracing_subscriber::{self, EnvFilter};
+
+use crate::{chain::parse_chain_assets, config::Config};
 
 mod assets;
 mod chain;
@@ -73,20 +72,43 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
-    let Config { chains, tokens, .. } = config;
+    let Config {
+        chains,
+        tokens,
+        tycho_api_key,
+        ..
+    } = config;
     let chain_tokens = parse_chain_assets(chains, tokens).expect("Failed to parse chain assets");
 
     // set up tycho stream for each chain
-    let (chain, tokens) = chain_tokens.into_iter().next().expect("No tokens found");
+    let (chain, tokens) = chain_tokens
+        .into_iter()
+        .find(|(chain, _)| {
+            chain.name
+                == tycho_common::models::Chain::from_str("ethereum")
+                    .expect("Failed to parse eth name")
+        })
+        .expect("No tokens found for base");
     let tycho_stream = tycho::Builder {
-        tycho_url: "https://api.tycho.xyz".to_string(),
-        api_key: "your_api_key".to_string(),
-        add_tvl_threshold: 0.0,
-        remove_tvl_threshold: 0.0,
+        tycho_url: chain.tycho_url.clone(),
+        api_key: tycho_api_key,
+        add_tvl_threshold: 100.0,
+        remove_tvl_threshold: 100.0,
         tokens: tokens,
         chain,
     }
     .build();
+
+    let mut stream_handle = match tycho_stream {
+        Ok(handle) => handle,
+        Err(e) => {
+            error!(%e, "failed initializing tycho stream");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut sigterm = signal(SignalKind::terminate())
+        .expect("setting sigterm listener on unix should always work");
 
     let cli = Cli::parse();
     match &cli.command {
@@ -99,6 +121,22 @@ async fn main() -> ExitCode {
         }
         Commands::Execute => {}
     }
+
+    let exit_reason = select! {
+        _ = sigterm.recv() => Ok("received SIGTERM"),
+        res = &mut stream_handle.worker_handle => {
+            match res {
+                Ok(inner_res) => {
+                    inner_res.expect("worker failed");
+                    Ok("exited")
+                }
+                Err(join_error) => {
+                    // Handle the case where the task panicked or was canceled
+                    Err(eyre::eyre!("worker task join error: {}", join_error))
+                }
+            }
+        },
+    };
 
     ExitCode::SUCCESS
 }

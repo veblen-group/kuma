@@ -21,6 +21,9 @@ pub struct Config {
     /// Maximum acceptable slippage percentage
     pub max_slippage: f64,
 
+    /// API key for Tycho Indexer
+    pub tycho_api_key: String,
+
     /// Private key bytes for transaction signing
     // TODO: replace with private key path
     pub private_key: String,

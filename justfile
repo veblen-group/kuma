@@ -13,7 +13,7 @@ run:
 
 [working-directory: 'crates/kuma-cli']
 generate-signals:
-    RUST_LOG=debug cargo run -p kuma-cli -- \
+    RUST_LOG=info cargo run -p kuma-cli -- \
     --token-a usdc --token-b weth \
     --chain-a ethereum --chain-b base \
     generate-signals

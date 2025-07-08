@@ -21,15 +21,11 @@ tokens:
 chains:
     - name: ethereum
       rpc_url: "https://mainnet.infura.io/v3/your-project-id"
-      tycho_url: "tycho-beta.propellerheads.xyz"
+      tycho_url: "tycho-beta.propellerheads.xyz/"
 
     - name: base
       rpc_url: "https://mainnet.base.org"
       tycho_url: "tycho-base-beta.propellerheads.xyz"
-
-    - name: unichain
-      rpc_url: "https://mainnet.unichain.org"
-      tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
 # Risk and trading parameters
 congestion_risk_discount: 0.9
@@ -37,8 +33,6 @@ max_slippage: 0.5
 
 # tycho simulation
 tycho_api_key: "sampletoken"
-# TODO: this needs to be chain-specific
-tycho_simulation_url: "tycho-beta.propellerheads.xyz"
 
 # Private key (recommended to use environment variable or secure key management)
 private_key: "0x35bfec585b1a17b4e5b339adb1ea0e87e26d398c152054745677b95019e6a834"

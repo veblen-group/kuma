@@ -5,8 +5,9 @@ use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 use tycho_common::Bytes;
 use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
 
@@ -18,7 +19,7 @@ mod builder;
 pub(crate) struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
-    worker_handle: tokio::task::JoinHandle<eyre::Result<()>>,
+    pub worker_handle: tokio::task::JoinHandle<eyre::Result<()>>,
     // asset_a_state_stream: ChainSpecificAssetState,
     // asset_b_state_stream: ChainSpecificAssetState,
 }
@@ -59,25 +60,48 @@ impl Handle {
 }
 
 struct Worker {
+    chain: Chain,
     protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
     tokens: HashMap<Bytes, Token>,
     // - channel writers
 }
 
 impl Worker {
+    #[instrument(skip(self))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
             protocol_stream_builder,
             tokens,
+            chain,
+            ..
         } = self;
 
-        let protocol_stream = protocol_stream_builder
+        let mut protocol_stream = protocol_stream_builder
             .await
             .build()
             .await
             .wrap_err("failed building protocol stream")?;
 
-        info!("Protocol stream built successfully");
+        info!(
+            chain.name = ?chain.name,
+            chain.id = ?chain.metadata.id(),
+            "==================== Starting Tycho Stream ===================="
+        );
+
+        while let Some(message_result) = protocol_stream.next().await {
+            let block_update = match message_result {
+                Ok(msg) => msg,
+                Err(e) => {
+                    error!("Failed to receive message: {}", e);
+                    continue;
+                }
+            };
+
+            info!(
+                block.number = ?block_update.block_number,
+                "Received block update"
+            );
+        }
 
         // connect to stream
         // let mut protocol_stream = protocol_stream

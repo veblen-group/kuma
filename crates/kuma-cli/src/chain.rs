@@ -8,6 +8,7 @@ use tycho_simulation::models::Token;
 
 use crate::config::{ChainConfig, TokenConfig};
 
+// TODO: impl Eq with just the name for simplicity?
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct Chain {
     pub(crate) name: tycho_models::Chain,

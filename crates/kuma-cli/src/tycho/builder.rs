@@ -39,7 +39,7 @@ impl Builder {
         } = self;
 
         // make protocol stream
-        let mut protocol_stream = ProtocolStreamBuilder::new(&url, chain.name);
+        let protocol_stream = ProtocolStreamBuilder::new(&url, chain.name);
         let tvl_filter = ComponentFilter::with_tvl_range(remove_tvl_threshold, add_tvl_threshold);
         let protocol_stream = Self::set_exchanges_for_chain(&chain, protocol_stream, tvl_filter)
             .wrap_err("failed to set exchanges for {chain.name}.")?;
@@ -55,6 +55,7 @@ impl Builder {
             // api_key: api_key.clone(),
             protocol_stream_builder: Box::pin(protocol_stream_builder),
             tokens: tokens,
+            chain: chain.clone(),
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 
