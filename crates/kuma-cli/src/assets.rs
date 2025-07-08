@@ -1,10 +1,10 @@
 // TODO: add types for asset, decimals & value (to represent inventory)
 
-use crate::chain::ChainInfo;
+use crate::chain::Chain;
 
 struct Token {
     address: String,
-    chain: ChainInfo,
+    chain: Chain,
     metadata: TokenMetadata,
 }
 

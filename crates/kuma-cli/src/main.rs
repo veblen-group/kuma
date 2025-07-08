@@ -1,10 +1,16 @@
 use std::{collections::HashMap, process::ExitCode};
 
 use clap::{Parser, Subcommand};
+use color_eyre::eyre::{self, Context};
 use tracing::info;
 use tracing_subscriber::{self, EnvFilter};
-use tycho_common::{Bytes, models::Chain};
+use tycho_common::Bytes;
 use tycho_simulation::models::Token;
+
+use crate::{
+    chain::{Chain, parse_chain_assets},
+    config::{ChainConfig, Config},
+};
 
 mod assets;
 mod chain;
@@ -67,41 +73,18 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
-    let tokens: HashMap<Chain, HashMap<Bytes, Token>> = config
-        .chains
-        .keys()
-        .map(|chain| {
-            (
-                chain.clone(),
-                config
-                    .tokens
-                    .iter()
-                    .map(|(symbol, token_config)| {
-                        (
-                            token_config.addresses[chain].clone(),
-                            Token::new(
-                                &token_config.addresses[chain].to_string(),
-                                token_config.decimals,
-                                &symbol,
-                                token_config.transfer_gas.into(),
-                            ),
-                        )
-                    })
-                    .collect(),
-            )
-        })
-        .collect();
+    let Config { chains, tokens, .. } = config;
+    let chain_tokens = parse_chain_assets(chains, tokens).expect("Failed to parse chain assets");
 
     // set up tycho stream for each chain
-    let (chain, chain_info) = config.chains.iter().next().expect("missing chain config");
-    let chain_tokens = tokens.get(chain).expect("missing tokens for chain");
+    let (chain, tokens) = chain_tokens.into_iter().next().expect("No tokens found");
     let tycho_stream = tycho::Builder {
-        url: "https://api.tycho.xyz".to_string(),
+        tycho_url: "https://api.tycho.xyz".to_string(),
         api_key: "your_api_key".to_string(),
         add_tvl_threshold: 0.0,
         remove_tvl_threshold: 0.0,
-        chain_info: chain_info.clone(),
-        tokens: chain_tokens.clone(),
+        tokens: tokens,
+        chain,
     }
     .build();
 

@@ -4,6 +4,7 @@ resolver = "3"
 
 [workspace.dependencies]
 alloy = "1.0.12"
+alloy-chains = "0.2.5"
 alloy-primitives = "^1.0.0"
 binance = "0.21.0"
 color-eyre = "0.6.3"

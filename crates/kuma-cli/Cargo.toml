@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 alloy = { workspace = true }
+alloy-chains = { workspace = true }
 clap = { version = "4.5.40", features = ["derive"] }
 core = { package = "kuma-core", path = "../kuma-core" }
 color-eyre = { workspace = true }

@@ -11,6 +11,12 @@ copy-env type=default_env:
 run:
   cargo run
 
+[working-directory: 'crates/kuma-cli']
+generate-signals:
+    RUST_LOG=debug cargo run -p kuma-cli -- \
+    --token-a usdc --token-b weth \
+    --chain-a ethereum --chain-b base \
+    generate-signals
 default_lang := 'all'
 
 # Format

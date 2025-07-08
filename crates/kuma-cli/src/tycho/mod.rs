@@ -6,17 +6,17 @@ use std::{collections::HashMap, pin::Pin};
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{error, info};
 use tycho_common::Bytes;
 use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
 
-use crate::chain::ChainInfo;
+use crate::chain::Chain;
 
 pub(crate) use builder::Builder;
 mod builder;
 
 pub(crate) struct Handle {
-    chain_info: ChainInfo,
+    chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: tokio::task::JoinHandle<eyre::Result<()>>,
     // asset_a_state_stream: ChainSpecificAssetState,
@@ -25,14 +25,14 @@ pub(crate) struct Handle {
 
 impl Handle {
     pub(super) fn new(
-        chain_info: ChainInfo,
+        chain: Chain,
         shutdown_token: CancellationToken,
         join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
         // asset_a_state_stream: ChainSpecificAssetState,
         // asset_b_state_stream: ChainSpecificAssetState,
     ) -> Self {
         Self {
-            chain_info,
+            chain,
             shutdown_token,
             worker_handle: join_handle,
             // asset_a_state_stream,
@@ -43,7 +43,7 @@ impl Handle {
     pub(crate) async fn shutdown(self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self.worker_handle.await {
-            error!(chain=?self.chain_info, "Tycho simulation stream worker failed: {}", e);
+            error!(chain=?self.chain, "Tycho simulation stream worker failed: {}", e);
             return Err(e.into());
         }
         Ok(())
@@ -76,6 +76,8 @@ impl Worker {
             .build()
             .await
             .wrap_err("failed building protocol stream")?;
+
+        info!("Protocol stream built successfully");
 
         // connect to stream
         // let mut protocol_stream = protocol_stream

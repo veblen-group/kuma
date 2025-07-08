@@ -4,7 +4,6 @@ tokens:
         addresses:
             ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
             base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
-        symbol: USDC
         decimals: 6
         inventory: 100000.0
         transfer_gas: 5
@@ -20,15 +19,17 @@ tokens:
 
 # Chain configurations
 chains:
-    ethereum:
-        rpc_url: "https://mainnet.infura.io/v3/YOUR_PROJECT_ID"
-        chain_id: 1
-        block_time_ms: 12000
+    - name: ethereum
+      rpc_url: "https://mainnet.infura.io/v3/your-project-id"
+      tycho_url: "tycho-beta.propellerheads.xyz"
 
-    base:
-        rpc_url: "https://base.drpc.org"
-        chain_id: 8453
-        block_time_ms: 2000
+    - name: base
+      rpc_url: "https://mainnet.base.org"
+      tycho_url: "tycho-base-beta.propellerheads.xyz"
+
+    - name: unichain
+      rpc_url: "https://mainnet.unichain.org"
+      tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
 # Risk and trading parameters
 congestion_risk_discount: 0.9
