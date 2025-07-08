@@ -20,14 +20,13 @@ tracing-subscriber = { workspace = true, features = [
     "once_cell",
 ] }
 tracing = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["full", "rt-multi-thread", "macros"] }
 tokio-util = { workspace = true }
 tokio-stream = { workspace = true }
 tycho-execution = "0.100.1"
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.116.0", features = [
     "evm",
 ] }
-tycho-common = "0.70.9"
-
-[dev-dependencies]
-serde_yaml = "0.9.34"
+tycho-common = "0.71.4"
+num-bigint = "0.4.6"
+mockall = "0.13.1"
