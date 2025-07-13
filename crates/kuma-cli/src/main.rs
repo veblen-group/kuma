@@ -21,8 +21,13 @@ use crate::{
 mod chain;
 mod collector;
 mod config;
+<<<<<<< HEAD
 mod state;
 mod utils;
+=======
+mod signals;
+mod tycho;
+>>>>>>> 62c307f (small changes)
 
 #[derive(Parser)]
 #[command(name = "kuma-cli", about)] // TODO: dont use stupid name

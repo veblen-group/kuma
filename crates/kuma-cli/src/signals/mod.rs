@@ -3,7 +3,6 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::{
     select,
     sync::watch,
-    task,
     time::{Sleep, sleep},
 };
 use tokio_util::sync::CancellationToken;
@@ -14,28 +13,21 @@ use crate::chain::ChainInfo;
 
 // Core state structures for the new architecture
 #[derive(Debug, Clone)]
-pub struct SlowState {
+pub struct State {
     pub state: Box<dyn ProtocolSim>,
     pub chain_info: ChainInfo,
     pub block_number: u64,
 }
 
 #[derive(Debug, Clone)]
-pub struct FastState {
-    pub state: Box<dyn ProtocolSim>,
-    pub chain_info: ChainInfo,
-    pub block_number: u64,
-}
-
-#[derive(Debug, Clone)]
-pub struct SlowPrecompute {
+pub struct Precompute {
     pub calculations: Vec<SlowChainCalculation>,
-    pub slow_state: SlowState,
+    pub slow_state: State,
 }
 
 #[derive(Debug, Clone)]
 pub struct SlowChainCalculation {
-    pub path: ArbitragePath,
+    pub path: Direction,
     pub amount_in: BigUint,
     pub amount_out: BigUint,
     pub input_token: Token,
@@ -43,7 +35,7 @@ pub struct SlowChainCalculation {
 }
 
 #[derive(Debug, Clone)]
-pub enum ArbitragePath {
+pub enum Direction {
     AtoB, // A->B->A
     BtoA, // B->A->B
 }
@@ -54,7 +46,7 @@ pub struct ArbSignal {
     pub asset_b: Token,
     pub slow_chain: ChainInfo,
     pub fast_chain: ChainInfo,
-    pub path: ArbitragePath,
+    pub path: Direction,
     pub slow_chain_amount_out: BigUint,
     pub fast_chain_amount_out: BigUint,
     pub profit_percentage: f64,
@@ -62,26 +54,20 @@ pub struct ArbSignal {
     pub expected_profit: BigUint,
 }
 
-// The main arbitrage strategy trait
-pub trait ArbStrategy: Send + Sync {
-    fn precompute(&self, slow_state: &SlowState) -> SlowPrecompute;
-    fn compute_arb(&self, precompute: &SlowPrecompute, fast_state: &FastState)
-    -> Option<ArbSignal>;
-}
-
 // Implementation of the arbitrage strategy
 pub struct CrossChainArbitrageStrategy {
     pub asset_a: Token,
     pub asset_b: Token,
     pub min_profit_threshold: f64,
+    // TODO: use limits
     pub max_trade_amount: BigUint,
     pub binary_search_steps: usize,
     pub slippage_tolerance: f64,
     pub risk_factor_bps: u64,
 }
 
-impl ArbStrategy for CrossChainArbitrageStrategy {
-    fn precompute(&self, slow_state: &SlowState) -> SlowPrecompute {
+impl CrossChainArbitrageStrategy {
+    fn precompute(&self, slow_state: &State) -> Precompute {
         let mut calculations = Vec::new();
 
         // Create amount input ranges for binary search
@@ -97,7 +83,7 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
                 self.simulate_swap(&slow_state.state, &self.asset_a, &self.asset_b, &amount_in)
             {
                 calculations.push(SlowChainCalculation {
-                    path: ArbitragePath::AtoB,
+                    path: Direction::AtoB,
                     amount_in: amount_in.clone(),
                     amount_out: amount_out_a_to_b,
                     input_token: self.asset_a.clone(),
@@ -110,7 +96,7 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
                 self.simulate_swap(&slow_state.state, &self.asset_b, &self.asset_a, &amount_in)
             {
                 calculations.push(SlowChainCalculation {
-                    path: ArbitragePath::BtoA,
+                    path: Direction::BtoA,
                     amount_in: amount_in.clone(),
                     amount_out: amount_out_b_to_a,
                     input_token: self.asset_b.clone(),
@@ -119,17 +105,13 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
             }
         }
 
-        SlowPrecompute {
+        Precompute {
             calculations,
             slow_state: slow_state.clone(),
         }
     }
 
-    fn compute_arb(
-        &self,
-        precompute: &SlowPrecompute,
-        fast_state: &FastState,
-    ) -> Option<ArbSignal> {
+    fn compute_arb(&self, precompute: &Precompute, fast_state: &State) -> Option<ArbSignal> {
         let mut best_signal: Option<ArbSignal> = None;
         let mut best_profit = BigUint::from(0u64);
 
@@ -175,9 +157,7 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
 
         best_signal
     }
-}
 
-impl CrossChainArbitrageStrategy {
     fn simulate_swap(
         &self,
         state: &Box<dyn ProtocolSim>,
@@ -190,17 +170,23 @@ impl CrossChainArbitrageStrategy {
             .get_amount_out(amount_in.clone(), token_in, token_out)
             .map_err(|e| format!("Swap simulation failed: {:?}", e))?;
 
-        // Apply slippage tolerance and risk factor to get minimum amount out
-        // TODO: move slippage to helper
-        let slippage_bps = (self.slippage_tolerance * 10000.0) as u64;
-        // TODO: move risk factor to helper
-        let total_risk_bps = slippage_bps + self.risk_factor_bps;
-
-        let risk_multiplier = BigUint::from(10000u64 - total_risk_bps);
-        let min_amount_out = (&swap_result.amount * &risk_multiplier) / BigUint::from(10000u64);
+        let mut min_amount_out =
+            with_slippage_tolerance(&swap_result.amount, self.slippage_tolerance);
+        min_amount_out = with_risk_factor(&swap_result.amount, self.risk_factor_bps);
 
         Ok(min_amount_out)
     }
+}
+
+pub(crate) fn with_slippage_tolerance(amount: &BigUint, slippage_tolerance: f64) -> BigUint {
+    let slippage_bps = (slippage_tolerance * 10000.0) as u64;
+    let risk_multiplier = BigUint::from(10000u64 - slippage_bps);
+    (amount * risk_multiplier) / BigUint::from(10000u64)
+}
+
+pub(crate) fn with_risk_factor(amount: &BigUint, risk_factor_bps: u64) -> BigUint {
+    let risk_multiplier = BigUint::from(10000u64 - risk_factor_bps);
+    (amount * risk_multiplier) / BigUint::from(10000u64)
 }
 
 // Async signal emission function
@@ -219,9 +205,9 @@ pub async fn emit_signal(sig: ArbSignal) {
 
 // Main arbitrage task runner with the new architecture
 pub async fn run_arb_task(
-    mut slow_rx: watch::Receiver<Arc<SlowState>>,
-    mut fast_rx: watch::Receiver<Arc<FastState>>,
-    strategy: Arc<dyn ArbStrategy>,
+    mut slow_rx: watch::Receiver<Arc<State>>,
+    mut fast_rx: watch::Receiver<Arc<State>>,
+    strategy: Arc<CrossChainArbitrageStrategy>,
     shutdown: CancellationToken,
     slow_block_interval: Duration,
 ) {
@@ -232,136 +218,7 @@ pub async fn run_arb_task(
     // Future for in-flight signal emission
     let mut emit_fut: Option<Pin<Box<dyn std::future::Future<Output = ()> + Send>>> = None;
     // Last slow-chain precompute result
-    let mut last_pre: Option<SlowPrecompute> = None;
-
-    loop {
-        match (&mut timer, &mut emit_fut) {
-            (Some(t), Some(e)) => {
-                select! {
-                    // A) Global shutdown
-                    _ = shutdown.cancelled() => {
-                        info!("Arbitrage task shutting down");
-                        break;
-                    },
-
-                    // B) Slow-chain block update
-                    Ok(_) = slow_rx.changed() => {
-                        let slow = (&*slow_rx.borrow()).clone();
-                        info!("Slow chain update received, precomputing arbitrage paths");
-
-                        let pre = strategy.precompute(&slow);
-                        last_pre = Some(pre);
-
-                        // Schedule 75% timer
-                        let delay = slow_block_interval.mul_f32(0.75);
-                        timer = Some(Box::pin(sleep(delay)));
-                        info!("Timer scheduled for {:?}", delay);
-                    },
-
-                    // C) Timer fires
-                    _ = t => {
-                        timer.take();
-                        info!("Timer fired, computing arbitrage with latest fast chain state");
-
-                        if let Some(pre) = last_pre.take() {
-                            let fast = (&*fast_rx.borrow()).clone();
-                            let strat = strategy.clone();
-
-                            let fut = async move {
-                                if let Some(sig) = strat.compute_arb(&pre, &fast) {
-                                    emit_signal(sig).await;
-                                }
-                            };
-                            emit_fut = Some(Box::pin(fut));
-                        }
-                    },
-
-                    // D) Drive the in-flight emit
-                    _ = e => {
-                        emit_fut.take();
-                        info!("Signal emission completed");
-                    },
-                }
-            }
-            (Some(t), None) => {
-                select! {
-                    _ = shutdown.cancelled() => {
-                        info!("Arbitrage task shutting down");
-                        break;
-                    },
-                    Ok(_) = slow_rx.changed() => {
-                        let slow = (&*slow_rx.borrow()).clone();
-                        info!("Slow chain update received, precomputing arbitrage paths");
-
-                        let pre = strategy.precompute(&slow);
-                        last_pre = Some(pre);
-
-                        let delay = slow_block_interval.mul_f32(0.75);
-                        timer = Some(Box::pin(sleep(delay)));
-                        info!("Timer scheduled for {:?}", delay);
-                    },
-                    _ = t => {
-                        timer.take();
-                        info!("Timer fired, computing arbitrage with latest fast chain state");
-
-                        if let Some(pre) = last_pre.take() {
-                            let fast = (&*fast_rx.borrow()).clone();
-                            let strat = strategy.clone();
-
-                            let fut = async move {
-                                if let Some(sig) = strat.compute_arb(&pre, &fast) {
-                                    emit_signal(sig).await;
-                                }
-                            };
-                            emit_fut = Some(Box::pin(fut));
-                        }
-                    },
-                }
-            }
-            (None, Some(e)) => {
-                select! {
-                    _ = shutdown.cancelled() => {
-                        info!("Arbitrage task shutting down");
-                        break;
-                    },
-                    Ok(_) = slow_rx.changed() => {
-                        let slow = (&*slow_rx.borrow()).clone();
-                        info!("Slow chain update received, precomputing arbitrage paths");
-
-                        let pre = strategy.precompute(&slow);
-                        last_pre = Some(pre);
-
-                        let delay = slow_block_interval.mul_f32(0.75);
-                        timer = Some(Box::pin(sleep(delay)));
-                        info!("Timer scheduled for {:?}", delay);
-                    },
-                    _ = e => {
-                        emit_fut.take();
-                        info!("Signal emission completed");
-                    },
-                }
-            }
-            (None, None) => {
-                select! {
-                    _ = shutdown.cancelled() => {
-                        info!("Arbitrage task shutting down");
-                        break;
-                    },
-                    Ok(_) = slow_rx.changed() => {
-                        let slow = (&*slow_rx.borrow()).clone();
-                        info!("Slow chain update received, precomputing arbitrage paths");
-
-                        let pre = strategy.precompute(&slow);
-                        last_pre = Some(pre);
-
-                        let delay = slow_block_interval.mul_f32(0.75);
-                        timer = Some(Box::pin(sleep(delay)));
-                        info!("Timer scheduled for {:?}", delay);
-                    },
-                }
-            }
-        }
-    }
+    let mut last_pre: Option<Precompute> = None;
 }
 
 #[cfg(test)]
@@ -417,14 +274,14 @@ mod tests {
         });
 
         // Create slow state (favors token B)
-        let slow_state = SlowState {
+        let slow_state = State {
             state: create_uniswap_v2_state_with_liquidity("950000", "1000000"),
             chain_info: create_test_chain_info("ethereum"),
             block_number: 100,
         };
 
         // Create fast state (favors token A)
-        let fast_state = FastState {
+        let fast_state = State {
             state: create_uniswap_v2_state_with_liquidity("1000000", "950000"),
             chain_info: create_test_chain_info("polygon"),
             block_number: 200,
@@ -465,13 +322,13 @@ mod tests {
             });
 
             // Create watch channels
-            let slow_state = Arc::new(SlowState {
+            let slow_state = Arc::new(State {
                 state: create_uniswap_v2_state_with_liquidity("950000", "1000000"),
                 chain_info: create_test_chain_info("ethereum"),
                 block_number: 100,
             });
 
-            let fast_state = Arc::new(FastState {
+            let fast_state = Arc::new(State {
                 state: create_uniswap_v2_state_with_liquidity("1000000", "950000"),
                 chain_info: create_test_chain_info("polygon"),
                 block_number: 200,

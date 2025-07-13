@@ -8,8 +8,6 @@ use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
 use tycho_simulation::{models::Token, protocol::state::ProtocolSim};
 
-use crate::strategies::TradeAmounts;
-
 #[derive(Debug)]
 pub(crate) struct ChainSpecificAssetState {
     pub(crate) asset_a: Token,
@@ -49,5 +47,5 @@ impl Stream for ChainSpecificAssetState {
 #[derive(Debug, Clone)]
 pub(crate) struct AssetStateUpdate {
     pub(crate) state: Box<dyn ProtocolSim>,
-    pub(crate) inventory: TradeAmounts,
+    pub(crate) inventory: u64,
 }
