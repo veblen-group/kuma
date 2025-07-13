@@ -108,10 +108,15 @@ async fn main() -> ExitCode {
         }
     };
 
+    // make pair-specific stream
+
     let cli = Cli::parse();
     if let Commands::GenerateSignals = cli.command {
         info!(command = "generate signals");
-        // TODO: read a block from stream
+        // read state from stream
+        // precompute data for signal
+        // compute arb signal
+        // log
     }
 
     if let Commands::DryRun = cli.command {
@@ -123,6 +128,7 @@ async fn main() -> ExitCode {
         // set up submission stuff
     }
 
+    // handle sigterm
     let mut sigterm = signal(SignalKind::terminate())
         .expect("setting sigterm listener on unix should always work");
     let exit_reason = select! {

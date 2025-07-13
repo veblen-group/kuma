@@ -10,16 +10,16 @@ pub(crate) struct Block {
     pub(crate) block_number: u64,
     // TODO: idnogre the modified/unmodified thing and just save the new blocks. protocolsims cant rly be compared without type nonsense
     // The pools that have been modified in the latest block update
-    pub(crate) modified_pools_by_pair: HashMap<Pair, Arc<HashMap<String, Box<dyn ProtocolSim>>>>,
+    pub(crate) modified_pools: HashMap<Pair, Arc<HashMap<String, Box<dyn ProtocolSim>>>>,
     // The pools that have not been modified in the latest block update
-    pub(crate) unmodified_pools_by_pair: HashMap<Pair, Arc<HashMap<String, Box<dyn ProtocolSim>>>>,
+    pub(crate) unmodified_pools: HashMap<Pair, Arc<HashMap<String, Box<dyn ProtocolSim>>>>,
 }
 
 impl Block {
     pub fn apply_update(self, block_update: BlockUpdate) -> Self {
         let Self {
-            mut modified_pools_by_pair,
-            mut unmodified_pools_by_pair,
+            modified_pools: mut modified_pools_by_pair,
+            unmodified_pools: mut unmodified_pools_by_pair,
             ..
         } = self;
 
@@ -33,13 +33,13 @@ impl Block {
         // remove pools that are no longer active
         for (id, component) in removed_pairs {
             for (pair, pools) in &mut unmodified_pools_by_pair {
-                if pair.subset(&component.tokens) {
+                if pair.subset_of_vec(&component.tokens) {
                     pools.remove(&id);
                 }
             }
 
             for (pair, pools) in &mut modified_pools_by_pair {
-                if pair.subset(&component.tokens) {
+                if pair.subset_of_vec(&component.tokens) {
                     pools.remove(&id);
                 }
             }
@@ -64,20 +64,20 @@ impl Block {
 
         Self {
             block_number: block_update.block_number,
-            modified_pools_by_pair,
-            unmodified_pools_by_pair,
+            modified_pools: modified_pools_by_pair,
+            unmodified_pools: unmodified_pools_by_pair,
         }
     }
 
     pub fn get_pair_state(&self, pair: Pair) -> eyre::Result<PairState> {
         let modified_pools = self
-            .modified_pools_by_pair
+            .modified_pools
             .get(&pair)
             .cloned()
             .ok_or_eyre("failed to get modified pools for pair {pair:?}")?;
 
         let unmodified_pools = self
-            .unmodified_pools_by_pair
+            .unmodified_pools
             .get(&pair)
             .cloned()
             .ok_or_eyre("failed to get unmodified pools for pair {pair:?}")?;

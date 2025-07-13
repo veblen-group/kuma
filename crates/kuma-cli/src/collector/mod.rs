@@ -88,7 +88,6 @@ struct Worker {
     chain: Chain,
     protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
     tokens: HashMap<Bytes, Token>,
-    // - channel writers
     block_tx: watch::Sender<Arc<Block>>,
 }
 
@@ -97,7 +96,6 @@ impl Worker {
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
             protocol_stream_builder,
-            tokens,
             chain,
             block_tx,
             ..
