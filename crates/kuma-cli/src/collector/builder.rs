@@ -15,7 +15,8 @@ use tycho_simulation::{
     tycho_client::feed::component_tracker::ComponentFilter,
 };
 
-use crate::{chain::Chain, tycho::Worker};
+use super::Worker;
+use crate::chain::Chain;
 
 pub(crate) struct Builder {
     pub(crate) chain: Chain,
@@ -41,13 +42,15 @@ impl Builder {
         // make protocol stream
         let protocol_stream = ProtocolStreamBuilder::new(&url, chain.name);
         let tvl_filter = ComponentFilter::with_tvl_range(remove_tvl_threshold, add_tvl_threshold);
-        let protocol_stream = Self::set_exchanges_for_chain(&chain, protocol_stream, tvl_filter)
+        let protocol_stream = Self::add_exchanges_for_chain(&chain, protocol_stream, tvl_filter)
             .wrap_err("failed to set exchanges for {chain.name}.")?;
 
         let protocol_stream_builder = protocol_stream
             .auth_key(Some(api_key))
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
+
+        let (block_rx, block_tx) = watch::channel();
 
         let worker = Worker {
             // TODO: do i really wanna get rid of these?
@@ -56,6 +59,7 @@ impl Builder {
             protocol_stream_builder: Box::pin(protocol_stream_builder),
             tokens: tokens,
             chain: chain.clone(),
+            block_tx,
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 
@@ -66,11 +70,12 @@ impl Builder {
         Ok(super::Handle {
             chain,
             shutdown_token,
-            worker_handle,
+            worker_handle: Some(worker_handle),
+            block_rx,
         })
     }
 
-    fn set_exchanges_for_chain(
+    fn add_exchanges_for_chain(
         chain: &Chain,
         protocol_stream: ProtocolStreamBuilder,
         tvl_filter: ComponentFilter,

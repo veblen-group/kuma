@@ -1,17 +1,18 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
 //! TODO: move this to a simulation submodule and add an execution submodule for the encoder
 //! and submission stuff?
-use std::{collections::HashMap, pin::Pin};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use tokio_stream::StreamExt;
+use tokio::sync::watch;
+use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 use tycho_common::Bytes;
 use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
 
-use crate::chain::Chain;
+use crate::{block::Block, chain::Chain};
 
 pub(crate) use builder::Builder;
 mod builder;
@@ -19,9 +20,8 @@ mod builder;
 pub(crate) struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
-    pub worker_handle: tokio::task::JoinHandle<eyre::Result<()>>,
-    // asset_a_state_stream: ChainSpecificAssetState,
-    // asset_b_state_stream: ChainSpecificAssetState,
+    worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
+    block_rx: watch::Receiver<Arc<Block>>,
 }
 
 impl Handle {
@@ -29,34 +29,59 @@ impl Handle {
         chain: Chain,
         shutdown_token: CancellationToken,
         join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
-        // asset_a_state_stream: ChainSpecificAssetState,
-        // asset_b_state_stream: ChainSpecificAssetState,
+        // TODO: get block receiver
+        block_rx: watch::Receiver<Arc<Block>>,
     ) -> Self {
         Self {
             chain,
             shutdown_token,
-            worker_handle: join_handle,
-            // asset_a_state_stream,
-            // asset_b_state_stream,
+            worker_handle: Some(join_handle),
+            block_rx,
         }
     }
 
-    pub(crate) async fn shutdown(self) -> eyre::Result<()> {
+    pub(crate) async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
-        if let Err(e) = self.worker_handle.await {
+        if let Err(e) = self
+            .worker_handle
+            .take()
+            .expect("shutdown must not be called twice")
+            .await
+        {
             error!(chain=?self.chain, "Tycho simulation stream worker failed: {}", e);
             return Err(e.into());
         }
         Ok(())
     }
 
-    // pub(crate) async fn asset_a_state_stream(&self) -> ChainSpecificAssetState {
-    //     self.asset_a_state_stream.clone()
-    // }
+    pub(crate) fn block_rx(&self) -> watch::Receiver<Arc<Block>> {
+        self.block_rx.clone()
+    }
+}
 
-    // pub(crate) async fn asset_b_state_stream(&self) -> ChainSpecificAssetState {
-    //     self.asset_b_state_stream.clone()
-    // }
+// Awaiting the handle deals with the Worker's result
+impl Future for Handle {
+    type Output = eyre::Result<()>;
+
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        use futures::future::FutureExt as _;
+
+        let task = self
+            .worker_handle
+            .as_mut()
+            .expect("collector handle must not be polled after shutdown");
+
+        task.poll_unpin(cx).map(|result| match result {
+            Ok(worker_res) => match worker_res {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e).wrap_err("collector task returned with err"),
+            },
+            Err(e) => Err(e).wrap_err("collector task panicked"),
+        })
+    }
 }
 
 struct Worker {
@@ -64,6 +89,7 @@ struct Worker {
     protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
     tokens: HashMap<Bytes, Token>,
     // - channel writers
+    block_tx: watch::Sender<Arc<Block>>,
 }
 
 impl Worker {
@@ -73,6 +99,7 @@ impl Worker {
             protocol_stream_builder,
             tokens,
             chain,
+            block_tx,
             ..
         } = self;
 
@@ -101,18 +128,15 @@ impl Worker {
                 block.number = ?block_update.block_number,
                 "Received block update"
             );
+            let old_block = block_tx.borrow().as_ref().clone();
+            let new_block = old_block.apply_update(block_update);
+            let send_res = block_tx.send(Arc::new(new_block));
+            if let Err(e) = send_res {
+                // TODO: handle send_res
+                error!("Failed to send block update: {}", e);
+            }
         }
 
-        // connect to stream
-        // let mut protocol_stream = protocol_stream
-        //     .auth_key(Some(tycho_api_key.clone()))
-        //     .skip_state_decode_failures(true)
-        //     .set_tokens(all_tokens.clone())
-        //     .await
-        //     .build()
-        //     .await
-        //     .expect("Failed building protocol stream");
-        // reap from stream and feed into each channel
         Ok(())
     }
 }

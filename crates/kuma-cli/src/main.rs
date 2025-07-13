@@ -1,22 +1,22 @@
 use std::{process::ExitCode, str::FromStr};
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{self, Context as _, eyre};
+use color_eyre::eyre::{self, eyre};
 use tokio::{
     select,
     signal::unix::{SignalKind, signal},
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{self, EnvFilter};
 
 use crate::{chain::parse_chain_assets, config::Config};
 
-mod assets;
+mod block;
 mod chain;
+mod collector;
 mod config;
-mod state_update;
+mod pair;
 mod strategies;
-mod tycho;
 
 #[derive(Parser)]
 #[command(name = "kuma-cli", about)] // TODO: dont use stupid name
@@ -89,7 +89,7 @@ async fn main() -> ExitCode {
                     .expect("Failed to parse eth name")
         })
         .expect("No tokens found for base");
-    let tycho_stream = tycho::Builder {
+    let tycho_stream = collector::Builder {
         tycho_url: chain.tycho_url.clone(),
         api_key: tycho_api_key,
         add_tvl_threshold: 100.0,
@@ -99,6 +99,7 @@ async fn main() -> ExitCode {
     }
     .build();
 
+    // set up stream
     let mut stream_handle = match tycho_stream {
         Ok(handle) => handle,
         Err(e) => {
@@ -107,36 +108,56 @@ async fn main() -> ExitCode {
         }
     };
 
-    let mut sigterm = signal(SignalKind::terminate())
-        .expect("setting sigterm listener on unix should always work");
-
     let cli = Cli::parse();
-    match &cli.command {
-        Commands::GenerateSignals => {
-            info!(command = "generate signals");
-        }
-        Commands::DryRun => {
-            // set up tycho encoder
-            // set up signer
-        }
-        Commands::Execute => {}
+    if let Commands::GenerateSignals = cli.command {
+        info!(command = "generate signals");
+        // TODO: read a block from stream
     }
 
+    if let Commands::DryRun = cli.command {
+        // set up tycho encoder
+        // set up signer
+    }
+
+    if let Commands::Execute = cli.command {
+        // set up submission stuff
+    }
+
+    let mut sigterm = signal(SignalKind::terminate())
+        .expect("setting sigterm listener on unix should always work");
     let exit_reason = select! {
-        _ = sigterm.recv() => Ok("received SIGTERM"),
-        res = &mut stream_handle.worker_handle => {
-            match res {
-                Ok(inner_res) => {
-                    inner_res.expect("worker failed");
-                    Ok("exited")
-                }
-                Err(join_error) => {
-                    // Handle the case where the task panicked or was canceled
-                    Err(eyre::eyre!("worker task join error: {}", join_error))
-                }
-            }
+        _ = sigterm.recv() => {
+            let stream_res = stream_handle.shutdown().await;
+            info!(stream_res = ?stream_res);
+            Ok("received SIGTERM")
+        },
+        res = &mut stream_handle => {
+            // will only return without shutdown if the collector's worker dies unexpectedly
+            res.and_then(|()| Err(eyre!("collector stream exited unexpectedly")))
         },
     };
 
-    ExitCode::SUCCESS
+    shutdown(exit_reason, stream_handle).await
+}
+
+async fn shutdown(
+    reason: eyre::Result<&'static str>,
+    mut collector: collector::Handle,
+) -> ExitCode {
+    let exit_reason = match reason {
+        Ok(reason) => {
+            info!(reason, "shutting down");
+            if let Err(e) = collector.shutdown().await {
+                warn!(%e, "error occurred while shutting down collector");
+            };
+            ExitCode::SUCCESS
+        }
+        Err(reason) => {
+            error!(%reason, "shutting down");
+            ExitCode::FAILURE
+        }
+    };
+    info!("shutdown successful");
+
+    exit_reason
 }
