@@ -85,8 +85,10 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
         let mut calculations = Vec::new();
 
         // Create amount input ranges for binary search
+        // TODO: determine max trade amount based on limits and inventory. min(self.max_protocol_limit * state.get_limits(), self.max_inventory)
         let step_size = &self.max_trade_amount / BigUint::from(self.binary_search_steps as u64);
 
+        // TODO: parrelize this loop
         for i in 1..=self.binary_search_steps {
             let amount_in = &step_size * BigUint::from(i as u64);
 
@@ -131,24 +133,15 @@ impl ArbStrategy for CrossChainArbitrageStrategy {
         let mut best_signal: Option<ArbSignal> = None;
         let mut best_profit = BigUint::from(0u64);
 
+        // TODO: parrelize this loop
         for slow_calc in &precompute.calculations {
             // Complete the arbitrage path based on the slow chain calculation
-            let (fast_input_token, fast_output_token) = match slow_calc.path {
-                ArbitragePath::AtoB => {
-                    // A->B->A: slow chain produced B, fast chain should convert B back to A
-                    (&slow_calc.output_token, &slow_calc.input_token)
-                }
-                ArbitragePath::BtoA => {
-                    // B->A->B: slow chain produced A, fast chain should convert A back to B
-                    (&slow_calc.output_token, &slow_calc.input_token)
-                }
-            };
 
             // Use the amount_out from slow chain as amount_in for fast chain
             if let Ok(fast_amount_out) = self.simulate_swap(
                 &fast_state.state,
-                fast_input_token,
-                fast_output_token,
+                &slow_calc.output_token,
+                &slow_calc.input_token,
                 &slow_calc.amount_out,
             ) {
                 // Calculate profit: fast_amount_out - slow_amount_in
@@ -198,8 +191,11 @@ impl CrossChainArbitrageStrategy {
             .map_err(|e| format!("Swap simulation failed: {:?}", e))?;
 
         // Apply slippage tolerance and risk factor to get minimum amount out
+        // TODO: move slippage to helper
         let slippage_bps = (self.slippage_tolerance * 10000.0) as u64;
+        // TODO: move risk factor to helper
         let total_risk_bps = slippage_bps + self.risk_factor_bps;
+
         let risk_multiplier = BigUint::from(10000u64 - total_risk_bps);
         let min_amount_out = (&swap_result.amount * &risk_multiplier) / BigUint::from(10000u64);
 
@@ -286,7 +282,7 @@ pub async fn run_arb_task(
                         info!("Signal emission completed");
                     },
                 }
-            },
+            }
             (Some(t), None) => {
                 select! {
                     _ = shutdown.cancelled() => {
@@ -321,7 +317,7 @@ pub async fn run_arb_task(
                         }
                     },
                 }
-            },
+            }
             (None, Some(e)) => {
                 select! {
                     _ = shutdown.cancelled() => {
@@ -344,7 +340,7 @@ pub async fn run_arb_task(
                         info!("Signal emission completed");
                     },
                 }
-            },
+            }
             (None, None) => {
                 select! {
                     _ = shutdown.cancelled() => {
@@ -363,7 +359,7 @@ pub async fn run_arb_task(
                         info!("Timer scheduled for {:?}", delay);
                     },
                 }
-            },
+            }
         }
     }
 }
