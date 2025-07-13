@@ -6,13 +6,13 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
 use tokio::sync::watch;
-use tokio_stream::{StreamExt, wrappers::WatchStream};
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 use tycho_common::Bytes;
 use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
 
-use crate::{block::Block, chain::Chain};
+use crate::{chain::Chain, state::block::Block};
 
 pub(crate) use builder::Builder;
 mod builder;
@@ -21,7 +21,8 @@ pub(crate) struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    block_rx: watch::Receiver<Arc<Block>>,
+    // TODO: get rid of option
+    block_rx: watch::Receiver<Arc<Option<Block>>>,
 }
 
 impl Handle {
@@ -30,7 +31,7 @@ impl Handle {
         shutdown_token: CancellationToken,
         join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
         // TODO: get block receiver
-        block_rx: watch::Receiver<Arc<Block>>,
+        block_rx: watch::Receiver<Arc<Option<Block>>>,
     ) -> Self {
         Self {
             chain,
@@ -54,7 +55,7 @@ impl Handle {
         Ok(())
     }
 
-    pub(crate) fn block_rx(&self) -> watch::Receiver<Arc<Block>> {
+    pub(crate) fn block_rx(&self) -> watch::Receiver<Arc<Option<Block>>> {
         self.block_rx.clone()
     }
 }
@@ -87,8 +88,7 @@ impl Future for Handle {
 struct Worker {
     chain: Chain,
     protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    tokens: HashMap<Bytes, Token>,
-    block_tx: watch::Sender<Arc<Block>>,
+    block_tx: watch::Sender<Arc<Option<Block>>>,
 }
 
 impl Worker {
@@ -126,9 +126,15 @@ impl Worker {
                 block.number = ?block_update.block_number,
                 "Received block update"
             );
-            let old_block = block_tx.borrow().as_ref().clone();
-            let new_block = old_block.apply_update(block_update);
-            let send_res = block_tx.send(Arc::new(new_block));
+            let block = {
+                if let Some(old_block) = block_tx.borrow().as_ref().clone() {
+                    let new_block = Some(old_block.apply_update(block_update));
+                    new_block
+                } else {
+                    Some(Block::new(block_update))
+                }
+            };
+            let send_res = block_tx.send(Arc::new(block));
             if let Err(e) = send_res {
                 // TODO: handle send_res
                 error!("Failed to send block update: {}", e);

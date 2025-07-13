@@ -11,12 +11,10 @@ use tracing_subscriber::{self, EnvFilter};
 
 use crate::{chain::parse_chain_assets, config::Config};
 
-mod block;
 mod chain;
 mod collector;
 mod config;
-mod pair;
-mod strategies;
+mod state;
 
 #[derive(Parser)]
 #[command(name = "kuma-cli", about)] // TODO: dont use stupid name
@@ -99,7 +97,6 @@ async fn main() -> ExitCode {
     }
     .build();
 
-    // set up stream
     let mut stream_handle = match tycho_stream {
         Ok(handle) => handle,
         Err(e) => {
@@ -108,13 +105,21 @@ async fn main() -> ExitCode {
         }
     };
 
+    // set up stream
     // make pair-specific stream
 
     let cli = Cli::parse();
     if let Commands::GenerateSignals = cli.command {
         info!(command = "generate signals");
+        // let chain_a_block_rx = stream_handle.block_rx();
+        // let pair = Pair::new(vec![]);
+        // let mut chain_a_pair_stream = PairStateStream::from_block_rx(pair, chain_a_block_rx);
+
         // read state from stream
+        // let block_a = chain_a_pair_stream.next().await;
+
         // precompute data for signal
+
         // compute arb signal
         // log
     }

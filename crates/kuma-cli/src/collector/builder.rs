@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context as _, eyre};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tycho_common::Bytes;
 use tycho_simulation::{
@@ -16,7 +17,7 @@ use tycho_simulation::{
 };
 
 use super::Worker;
-use crate::chain::Chain;
+use crate::{chain::Chain, state::block::Block};
 
 pub(crate) struct Builder {
     pub(crate) chain: Chain,
@@ -50,14 +51,13 @@ impl Builder {
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
 
-        let (block_rx, block_tx) = watch::channel();
+        let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
 
         let worker = Worker {
-            // TODO: do i really wanna get rid of these?
+            // TODO: do i really wanna get rid of these or keep them for reconnect?
             // uri: Uri::from_str(&url).expect("invalid uri"),
             // api_key: api_key.clone(),
             protocol_stream_builder: Box::pin(protocol_stream_builder),
-            tokens: tokens,
             chain: chain.clone(),
             block_tx,
         };
