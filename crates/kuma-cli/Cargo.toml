@@ -20,7 +20,7 @@ tracing-subscriber = { workspace = true, features = [
     "once_cell",
 ] }
 tracing = { workspace = true }
-tokio = { workspace = true, features = ["full", "rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tokio-util = { workspace = true }
 tokio-stream = { workspace = true }
 tycho-execution = "0.100.1"
