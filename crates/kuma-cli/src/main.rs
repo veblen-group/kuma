@@ -1,14 +1,14 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::{self, eyre};
+use futures::StreamExt as _;
+use futures::StreamExt;
 use tokio::{
     select,
     signal::unix::{SignalKind, signal},
 };
 use tracing::{error, info, warn};
 use tracing_subscriber::{self, EnvFilter};
-use tycho_simulation::evm::tycho_models;
 
 use crate::{
     config::Config,
@@ -100,13 +100,13 @@ async fn main() -> ExitCode {
         log_chain_tokens(&chain_tokens);
 
         let cli = Cli::parse();
-        let pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &chain_tokens);
+        let mut pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &chain_tokens);
         let (chain_a, chain_b) = get_chains_from_cli(&cli, &chain_tokens);
 
         let (collector_a_handle, collector_b_handle) = {
             match make_collectors(
-                chain_a,
-                chain_b,
+                chain_a.clone(),
+                chain_b.clone(),
                 &chain_tokens,
                 &tycho_api_key,
                 add_tvl_threshold,
@@ -122,12 +122,16 @@ async fn main() -> ExitCode {
 
         if let Commands::GenerateSignals = cli.command {
             info!(command = "generate signals");
+            let pair_a = pairs.remove(&chain_a).expect("pair for chain a not found");
+
             let chain_a_block_rx = collector_a_handle.block_rx();
-            let chain_b_block_rx = collector_b_handle.block_rx();
-            // let mut chain_a_pair_stream = PairStateStream::from_block_rx(pair, chain_a_block_rx);
+            let _chain_b_block_rx = collector_b_handle.block_rx();
+            let mut chain_a_pair_stream = PairStateStream::from_block_rx(pair_a, chain_a_block_rx);
 
             // read state from stream
-            // let block_a = chain_a_pair_stream.next().await;
+            let block_a = chain_a_pair_stream.next().await.expect("test");
+
+            error!("Block A: {:?}", block_a);
 
             // precompute data for signal
 

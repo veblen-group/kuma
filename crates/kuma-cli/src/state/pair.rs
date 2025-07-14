@@ -8,6 +8,7 @@ use std::{
 use futures::{Stream, StreamExt};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
+use tracing::warn;
 use tycho_simulation::{
     models::Token,
     protocol::{models::ProtocolComponent, state::ProtocolSim},
@@ -30,6 +31,7 @@ impl Pair {
     }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct PairState {
     pub(crate) block_number: u64,
     pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
@@ -48,7 +50,7 @@ impl PairStateStream {
     pub(crate) fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
         Self {
             pair,
-            block_rx: WatchStream::new(block_rx),
+            block_rx: WatchStream::from_changes(block_rx),
         }
     }
 }
@@ -70,11 +72,15 @@ impl Stream for PairStateStream {
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
+                    warn!("some block");
                     let state = block.get_pair_state(&self.pair);
                     Poll::Ready(Some(state))
                 }
                 // Only start yielding values after the initial block is received
-                None => Poll::Pending,
+                None => {
+                    warn!("none");
+                    Poll::Pending
+                }
             },
         }
     }

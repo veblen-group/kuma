@@ -59,7 +59,7 @@ pub(crate) fn parse_chain_assets(
 pub(crate) fn log_chain_tokens(chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>) {
     info!("Parsed {} chains from config:", chain_tokens.len());
 
-    for (chain, tokens) in chain_tokens {
+    for (chain, _tokens) in chain_tokens {
         info!(chain.name = %chain.name,
             chain.id = %chain.metadata.id(),
             "🔗");
@@ -75,22 +75,22 @@ pub(crate) fn get_chain_pairs(
     for (chain, tokens) in chain_tokens {
         let a = tokens
             .iter()
-            .filter(|(_addr, token)| token.symbol == token_a)
+            .filter(|(_addr, token)| token.symbol == token_a.to_ascii_uppercase())
             .next();
         let b = tokens
             .iter()
-            .filter(|(_addr, token)| token.symbol == token_b)
+            .filter(|(_addr, token)| token.symbol == token_b.to_ascii_uppercase())
             .next();
 
         match (a, b) {
             (None, _) | (_, None) => {
-                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🚫 Token pair not available on chain");
+                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🚫 Token pair not configured on chain");
             }
             (Some((_, a)), Some((_, b))) => {
                 let pair = Pair::new(a.clone(), b.clone());
                 pairs.insert(chain.clone(), pair);
 
-                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🔄 Token pair ready for trading");
+                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🔄 Token pair configured");
             }
         }
     }

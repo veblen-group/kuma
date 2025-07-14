@@ -76,8 +76,8 @@ struct Worker {
 }
 
 impl Worker {
-    #[instrument(skip(self))]
-    pub async fn run(self) -> eyre::Result<()> {
+    #[instrument(skip(self), fields(chain.name = %self.chain.name))]
+    pub async fn run(mut self) -> eyre::Result<()> {
         let Self {
             protocol_stream_builder,
             chain,

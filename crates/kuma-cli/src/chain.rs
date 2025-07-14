@@ -1,12 +1,9 @@
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use alloy_chains::{self, NamedChain};
-use color_eyre::eyre::{self, Context, OptionExt, eyre};
+use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
 use tycho_common::models as tycho_models;
-use tycho_simulation::models::Token;
-
-use crate::config::{ChainConfig, TokenConfig};
 
 // TODO: impl Eq with just the name for simplicity?
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
