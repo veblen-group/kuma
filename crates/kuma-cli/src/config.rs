@@ -24,6 +24,12 @@ pub struct Config {
     /// API key for Tycho Indexer
     pub tycho_api_key: String,
 
+    /// Threshold for adding TVL to the system
+    pub add_tvl_threshold: f64,
+
+    /// Threshold for removing TVL from the system
+    pub remove_tvl_threshold: f64,
+
     /// Private key bytes for transaction signing
     // TODO: replace with private key path
     pub private_key: String,

@@ -1,7 +1,7 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
 //! TODO: move this to a simulation submodule and add an execution submodule for the encoder
 //! and submission stuff?
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+use std::{pin::Pin, sync::Arc};
 
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
@@ -9,8 +9,7 @@ use tokio::sync::watch;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
-use tycho_common::Bytes;
-use tycho_simulation::{evm::stream::ProtocolStreamBuilder, models::Token};
+use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
 use crate::{chain::Chain, state::block::Block};
 
@@ -26,21 +25,6 @@ pub(crate) struct Handle {
 }
 
 impl Handle {
-    pub(super) fn new(
-        chain: Chain,
-        shutdown_token: CancellationToken,
-        join_handle: tokio::task::JoinHandle<eyre::Result<()>>,
-        // TODO: get block receiver
-        block_rx: watch::Receiver<Arc<Option<Block>>>,
-    ) -> Self {
-        Self {
-            chain,
-            shutdown_token,
-            worker_handle: Some(join_handle),
-            block_rx,
-        }
-    }
-
     pub(crate) async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self
@@ -128,16 +112,25 @@ impl Worker {
             );
             let block = {
                 if let Some(old_block) = block_tx.borrow().as_ref().clone() {
-                    let new_block = Some(old_block.apply_update(block_update));
-                    new_block
+                    let new_block = old_block.apply_update(block_update);
+                    info!(
+                        block.number = new_block.block_number,
+                        "Applied block update from Tycho Simulation stream."
+                    );
+
+                    Some(new_block)
                 } else {
+                    info!(
+                        block.number = block_update.block_number,
+                        "Received initial block from Tycho Simulation stream."
+                    );
                     Some(Block::new(block_update))
                 }
             };
             let send_res = block_tx.send(Arc::new(block));
             if let Err(e) = send_res {
-                // TODO: handle send_res
-                error!("Failed to send block update: {}", e);
+                // TODO: handle send_res more
+                error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
             }
         }
 

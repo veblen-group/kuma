@@ -16,6 +16,7 @@ use tycho_simulation::{
 use super::block::Block;
 use crate::state;
 
+// TODO: maybe move to assets.rs?
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Pair(Token, Token);
 
@@ -40,11 +41,11 @@ pub(crate) struct PairState {
 #[derive(Debug)]
 pub(crate) struct PairStateStream {
     pair: Pair,
-    block_rx: WatchStream<Arc<Block>>,
+    block_rx: WatchStream<Arc<Option<Block>>>,
 }
 
 impl PairStateStream {
-    pub(crate) fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Block>>) -> Self {
+    pub(crate) fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
         Self {
             pair,
             block_rx: WatchStream::new(block_rx),
@@ -63,14 +64,18 @@ impl Stream for PairStateStream {
         let block_poll = self.block_rx.poll_next_unpin(cx);
 
         match block_poll {
+            // Stream itself isn't ready, propagate pending state
             Poll::Pending => Poll::Pending,
-            // Only return a value after the initial block has been processed
-            Poll::Ready(None) => Poll::Pending,
-            Poll::Ready(Some(block)) => {
-                let state = block.get_pair_state(&self.pair);
-
-                Poll::Ready(Some(state))
-            }
+            // Stream has ended, end our stream too
+            Poll::Ready(None) => Poll::Ready(None),
+            Poll::Ready(Some(block)) => match block.as_ref() {
+                Some(block) => {
+                    let state = block.get_pair_state(&self.pair);
+                    Poll::Ready(Some(state))
+                }
+                // Only start yielding values after the initial block is received
+                None => Poll::Pending,
+            },
         }
     }
 }

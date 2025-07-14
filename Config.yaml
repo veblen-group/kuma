@@ -29,6 +29,8 @@ chains:
 # Risk and trading parameters
 congestion_risk_discount: 0.9
 max_slippage: 0.5
+add_tvl_threshold: 10.0
+remove_tvl_threshold: 5.0
 
 # tycho simulation
 tycho_api_key: "sampletoken"
