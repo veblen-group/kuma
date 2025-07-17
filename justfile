@@ -6,10 +6,10 @@ set fallback
 
 default_env := 'local'
 copy-env type=default_env:
-  cp {{ type }}.env.example .env
+    cp {{ type }}.env.example .env
 
 run:
-  cargo run
+    cargo run
 
 generate-signals:
     RUST_LOG=info cargo run -p kuma-cli -- \
