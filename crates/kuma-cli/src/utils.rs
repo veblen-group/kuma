@@ -78,13 +78,13 @@ pub(crate) fn get_chain_pairs(
 
         match (a, b) {
             (None, _) | (_, None) => {
-                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🚫 Token pair not configured on chain");
+                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "Failed to initialized token pair for chain");
             }
             (Some((_, a)), Some((_, b))) => {
                 let pair = Pair::new(a.clone(), b.clone());
                 pairs.insert(chain.clone(), pair);
 
-                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🔄 Token pair configured");
+                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🪙 Successfully initialized token pair for chain");
             }
         }
     }

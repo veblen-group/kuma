@@ -15,12 +15,6 @@ pub struct Config {
     /// Chain configurations (deserialized from string map to Chain map)
     pub chains: Vec<ChainConfig>,
 
-    /// Congestion risk discount factor (0.0 - 1.0)
-    pub congestion_risk_discount: f64,
-
-    /// Maximum acceptable slippage percentage
-    pub max_slippage: f64,
-
     /// API key for Tycho Indexer
     pub tycho_api_key: String,
 
@@ -29,6 +23,16 @@ pub struct Config {
 
     /// Threshold for removing TVL from the system
     pub remove_tvl_threshold: f64,
+
+    /// Congestion risk discount factor (0.0 - 1.0)
+    pub congestion_risk_discount_bps: u64,
+
+    /// Maximum acceptable slippage percentage
+    pub max_slippage_bps: u64,
+
+    pub binary_search_steps: usize,
+
+    pub max_trade_size: u64,
 
     /// Private key bytes for transaction signing
     // TODO: replace with private key path

@@ -26,6 +26,14 @@ impl Pair {
     pub fn in_token_vec(&self, tokens: &[Token]) -> bool {
         tokens.contains(&self.0) && tokens.contains(&self.1)
     }
+
+    pub fn token_a(&self) -> &Token {
+        &self.0
+    }
+
+    pub fn token_b(&self) -> &Token {
+        &self.1
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +41,10 @@ pub(crate) struct PairState {
     pub(crate) block_number: u64,
     pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
     pub(crate) modified_pools: Arc<HashSet<state::Id>>,
+
     pub(crate) unmodified_pools: Arc<HashSet<state::Id>>,
+
+    #[allow(dead_code)]
     pub(crate) metadata: HashMap<state::Id, Arc<ProtocolComponent>>,
 }
 

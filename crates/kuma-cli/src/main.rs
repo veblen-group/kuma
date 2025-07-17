@@ -16,6 +16,7 @@ mod config;
 mod kuma;
 mod signals;
 mod state;
+mod strategy;
 mod utils;
 
 #[derive(Parser)]

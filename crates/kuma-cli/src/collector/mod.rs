@@ -123,7 +123,7 @@ impl Worker {
 
             info!(
                 block.height = ?block_update.block_number_or_timestamp,
-                "Received block update"
+                "🎁 Received block update"
             );
             let block = {
                 if let Some(old_block) = block_tx.borrow().as_ref().clone() {

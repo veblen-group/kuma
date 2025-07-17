@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{self, Context as _};
+use color_eyre::eyre::{self, Context as _, ensure};
 use futures::StreamExt as _;
+use num_bigint::BigUint;
 use tracing::info;
 use tycho_common::models::token::Token;
 
@@ -11,23 +12,23 @@ use crate::{
     collector,
     config::Config,
     state::pair::Pair,
+    strategy::CrossChainSingleHop,
     utils::{get_chain_pairs, get_chains_from_cli, parse_chain_assets},
 };
 
 pub(crate) struct Kuma {
+    command: Commands,
+
     #[allow(unused)]
     all_tokens: HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
-    #[allow(unused)]
-    pair: Pair,
-    // slow chain
-    #[allow(unused)]
-    chain_a: Chain,
-    // fast chain
-    #[allow(unused)]
-    chain_b: Chain,
-    cli: Cli,
-    collector_a_handle: crate::collector::Handle,
-    collector_b_handle: crate::collector::Handle,
+    slow_pair: Pair,
+    slow_chain: Chain,
+    fast_pair: Pair,
+    fast_chain: Chain,
+
+    slow_collector_handle: crate::collector::Handle,
+    fast_collector_handle: crate::collector::Handle,
+    strategy: CrossChainSingleHop,
 }
 
 impl Kuma {
@@ -38,6 +39,10 @@ impl Kuma {
             tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
+            max_slippage_bps,
+            congestion_risk_discount_bps,
+            binary_search_steps,
+            max_trade_size,
             ..
         } = cfg;
 
@@ -49,82 +54,120 @@ impl Kuma {
         for (chain, _tokens) in &chain_assets {
             info!(chain.name = %chain.name,
                     chain.id = %chain.metadata.id(),
-                    "🔗");
+                    "🔗 Initialized chain info from config");
         }
 
-        let mut pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &chain_assets);
-        let (chain_a, chain_b) = get_chains_from_cli(&cli, &chain_assets);
+        let pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &chain_assets);
+        let (slow_chain, fast_chain) = get_chains_from_cli(&cli, &chain_assets);
+        let slow_pair = pairs.get(&slow_chain).expect(&format!(
+            "could not find pair info for {:}",
+            slow_chain.name
+        ));
+        let fast_pair = pairs.get(&fast_chain).expect(&format!(
+            "could not find pair info for {:}",
+            fast_chain.name
+        ));
 
-        let collector_a_handle = make_collector(
-            chain_a.clone(),
-            chain_assets[&chain_a].clone(),
+        // set up tycho stream collectors
+        let slow_collector_handle = make_collector(
+            slow_chain.clone(),
+            chain_assets[&slow_chain].clone(),
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
         )
         .wrap_err("failed to start chain a collector")?;
 
-        let collector_b_handle = make_collector(
-            chain_b.clone(),
-            chain_assets[&chain_b].clone(),
+        let fast_collector_handle = make_collector(
+            fast_chain.clone(),
+            chain_assets[&fast_chain].clone(),
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
         )
         .wrap_err("failed to start chain a collector")?;
+
+        // initialize single hop strategy
+        let strategy = CrossChainSingleHop {
+            slow_pair: slow_pair.clone(),
+            fast_pair: fast_pair.clone(),
+            // TODO: ??
+            min_profit_threshold: 0.5,
+            // TODO: make token -> chain -> bigint inventory map from config
+            available_inventory: BigUint::from(max_trade_size),
+            binary_search_steps,
+            max_slippage_bps: (max_slippage_bps as i32)
+                .try_into()
+                .expect("Failed to convert max_slippage_bps to f64"),
+            congestion_risk_discount_bps,
+        };
 
         Ok(Self {
-            cli,
-            chain_a: chain_a.clone(),
-            chain_b,
+            command: cli.command,
             all_tokens: chain_assets,
-            // TODO: do i have one pair or a pair per chain?
-            pair: pairs.remove(&chain_a).expect("pair for chain a not found"),
-            collector_a_handle,
-            collector_b_handle,
+            slow_chain,
+            slow_pair: slow_pair.clone(),
+            fast_chain,
+            fast_pair: fast_pair.clone(),
+            slow_collector_handle,
+            fast_collector_handle,
+            strategy,
         })
     }
 
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            cli,
-            pair,
-            collector_a_handle,
-            collector_b_handle,
+            command,
+            slow_chain,
+            slow_pair,
+            fast_chain,
+            fast_pair,
+            slow_collector_handle,
+            fast_collector_handle,
+            strategy,
             ..
         } = self;
 
-        if let Commands::GenerateSignals = cli.command {
-            info!(command = "generate signals");
+        let _signal = {
+            // TODO: do i need Commands::GenerateSignal if this is always run?
+            info!(command = "generating signal");
 
-            let mut chain_a_pair_stream = collector_a_handle.get_pair_state_stream(&pair);
-            let mut chain_b_pair_stream = collector_b_handle.get_pair_state_stream(&pair);
+            let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
+            let mut fast_chain_states = fast_collector_handle.get_pair_state_stream(&fast_pair);
 
             // read state from stream
-            let block_a = chain_a_pair_stream
+            let slow_state = slow_chain_states
                 .next()
                 .await
                 .expect("chain a stream should yield initial block");
-            let block_b = chain_b_pair_stream
+            let fast_state = fast_chain_states
                 .next()
                 .await
                 .expect("chain b stream should yield initial block");
 
-            info!(block = %block_a.block_number, "reaped initial block from chain a");
-            info!(block = %block_b.block_number, "reaped initial block from chain b");
+            info!(block = %slow_state.block_number, "reaped initial block from chain a");
+            info!(block = %fast_state.block_number, "reaped initial block from chain b");
 
             // precompute data for signal
+            let precompute = strategy.precompute(&slow_state, &slow_chain);
 
             // compute arb signal
-            // log result
-        }
+            if let Some(signal) = strategy.generate_signal(&precompute, &fast_state, &fast_chain) {
+                // TODO: display impl for signal
+                info!(signal = ?signal,"generated signal");
+                Some(signal)
+            } else {
+                info!("no signal generated");
+                None
+            }
+        };
 
-        if let Commands::DryRun = cli.command {
+        if let Commands::DryRun = command {
             // set up tycho encoder
             // set up signer
         }
 
-        if let Commands::Execute = cli.command {
+        if let Commands::Execute = command {
             // set up submission stuff
         }
 
