@@ -4,17 +4,15 @@ use std::{
 };
 
 use tracing::{debug, instrument, trace};
-use tycho_simulation::protocol::{
-    models::{BlockUpdate, ProtocolComponent},
-    state::ProtocolSim,
-};
+use tycho_common::simulation::protocol_sim::ProtocolSim;
+use tycho_simulation::protocol::models::{ProtocolComponent, Update};
 
 use super::pair::{Pair, PairState};
 use crate::state;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Block {
-    pub(crate) block_number: u64,
+    pub(crate) height: u64,
     /// The current states
     pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
     /// The pools that have been modified in the latest block update
@@ -25,9 +23,9 @@ pub(crate) struct Block {
 }
 
 impl Block {
-    pub fn new(block_update: BlockUpdate) -> Self {
-        let BlockUpdate {
-            block_number,
+    pub fn new(block_update: Update) -> Self {
+        let Update {
+            block_number_or_timestamp,
             states,
             new_pairs,
             ..
@@ -44,7 +42,7 @@ impl Block {
             .collect();
 
         Self {
-            block_number,
+            height: block_number_or_timestamp,
             states,
             modified_pools: Arc::new(metadata.keys().cloned().collect()),
             unmodified_pools: Arc::new(HashSet::new()),
@@ -71,7 +69,7 @@ impl Block {
     /// - if `removed_pairs` contains an ID not present in the original maps
     /// - if `new_pairs` refers to a state missing from `updated_states`
     #[instrument]
-    pub fn apply_update(self, block_update: BlockUpdate) -> Self {
+    pub fn apply_update(self, block_update: Update) -> Self {
         let Self {
             modified_pools,
             unmodified_pools,
@@ -80,8 +78,8 @@ impl Block {
             ..
         } = self;
 
-        let BlockUpdate {
-            block_number,
+        let Update {
+            block_number_or_timestamp: height,
             states: mut updated_states,
             new_pairs,
             removed_pairs,
@@ -105,15 +103,15 @@ impl Block {
 
             // update modified/unmodified maps
             if modified_pools.remove(&id) {
-                trace!(block.number = %block_number, pair.id = %id, "Removed pair from modified pairs");
+                trace!(block.number = %height, pair.id = %id, "Removed pair from modified pairs");
             } else if unmodified_pools.remove(&id) {
-                trace!(block.number = %block_number, pair.id = %id, "Removed pair from unmodified pairs");
+                trace!(block.number = %height, pair.id = %id, "Removed pair from unmodified pairs");
             } else {
                 // TODO: maybe fail more gracefully from bad block updates, altho this should never happen if tycho_simulation is well written
                 panic!("BlockUpdate.removed_pairs should only contain existing pairs");
             }
 
-            debug!(block.number = %block_number, pair.id = %id, "Removed pair");
+            debug!(block.number = %height, pair.id = %id, "Removed pair");
         }
 
         // add new pools
@@ -127,13 +125,13 @@ impl Block {
 
             // update metadata map
             if let Some(metadata) = metadata.insert(pair_id.clone(), Arc::new(new_pair)) {
-                debug!(block.number = %block_number, pair.id = %metadata.id, "Updated metadata for pair");
+                debug!(block.number = %height, pair.id = %metadata.id, "Updated metadata for pair");
             }
 
             // Update modified pairs
             modified_pools.insert(pair_id.clone());
 
-            debug!(block.number = %block_number, pair.id = %pair_id, "Added pair to ");
+            debug!(block.number = %height, pair.id = %pair_id, "Added pair to ");
         }
 
         // update existing pools
@@ -145,14 +143,14 @@ impl Block {
             // add to modified pairs
             modified_pools.insert(pair_id.clone());
             if unmodified_pools.remove(&pair_id) {
-                trace!(block.number = %block_number, pair.id = %pair_id, "Updated unmodified pair");
+                trace!(block.number = %height, pair.id = %pair_id, "Updated unmodified pair");
             }
 
-            debug!(block.number = %block_number, pair.id = %pair_id, "Updated pair state");
+            debug!(block.number = %height, pair.id = %pair_id, "Updated pair state");
         }
 
         Self {
-            block_number: block_update.block_number,
+            height: block_update.block_number_or_timestamp,
             modified_pools: Arc::new(modified_pools),
             unmodified_pools: Arc::new(unmodified_pools),
             metadata,
@@ -176,7 +174,7 @@ impl Block {
             .collect();
 
         PairState {
-            block_number: self.block_number,
+            block_number: self.height,
             modified_pools: Arc::clone(&self.modified_pools),
             unmodified_pools: Arc::clone(&self.unmodified_pools),
             states: pair_states,

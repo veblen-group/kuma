@@ -41,13 +41,19 @@ pub struct TokenConfig {
     pub addresses: HashMap<Chain, Bytes>,
 
     /// Token decimals
-    pub decimals: usize,
+    pub decimals: u32,
+
+    /// Taxs
+    pub tax: u64,
 
     /// Amount of gas to use for transfers
-    pub transfer_gas: u64,
+    // pub transfer_gas: Vec<Option<u64>>,
 
     /// Existing inventory for this token
     pub inventory: f64,
+
+    /// Quality of the token
+    pub quality: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

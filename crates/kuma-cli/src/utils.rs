@@ -2,7 +2,8 @@ use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _, OptionExt as _};
 use tracing::{info, warn};
-use tycho_simulation::{evm::tycho_models, models::Token};
+use tycho_common::models::token::Token;
+use tycho_simulation::evm::tycho_models;
 
 use crate::{
     Cli,
@@ -43,10 +44,13 @@ pub(crate) fn parse_chain_assets(
                         .clone();
 
                     let token = Token::new(
-                        &addr.to_string(),
-                        token_config.decimals,
+                        &addr,
                         &symbol,
-                        token_config.transfer_gas.into(),
+                        token_config.decimals,
+                        token_config.tax,
+                        &vec![None],
+                        chain.name,
+                        token_config.quality,
                     );
                     Ok((addr, token))
                 })

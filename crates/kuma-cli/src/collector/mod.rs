@@ -77,7 +77,7 @@ struct Worker {
 
 impl Worker {
     #[instrument(skip(self), fields(chain.name = %self.chain.name))]
-    pub async fn run(mut self) -> eyre::Result<()> {
+    pub async fn run(self) -> eyre::Result<()> {
         let Self {
             protocol_stream_builder,
             chain,
@@ -107,21 +107,21 @@ impl Worker {
             };
 
             info!(
-                block.number = ?block_update.block_number,
+                block.height = ?block_update.block_number_or_timestamp,
                 "Received block update"
             );
             let block = {
                 if let Some(old_block) = block_tx.borrow().as_ref().clone() {
                     let new_block = old_block.apply_update(block_update);
                     info!(
-                        block.number = new_block.block_number,
+                        block.number = new_block.height,
                         "Applied block update from Tycho Simulation stream."
                     );
 
                     Some(new_block)
                 } else {
                     info!(
-                        block.number = block_update.block_number,
+                        block.number = block_update.block_number_or_timestamp,
                         "Received initial block from Tycho Simulation stream."
                     );
                     Some(Block::new(block_update))

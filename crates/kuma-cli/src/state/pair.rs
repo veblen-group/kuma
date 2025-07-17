@@ -9,10 +9,8 @@ use futures::{Stream, StreamExt};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::warn;
-use tycho_simulation::{
-    models::Token,
-    protocol::{models::ProtocolComponent, state::ProtocolSim},
-};
+use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use super::block::Block;
 use crate::state;
