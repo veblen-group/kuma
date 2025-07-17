@@ -1,20 +1,18 @@
+use std::sync::Arc;
+
 use num_bigint::BigUint;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 
-use crate::chain::Chain;
-
-// Core state structures for the new architecture
-#[derive(Debug, Clone)]
-pub struct State {
-    pub state: Box<dyn ProtocolSim>,
-    pub chain_info: Chain,
-    pub block_number: u64,
-}
+use crate::{
+    chain::Chain,
+    state::{self, pair::PairState},
+};
 
 #[derive(Debug, Clone)]
 pub struct Precompute {
     pub calculations: Vec<SlowChainCalculation>,
-    pub slow_state: State,
+    pub state: PairState,
+    pub chain: Chain,
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +22,7 @@ pub struct SlowChainCalculation {
     pub amount_out: BigUint,
     pub input_token: Token,
     pub output_token: Token,
+    pub pool_id: state::Id,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +58,8 @@ pub struct CrossChainArbitrageStrategy {
 }
 
 impl CrossChainArbitrageStrategy {
-    fn precompute(&self, slow_state: &State) -> Precompute {
+    fn precompute(&self, slow_state: &PairState, slow_chain: &Chain) -> Precompute {
+        // TODO: initialize calculations from unmodified pools' precompute values
         let mut calculations = Vec::new();
 
         // Create amount input ranges for binary search
@@ -69,10 +69,21 @@ impl CrossChainArbitrageStrategy {
         // TODO: parrelize this loop
         for i in 1..=self.binary_search_steps {
             let amount_in = &step_size * BigUint::from(i as u64);
+            let pool_id = slow_state
+                .modified_pools
+                .iter()
+                .next()
+                .expect("only modified pools in cli");
+            let pool = slow_state
+                .states
+                .get(pool_id)
+                .expect("pool not found")
+                .clone();
 
             // Path A->B->A: Start with asset A, swap to B on slow chain
             if let Ok(amount_out_a_to_b) =
-                self.simulate_swap(&slow_state.state, &self.asset_a, &self.asset_b, &amount_in)
+                // TODO: need to get the calculations for all modified pools for a given pair
+                self.simulate_swap(pool.clone(), &self.asset_a, &self.asset_b, &amount_in)
             {
                 calculations.push(SlowChainCalculation {
                     path: Direction::AtoB,
@@ -80,12 +91,14 @@ impl CrossChainArbitrageStrategy {
                     amount_out: amount_out_a_to_b,
                     input_token: self.asset_a.clone(),
                     output_token: self.asset_b.clone(),
+                    pool_id: pool_id.clone(),
                 });
             }
 
             // Path B->A->B: Start with asset B, swap to A on slow chain
             if let Ok(amount_out_b_to_a) =
-                self.simulate_swap(&slow_state.state, &self.asset_b, &self.asset_a, &amount_in)
+                // TODO: check for each unmodified pool
+                self.simulate_swap(pool, &self.asset_b, &self.asset_a, &amount_in)
             {
                 calculations.push(SlowChainCalculation {
                     path: Direction::BtoA,
@@ -93,27 +106,35 @@ impl CrossChainArbitrageStrategy {
                     amount_out: amount_out_b_to_a,
                     input_token: self.asset_b.clone(),
                     output_token: self.asset_a.clone(),
+                    pool_id: pool_id.clone(),
                 });
             }
         }
 
         Precompute {
             calculations,
-            slow_state: slow_state.clone(),
+            state: slow_state.clone(),
+            chain: slow_chain.clone(),
         }
     }
 
-    fn compute_arb(&self, precompute: &Precompute, fast_state: &State) -> Option<ArbSignal> {
+    fn compute_arb(
+        &self,
+        precompute: &Precompute,
+        fast_state: &PairState,
+        fast_chain: &Chain,
+    ) -> Option<ArbSignal> {
         let mut best_signal: Option<ArbSignal> = None;
         let mut best_profit = BigUint::from(0u64);
 
         // TODO: parrelize this loop
         for slow_calc in &precompute.calculations {
             // Complete the arbitrage path based on the slow chain calculation
+            let pool = fast_state.states.values().next().unwrap().clone();
 
             // Use the amount_out from slow chain as amount_in for fast chain
             if let Ok(fast_amount_out) = self.simulate_swap(
-                &fast_state.state,
+                pool,
                 &slow_calc.output_token,
                 &slow_calc.input_token,
                 &slow_calc.amount_out,
@@ -133,8 +154,8 @@ impl CrossChainArbitrageStrategy {
                         best_signal = Some(ArbSignal {
                             asset_a: self.asset_a.clone(),
                             asset_b: self.asset_b.clone(),
-                            slow_chain: precompute.slow_state.chain_info.clone(),
-                            fast_chain: fast_state.chain_info.clone(),
+                            slow_chain: precompute.chain.clone(),
+                            fast_chain: fast_chain.clone(),
                             path: slow_calc.path.clone(),
                             slow_chain_amount_out: slow_calc.amount_out.clone(),
                             fast_chain_amount_out: fast_amount_out,
@@ -152,7 +173,7 @@ impl CrossChainArbitrageStrategy {
 
     fn simulate_swap(
         &self,
-        state: &Box<dyn ProtocolSim>,
+        state: Arc<dyn ProtocolSim>,
         token_in: &Token,
         token_out: &Token,
         amount_in: &BigUint,
@@ -185,21 +206,25 @@ pub(crate) fn with_risk_factor(amount: &BigUint, risk_factor_bps: u64) -> BigUin
 mod tests {
     use super::*;
     use crate::chain::Chain;
-    use std::{str::FromStr as _, sync::Arc};
+    use std::{
+        collections::{HashMap, HashSet},
+        str::FromStr as _,
+        sync::Arc,
+    };
     use tycho_common::simulation::protocol_sim::ProtocolSim;
 
     // Helper function to create UniswapV2State for testing
     fn create_uniswap_v2_state_with_liquidity(
         reserve_0: &str,
         reserve_1: &str,
-    ) -> Box<dyn ProtocolSim> {
+    ) -> Arc<dyn ProtocolSim> {
         use std::str::FromStr;
         use tycho_simulation::evm::protocol::uniswap_v2::state::UniswapV2State;
 
         let reserve_0_u256 = alloy::primitives::U256::from_str(reserve_0).unwrap();
         let reserve_1_u256 = alloy::primitives::U256::from_str(reserve_1).unwrap();
 
-        Box::new(UniswapV2State::new(reserve_0_u256, reserve_1_u256))
+        Arc::new(UniswapV2State::new(reserve_0_u256, reserve_1_u256))
     }
 
     fn make_weth() -> Token {
@@ -241,23 +266,36 @@ mod tests {
         });
 
         // Create slow state (favors token B)
-        let slow_state = State {
-            state: create_uniswap_v2_state_with_liquidity("950000", "1000000"),
-            chain_info: Chain::eth_mainnet(),
+        let slow_chain = Chain::eth_mainnet();
+        let slow_state = PairState {
+            states: HashMap::from([(
+                state::Id::from("0x123"),
+                create_uniswap_v2_state_with_liquidity("950000", "1000000"),
+            )]),
             block_number: 100,
+            modified_pools: Arc::new(HashSet::from([state::Id::from("0x123")])),
+            unmodified_pools: Arc::new(HashSet::new()),
+            metadata: HashMap::new(),
         };
 
         // Create fast state (favors token A)
-        let fast_state = State {
-            state: create_uniswap_v2_state_with_liquidity("1000000", "950000"),
-            chain_info: Chain::eth_mainnet(),
+        let fast_chain = Chain::base_mainnet();
+        let fast_state = PairState {
             block_number: 200,
+            states: HashMap::from([(
+                state::Id::from("0x456"),
+                create_uniswap_v2_state_with_liquidity("1000000", "950000"),
+            )]),
+            modified_pools: Arc::new(HashSet::from([state::Id::from("0x456")])),
+            unmodified_pools: Arc::new(HashSet::new()),
+            metadata: HashMap::new(),
         };
 
         // Test precompute
-        let precompute = strategy.precompute(&slow_state);
+        let precompute = strategy.precompute(&slow_state, &slow_chain);
         assert!(!precompute.calculations.is_empty());
         assert_eq!(precompute.calculations.len(), 10); // 5 steps × 2 paths
+        assert_eq!(precompute.chain, slow_chain);
 
         // Verify precompute calculations
         let first_calc = &precompute.calculations[0];
@@ -268,11 +306,11 @@ mod tests {
         assert_eq!(second_calc.amount_in, BigUint::from(200u64));
         assert!(matches!(second_calc.path, Direction::BtoA)); // Second path should be BtoA
 
-        // Test compute_arb
-        let signal = strategy.compute_arb(&precompute, &fast_state);
-        assert!(signal.is_some());
+        // compute_arb
+        let signal = strategy
+            .compute_arb(&precompute, &fast_state, &fast_chain)
+            .unwrap();
 
-        let signal = signal.unwrap();
         // With given reserves and slippage, profit should be in a specific range
         assert!(signal.profit_percentage >= 0.5 && signal.profit_percentage <= 10.0);
         assert!(signal.expected_profit > BigUint::from(0u64));
@@ -286,7 +324,7 @@ mod tests {
 
         assert_eq!(
             signal.fast_chain.chain_id(),
-            Chain::eth_mainnet().chain_id()
+            Chain::base_mainnet().chain_id()
         );
 
         // Verify token assignments
