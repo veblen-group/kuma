@@ -1,21 +1,13 @@
 use num_bigint::BigUint;
-use std::{pin::Pin, sync::Arc, time::Duration};
-use tokio::{
-    select,
-    sync::watch,
-    time::{Sleep, sleep},
-};
-use tokio_util::sync::CancellationToken;
-use tracing::{info, instrument, warn};
-use tycho_simulation::{models::Token, protocol::state::ProtocolSim};
+use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 
-use crate::chain::ChainInfo;
+use crate::chain::Chain;
 
 // Core state structures for the new architecture
 #[derive(Debug, Clone)]
 pub struct State {
     pub state: Box<dyn ProtocolSim>,
-    pub chain_info: ChainInfo,
+    pub chain_info: Chain,
     pub block_number: u64,
 }
 
@@ -44,8 +36,8 @@ pub enum Direction {
 pub struct ArbSignal {
     pub asset_a: Token,
     pub asset_b: Token,
-    pub slow_chain: ChainInfo,
-    pub fast_chain: ChainInfo,
+    pub slow_chain: Chain,
+    pub fast_chain: Chain,
     pub path: Direction,
     pub slow_chain_amount_out: BigUint,
     pub fast_chain_amount_out: BigUint,
@@ -189,44 +181,12 @@ pub(crate) fn with_risk_factor(amount: &BigUint, risk_factor_bps: u64) -> BigUin
     (amount * risk_multiplier) / BigUint::from(10000u64)
 }
 
-// Async signal emission function
-pub async fn emit_signal(sig: ArbSignal) {
-    info!(
-        "🚀 Arbitrage signal emitted: {:.2}% profit on {} {} trade",
-        sig.profit_percentage, sig.optimal_amount_in, sig.asset_a.symbol
-    );
-
-    // In production, this would emit to:
-    // - Trading execution engine
-    // - Risk management system
-    // - Monitoring/alerting system
-    // - Performance analytics
-}
-
-// Main arbitrage task runner with the new architecture
-pub async fn run_arb_task(
-    mut slow_rx: watch::Receiver<Arc<State>>,
-    mut fast_rx: watch::Receiver<Arc<State>>,
-    strategy: Arc<CrossChainArbitrageStrategy>,
-    shutdown: CancellationToken,
-    slow_block_interval: Duration,
-) {
-    info!("Starting arbitrage task with timer-based architecture");
-
-    // Timer for "75% of slow block interval"
-    let mut timer: Option<Pin<Box<Sleep>>> = None;
-    // Future for in-flight signal emission
-    let mut emit_fut: Option<Pin<Box<dyn std::future::Future<Output = ()> + Send>>> = None;
-    // Last slow-chain precompute result
-    let mut last_pre: Option<Precompute> = None;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
-    use tokio::sync::watch;
-    use tokio_util::sync::CancellationToken;
+    use crate::chain::Chain;
+    use std::{str::FromStr as _, sync::Arc};
+    use tycho_common::simulation::protocol_sim::ProtocolSim;
 
     // Helper function to create UniswapV2State for testing
     fn create_uniswap_v2_state_with_liquidity(
@@ -242,30 +202,37 @@ mod tests {
         Box::new(UniswapV2State::new(reserve_0_u256, reserve_1_u256))
     }
 
-    fn create_test_token(symbol: &str, address: &str) -> Token {
-        Token {
-            symbol: symbol.to_string(),
-            address: address.as_bytes().to_vec().into(),
-            decimals: 18,
-            gas: BigUint::from(0u64),
-        }
+    fn make_weth() -> Token {
+        Token::new(
+            &tycho_common::Bytes::from_str("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2").unwrap(),
+            "WETH",
+            18,
+            1000,
+            &[Some(1000u64)],
+            tycho_common::models::Chain::Ethereum,
+            100,
+        )
     }
-
-    fn create_test_chain_info(chain: &str) -> ChainInfo {
-        ChainInfo {
-            chain: chain.to_string(),
-            ..Default::default()
-        }
+    fn make_usdc() -> Token {
+        Token::new(
+            &tycho_common::Bytes::from_str("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48").unwrap(),
+            "USDC",
+            6,
+            1000,
+            &[Some(1000u64)],
+            tycho_common::models::Chain::Ethereum,
+            100,
+        )
     }
 
     #[test]
-    fn test_timer_based_arbitrage_strategy() {
-        let token_a = create_test_token("USDC", "0x1");
-        let token_b = create_test_token("USDT", "0x2");
+    fn compute_arb_sanity_check() {
+        let usdc = make_usdc();
+        let weth = make_weth();
 
         let strategy = Arc::new(CrossChainArbitrageStrategy {
-            asset_a: token_a.clone(),
-            asset_b: token_b.clone(),
+            asset_a: usdc.clone(),
+            asset_b: weth.clone(),
             min_profit_threshold: 0.5, // 0.5%
             max_trade_amount: BigUint::from(1000u64),
             binary_search_steps: 5,
@@ -276,14 +243,14 @@ mod tests {
         // Create slow state (favors token B)
         let slow_state = State {
             state: create_uniswap_v2_state_with_liquidity("950000", "1000000"),
-            chain_info: create_test_chain_info("ethereum"),
+            chain_info: Chain::eth_mainnet(),
             block_number: 100,
         };
 
         // Create fast state (favors token A)
         let fast_state = State {
             state: create_uniswap_v2_state_with_liquidity("1000000", "950000"),
-            chain_info: create_test_chain_info("polygon"),
+            chain_info: Chain::eth_mainnet(),
             block_number: 200,
         };
 
@@ -292,76 +259,38 @@ mod tests {
         assert!(!precompute.calculations.is_empty());
         assert_eq!(precompute.calculations.len(), 10); // 5 steps × 2 paths
 
+        // Verify precompute calculations
+        let first_calc = &precompute.calculations[0];
+        assert_eq!(first_calc.amount_in, BigUint::from(200u64)); // 1000 / 5 steps
+        assert!(matches!(first_calc.path, Direction::AtoB)); // First path should be AtoB
+
+        let second_calc = &precompute.calculations[1];
+        assert_eq!(second_calc.amount_in, BigUint::from(200u64));
+        assert!(matches!(second_calc.path, Direction::BtoA)); // Second path should be BtoA
+
         // Test compute_arb
         let signal = strategy.compute_arb(&precompute, &fast_state);
         assert!(signal.is_some());
 
         let signal = signal.unwrap();
-        assert!(signal.profit_percentage > 0.5);
+        // With given reserves and slippage, profit should be in a specific range
+        assert!(signal.profit_percentage >= 0.5 && signal.profit_percentage <= 10.0);
         assert!(signal.expected_profit > BigUint::from(0u64));
 
-        println!("✅ Timer-based arbitrage strategy test passed!");
-        println!("   Profit: {:.2}%", signal.profit_percentage);
-        println!("   Expected profit: {} units", signal.expected_profit);
-    }
+        // Verify the optimal path and chain assignments
+        assert!(matches!(signal.path, Direction::AtoB)); // The profitable direction with these reserves
+        assert_eq!(
+            signal.slow_chain.chain_id(),
+            Chain::eth_mainnet().chain_id()
+        );
 
-    #[test]
-    fn test_run_arb_task_integration() {
-        tokio_test::block_on(async {
-            let token_a = create_test_token("USDC", "0x1");
-            let token_b = create_test_token("USDT", "0x2");
+        assert_eq!(
+            signal.fast_chain.chain_id(),
+            Chain::eth_mainnet().chain_id()
+        );
 
-            let strategy = Arc::new(CrossChainArbitrageStrategy {
-                asset_a: token_a.clone(),
-                asset_b: token_b.clone(),
-                min_profit_threshold: 0.5,
-                max_trade_amount: BigUint::from(1000u64),
-                binary_search_steps: 3, // Smaller for test performance
-                slippage_tolerance: 0.0025,
-                risk_factor_bps: 25,
-            });
-
-            // Create watch channels
-            let slow_state = Arc::new(State {
-                state: create_uniswap_v2_state_with_liquidity("950000", "1000000"),
-                chain_info: create_test_chain_info("ethereum"),
-                block_number: 100,
-            });
-
-            let fast_state = Arc::new(State {
-                state: create_uniswap_v2_state_with_liquidity("1000000", "950000"),
-                chain_info: create_test_chain_info("polygon"),
-                block_number: 200,
-            });
-
-            let (slow_tx, slow_rx) = watch::channel(slow_state.clone());
-            let (fast_tx, fast_rx) = watch::channel(fast_state.clone());
-            let shutdown = CancellationToken::new();
-
-            // Start the arbitrage task
-            let task_shutdown = shutdown.clone();
-            let task_handle = tokio::spawn(run_arb_task(
-                slow_rx,
-                fast_rx,
-                strategy,
-                task_shutdown,
-                Duration::from_millis(100), // Fast for testing
-            ));
-
-            // Simulate updates
-            tokio::time::sleep(Duration::from_millis(10)).await;
-
-            // Send new slow state update to trigger precompute + timer
-            let _ = slow_tx.send(slow_state);
-
-            // Wait for timer to fire and computation to complete
-            tokio::time::sleep(Duration::from_millis(150)).await;
-
-            // Shutdown
-            shutdown.cancel();
-            task_handle.await.unwrap();
-
-            println!("✅ Timer-based arbitrage task integration test passed!");
-        });
+        // Verify token assignments
+        assert_eq!(signal.asset_a.symbol, "USDC");
+        assert_eq!(signal.asset_b.symbol, "WETH");
     }
 }

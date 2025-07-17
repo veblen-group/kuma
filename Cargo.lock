@@ -477,7 +477,7 @@ dependencies = [
  "lru 0.13.0",
  "parking_lot",
  "pin-project 1.1.10",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -543,7 +543,7 @@ dependencies = [
  "async-stream",
  "futures 0.3.31",
  "pin-project 1.1.10",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "tokio",
@@ -867,7 +867,7 @@ checksum = "b234272ee449e32c9f1afbbe4ee08ea7c4b52f14479518f95c844ab66163c545"
 dependencies = [
  "alloy-json-rpc",
  "alloy-transport",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde_json",
  "tower",
  "tracing",
@@ -2974,9 +2974,9 @@ dependencies = [
 
 [[package]]
 name = "evm_ekubo_sdk"
-version = "0.4.4"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea508be2fca38161c011c360afd34e9a6df2579273cd77b8e51aba11f35f59db"
+checksum = "3718a9dd4f14da3c485e7aa4c8e9c856b4bb98d9a18059636f3315d70f2c7c1f"
 dependencies = [
  "insta",
  "num-traits",
@@ -3143,7 +3143,7 @@ dependencies = [
  "alloy-json-abi",
  "alloy-primitives",
  "foundry-compilers",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "semver 1.0.26",
  "serde",
  "serde_json",
@@ -3251,7 +3251,7 @@ dependencies = [
  "jiff",
  "num-format",
  "path-slash",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "semver 1.0.26",
  "serde",
  "serde_json",
@@ -3411,7 +3411,7 @@ dependencies = [
  "number_prefix",
  "path-slash",
  "regex",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "revm",
  "semver 1.0.26",
  "serde",
@@ -3785,7 +3785,7 @@ dependencies = [
  "once_cell",
  "prost",
  "prost-types",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "secret-vault-value",
  "serde",
  "serde_json",
@@ -4690,7 +4690,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.71.4",
+ "tycho-common",
  "tycho-execution",
  "tycho-simulation",
 ]
@@ -6232,9 +6232,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.20"
+version = "0.12.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabf4c97d9130e2bf606614eb937e86edac8292eaa6f422f995d7e8de1eb1813"
+checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
 dependencies = [
  "async-compression",
  "base64 0.22.1",
@@ -7391,7 +7391,7 @@ dependencies = [
  "path-slash",
  "rayon",
  "regex",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "sanitize-filename",
  "semver 1.0.26",
  "serde",
@@ -7567,7 +7567,7 @@ dependencies = [
  "const-hex",
  "dirs",
  "fs4",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "semver 1.0.26",
  "serde",
  "serde_json",
@@ -8370,9 +8370,9 @@ dependencies = [
 
 [[package]]
 name = "tycho-client"
-version = "0.70.8"
+version = "0.77.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2467bb457a5bd22eb65fadcf3ed928bdfc7f103517e9ad926812e90314cddf52"
+checksum = "843e7e8117cc4e87fb6205b39dc0be2b95c0d553808bea4ef3f55db8e0afd168"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8382,7 +8382,7 @@ dependencies = [
  "hex",
  "hyper 0.14.32",
  "lru 0.12.5",
- "reqwest 0.12.20",
+ "reqwest 0.12.22",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -8391,45 +8391,22 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.70.9",
+ "tycho-common",
  "uuid 1.17.0",
 ]
 
 [[package]]
 name = "tycho-common"
-version = "0.70.9"
+version = "0.77.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4dce602cc742359f7ea61dd3fa752c3449a3aacf6cc2ad1c74ec5419da2c2af"
+checksum = "3cb973035042a6a1ec812dc86e4ba0e8ff0bb26ab46ab3e3f70c4493b75a8d6a"
 dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
  "chrono",
  "hex",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "thiserror 1.0.69",
- "tiny-keccak",
- "tracing",
- "typetag",
- "utoipa",
- "uuid 1.17.0",
-]
-
-[[package]]
-name = "tycho-common"
-version = "0.71.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be61f69315fbff1516adae39c21d1b718d3c102a484976f79f11878111c3e10c"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "chrono",
- "hex",
+ "num-bigint",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -8445,9 +8422,9 @@ dependencies = [
 
 [[package]]
 name = "tycho-execution"
-version = "0.100.1"
+version = "0.111.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6a720e6ee66a81d252be6fe414666ba34202d81b79c4717f1a4d0e3ab273cda"
+checksum = "02e4845d3032951db50ea00313f744df747cc88acd75331fd6bfa298686c4181"
 dependencies = [
  "alloy",
  "chrono",
@@ -8462,15 +8439,16 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "tycho-common 0.71.4",
+ "tycho-common",
 ]
 
 [[package]]
 name = "tycho-simulation"
-version = "0.116.0"
-source = "git+https://github.com/propeller-heads/tycho-simulation.git?tag=0.116.0#9cd12329a1d5f5f745f932bf81d06ed15562ab38"
+version = "0.127.1"
+source = "git+https://github.com/propeller-heads/tycho-simulation.git?tag=0.127.1#b5cce847678c1b60524378797856d55c360dbd80"
 dependencies = [
  "alloy",
+ "async-trait",
  "chrono",
  "dialoguer 0.10.4",
  "dotenv",
@@ -8485,6 +8463,7 @@ dependencies = [
  "mini-moka",
  "num-bigint",
  "num-traits",
+ "reqwest 0.12.22",
  "revm",
  "revm-inspectors",
  "serde",
@@ -8496,7 +8475,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tycho-client",
- "tycho-common 0.70.9",
+ "tycho-common",
  "uuid 1.17.0",
 ]
 

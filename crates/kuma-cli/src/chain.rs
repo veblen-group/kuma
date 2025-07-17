@@ -32,4 +32,17 @@ impl Chain {
             tycho_url: tycho_url.to_string(),
         })
     }
+
+    pub fn eth_mainnet() -> Self {
+        Self {
+            name: tycho_models::Chain::Ethereum,
+            metadata: alloy_chains::Chain::from_named(NamedChain::Mainnet),
+            rpc_url: "https://mainnet.infura.io/v3/".to_string(),
+            tycho_url: "https://tycho.example.com".to_string(),
+        }
+    }
+
+    pub fn chain_id(&self) -> u64 {
+        self.metadata.id()
+    }
 }

@@ -23,11 +23,11 @@ tracing = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tokio-util = { workspace = true }
 tokio-stream = { workspace = true }
-tycho-execution = "0.100.1"
-tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.116.0", features = [
+tycho-execution = "0.111.0"
+tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.127.1", features = [
     "evm",
 ] }
-tycho-common = "0.71.4"
+tycho-common = "0.77.1"
 num-bigint = "0.4.6"
 mockall = "0.13.1"
 proptest = "1.4.0"
