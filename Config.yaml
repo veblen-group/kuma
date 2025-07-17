@@ -4,17 +4,25 @@ tokens:
     addresses:
       ethereum: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
       base: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      unichain: "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
     decimals: 6
+    tax: 1000
+    gas:
+      - 1000
+    quality: 100
     inventory: 100000.0
-    transfer_gas: 5
 
   WETH:
     addresses:
       ethereum: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
       base: "0x4200000000000000000000000000000000000006"
+      unichain: "0x4200000000000000000000000000000000000006"
     decimals: 18
+    tax: 1000
+    gas:
+      - 1000
+    quality: 100
     inventory: 50.0
-    transfer_gas: 5
 
 # Chain configurations
 chains:
@@ -26,6 +34,10 @@ chains:
     rpc_url: "https://mainnet.base.org"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
 
+  - name: unichain
+    rpc_url: "https://mainnet.unichain.org"
+    tycho_url: "tycho-unichain-beta.propellerheads.xyz"
+
 # Risk and trading parameters
 congestion_risk_discount: 0.9
 max_slippage: 0.5
@@ -35,5 +47,5 @@ remove_tvl_threshold: 5.0
 # tycho simulation
 tycho_api_key: "sampletoken"
 
-# Private key (recommended to use environment variable or secure key management)
+# Private key
 private_key: "0x35bfec585b1a17b4e5b339adb1ea0e87e26d398c152054745677b95019e6a834"

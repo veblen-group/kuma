@@ -8,7 +8,6 @@ use std::{
 use futures::{Stream, StreamExt};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
-use tracing::warn;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
@@ -70,15 +69,11 @@ impl Stream for PairStateStream {
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
-                    warn!("some block");
                     let state = block.get_pair_state(&self.pair);
                     Poll::Ready(Some(state))
                 }
                 // Only start yielding values after the initial block is received
-                None => {
-                    warn!("none");
-                    Poll::Pending
-                }
+                None => Poll::Pending,
             },
         }
     }

@@ -32,7 +32,7 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone)]
-pub struct ArbSignal {
+pub struct Signal {
     pub asset_a: Token,
     pub asset_b: Token,
     pub slow_chain: Chain,
@@ -46,7 +46,7 @@ pub struct ArbSignal {
 }
 
 // Implementation of the arbitrage strategy
-pub struct CrossChainArbitrageStrategy {
+pub struct CrossChainSingleHop {
     pub asset_a: Token,
     pub asset_b: Token,
     pub min_profit_threshold: f64,
@@ -57,7 +57,7 @@ pub struct CrossChainArbitrageStrategy {
     pub risk_factor_bps: u64,
 }
 
-impl CrossChainArbitrageStrategy {
+impl CrossChainSingleHop {
     fn precompute(&self, slow_state: &PairState, slow_chain: &Chain) -> Precompute {
         // TODO: initialize calculations from unmodified pools' precompute values
         let mut calculations = Vec::new();
@@ -66,9 +66,10 @@ impl CrossChainArbitrageStrategy {
         // TODO: determine max trade amount based on limits and inventory. min(self.max_protocol_limit * state.get_limits(), self.max_inventory)
         let step_size = &self.max_trade_amount / BigUint::from(self.binary_search_steps as u64);
 
-        // TODO: parrelize this loop
+        // TODO: parrelize this loop over all the steps for each pool
         for i in 1..=self.binary_search_steps {
             let amount_in = &step_size * BigUint::from(i as u64);
+            // TODO: check for every modified pool
             let pool_id = slow_state
                 .modified_pools
                 .iter()
@@ -123,16 +124,17 @@ impl CrossChainArbitrageStrategy {
         precompute: &Precompute,
         fast_state: &PairState,
         fast_chain: &Chain,
-    ) -> Option<ArbSignal> {
-        let mut best_signal: Option<ArbSignal> = None;
+    ) -> Option<Signal> {
+        let mut best_signal: Option<Signal> = None;
         let mut best_profit = BigUint::from(0u64);
 
-        // TODO: parrelize this loop
+        // TODO: binary search over calculation
         for slow_calc in &precompute.calculations {
             // Complete the arbitrage path based on the slow chain calculation
             let pool = fast_state.states.values().next().unwrap().clone();
 
             // Use the amount_out from slow chain as amount_in for fast chain
+            // TODO: slippage adjustment here? probably a question for marcus/tanay
             if let Ok(fast_amount_out) = self.simulate_swap(
                 pool,
                 &slow_calc.output_token,
@@ -151,7 +153,7 @@ impl CrossChainArbitrageStrategy {
 
                     if profit_percentage >= self.min_profit_threshold && profit > best_profit {
                         best_profit = profit.clone();
-                        best_signal = Some(ArbSignal {
+                        best_signal = Some(Signal {
                             asset_a: self.asset_a.clone(),
                             asset_b: self.asset_b.clone(),
                             slow_chain: precompute.chain.clone(),
@@ -255,7 +257,7 @@ mod tests {
         let usdc = make_usdc();
         let weth = make_weth();
 
-        let strategy = Arc::new(CrossChainArbitrageStrategy {
+        let strategy = Arc::new(CrossChainSingleHop {
             asset_a: usdc.clone(),
             asset_b: weth.clone(),
             min_profit_threshold: 0.5, // 0.5%

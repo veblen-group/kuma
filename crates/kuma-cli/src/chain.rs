@@ -33,6 +33,7 @@ impl Chain {
         })
     }
 
+    #[allow(unused)]
     pub fn chain_id(&self) -> u64 {
         self.metadata.id()
     }
@@ -58,6 +59,7 @@ impl Chain {
     }
 
     #[cfg(test)]
+    #[allow(unused)]
     pub fn unichain_mainnet() -> Self {
         Self {
             name: tycho_models::Chain::Unichain,

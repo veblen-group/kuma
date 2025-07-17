@@ -14,7 +14,7 @@ run:
 generate-signals:
     RUST_LOG=info cargo run -p kuma-cli -- \
     --token-a usdc --token-b weth \
-    --chain-a ethereum --chain-b base \
+    --chain-a ethereum --chain-b unichain \
     generate-signals
 
 default_lang := 'all'

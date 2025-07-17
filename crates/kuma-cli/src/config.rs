@@ -47,13 +47,13 @@ pub struct TokenConfig {
     pub tax: u64,
 
     /// Amount of gas to use for transfers
-    // pub transfer_gas: Vec<Option<u64>>,
-
-    /// Existing inventory for this token
-    pub inventory: f64,
+    pub gas: Vec<Option<u64>>,
 
     /// Quality of the token
     pub quality: u32,
+
+    /// Existing inventory for this token
+    pub inventory: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
