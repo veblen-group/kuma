@@ -42,7 +42,7 @@ impl Handle {
             .expect("shutdown must not be called twice")
             .await
         {
-            error!(chain=?self.chain, "Tycho simulation stream worker failed: {}", e);
+            error!(chain=%self.chain, "Tycho simulation stream worker failed: {}", e);
             return Err(e.into());
         }
         Ok(())

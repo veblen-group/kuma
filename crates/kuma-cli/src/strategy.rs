@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    iter::zip,
+};
 
 use color_eyre::eyre::{self, Context};
 use num_bigint::BigUint;
@@ -44,61 +47,38 @@ impl CrossChainSingleHop {
         precompute: Precomputes,
         fast_state: PairState,
     ) -> Option<Signal> {
-        // 1. find all crossing pools from precompute & fast
+        // 1. find the first crossing pools from precompute & fast_state
+        let fast_sorted_spot_prices = (
+            make_sorted_spot_prices(&fast_state, &self.fast_pair, Direction::AtoB),
+            make_sorted_spot_prices(&fast_state, &self.fast_pair, Direction::BtoA),
+        );
 
-        // 2. for each pair of crossing pools, binary search over swap amounts
-        // 3. choose best crossing pair
-        // 4. choose best direction (probably can just be part of 3)
+        // pools with the best A-> B (slow) and B-> A (fast) trades
+        let aba = find_crossed_pools(
+            &precompute.sorted_spot_prices.0,
+            &fast_sorted_spot_prices.1,
+            Direction::AtoB,
+        );
+        if let Some(aba) = aba {
+            debug!(
+                slow.chain = %self.slow_chain,
+                slow.pool_id = %aba.0,
+                fast.chain = %self.fast_chain,
+                fast.pool_id = %aba.1,
+                "found A-> B (slow) and B-> A (fast) trades"
+            );
+        } else {
+            debug!(
+                slow.chain = %self.slow_chain,
+                fast.chain = %self.fast_chain,
+                "no A-> B (slow) and B-> A (fast) trades"
+            )
+        };
 
-        // let signal = precompute.generate_best_signal();
+        // TODO: other direction
 
-        // let mut best_signal: Option<Signal> = None;
-        // let mut best_profit = BigUint::from(0u64);s
+        // 2. binary search over swap amounts
 
-        // // TODO: binary search over calculation
-        // for slow_calc in &precompute.calculations {
-        //     // Complete the arbitrage path based on the slow chain calculation
-        //     let pool = fast_state.states.values().next().unwrap().clone();
-
-        //     // Use the amount_out from slow chain as amount_in for fast chain
-        //     // TODO: slippage adjustment here? probably a question for marcus/tanay
-        //     if let Ok(fast_amount_out) = self.simulate_swap(
-        //         pool,
-        //         &slow_calc.output_token,
-        //         &slow_calc.input_token,
-        //         &slow_calc.amount_out,
-        //     ) {
-        //         // Calculate profit: fast_amount_out - slow_amount_in
-        //         if fast_amount_out > slow_calc.amount_in {
-        //             let profit = &fast_amount_out - &slow_calc.amount_in;
-        //             let profit_percentage = (profit.clone() * BigUint::from(10000u64)
-        //                 / &slow_calc.amount_in)
-        //                 .to_string()
-        //                 .parse::<f64>()
-        //                 .unwrap_or(0.0)
-        //                 / 100.0;
-
-        //             // TODO: profit % should probably be handled at the signal promotion stage
-        //             if profit_percentage >= self.min_profit_threshold && profit > best_profit {
-        //                 best_profit = profit.clone();
-        //                 best_signal = Some(Signal {
-        //                     slow_pair: self.slow_pair.clone(),
-        //                     fast_pair: self.fast_pair.clone(),
-        //                     slow_chain: precompute.chain.clone(),
-        //                     fast_chain: fast_chain.clone(),
-        //                     path: slow_calc.path.clone(),
-        //                     slow_chain_amount_out: slow_calc.amount_out.clone(),
-        //                     fast_chain_amount_out: fast_amount_out,
-        //                     profit_percentage,
-        //                     optimal_amount_in: slow_calc.amount_in.clone(),
-        //                     expected_profit: profit,
-        //                 });
-        //             }
-        //         }
-        //     }
-        // }
-
-        // best_signal
         None
     }
 }
@@ -150,7 +130,7 @@ impl PoolPrecomputes {
 
 pub struct Precomputes {
     sims: HashMap<state::Id, (PoolPrecomputes, PoolPrecomputes)>,
-    spot_prices_sorted: (Vec<(state::Id, f64)>, Vec<(state::Id, f64)>),
+    sorted_spot_prices: (Vec<(state::Id, f64)>, Vec<(state::Id, f64)>),
 }
 
 impl Precomputes {
@@ -197,13 +177,13 @@ impl Precomputes {
         sims.extend(precomputes);
 
         let spot_prices_a_to_b_sorted: Vec<(state::Id, f64)> =
-            make_sorted_spot_prices_for_direction(&state, &pair, Direction::AtoB);
+            make_sorted_spot_prices(&state, &pair, Direction::AtoB);
         let spot_prices_b_to_a_sorted: Vec<(state::Id, f64)> =
-            make_sorted_spot_prices_for_direction(&state, &pair, Direction::BtoA);
+            make_sorted_spot_prices(&state, &pair, Direction::BtoA);
 
         Self {
             sims,
-            spot_prices_sorted: (spot_prices_a_to_b_sorted, spot_prices_b_to_a_sorted),
+            sorted_spot_prices: (spot_prices_a_to_b_sorted, spot_prices_b_to_a_sorted),
         }
     }
 
@@ -249,7 +229,7 @@ fn make_pool_precomputes(
     Ok((a_to_b, b_to_a))
 }
 
-fn make_sorted_spot_prices_for_direction(
+fn make_sorted_spot_prices(
     state: &PairState,
     pair: &Pair,
     direction: Direction,
@@ -279,4 +259,50 @@ fn make_sorted_spot_prices_for_direction(
 
     spots.sort_by(|(_, spot_price), (_, other_spot_price)| spot_price.total_cmp(other_spot_price));
     spots
+}
+
+/// Finds the pair of pools with the biggest difference in spot prices based
+/// on the provided direction. The direction denotes the trade direction on the
+/// slow chain.
+///
+/// slow_prices contain the A -> B prices on the slow chain, sorted from lowest to highest.
+/// fast_prices contain the B -> A prices on the fast chain, sorted from lowest to highest.
+///
+/// # Returns
+/// A tuple of pool IDs (slow_id, fast_id, spread) denoting the pool IDs corresponding to the
+/// slow and fast chains respectively, and the spread between the two prices.
+fn find_crossed_pools(
+    slow_prices: &Vec<(state::Id, f64)>,
+    fast_prices: &Vec<(state::Id, f64)>,
+    slow_direction: Direction,
+) -> Option<(state::Id, state::Id, f64)> {
+    if slow_prices.is_empty() || fast_prices.is_empty() {
+        return None;
+    }
+
+    // need to find the max spread
+    // spread between two prices is the difference between the two prices
+    // slow_in = 1
+    // slow_out = slow_price
+    // fast_in = slow_price * slow_in = slow_price
+    // fast_out = fast_price * fast_in = fast_price * slow_price
+    // diff = fast_price * slow_price - slow_price
+    //
+    // slow[slow.len()] and fast[fast.len()] should have the biggest spread
+    // or slow.last() and fast[i] such that i is the highest index that is still <= slow.last()
+    // if cant find i for slow.last, look for slow[slow.len() - 1] and so on?
+    let mut max_spread = 0.0;
+    let mut max_spread_pair = None;
+
+    for (slow_id, slow_price) in slow_prices {
+        for (fast_id, fast_price) in fast_prices {
+            let spread = (slow_price - fast_price).abs();
+            if spread > max_spread {
+                max_spread = spread;
+                max_spread_pair = Some((*slow_id, *fast_id, spread));
+            }
+        }
+    }
+
+    max_spread_pair
 }

@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 use alloy_chains::{self, NamedChain};
 use color_eyre::eyre::{self, Context, eyre};
@@ -67,5 +70,11 @@ impl Chain {
             rpc_url: "https://unichain-mainnet.infura.io/v3/".to_string(),
             tycho_url: "https://unichain.tycho.example.com".to_string(),
         }
+    }
+}
+
+impl Display for Chain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (id={})", self.name, self.chain_id())
     }
 }
