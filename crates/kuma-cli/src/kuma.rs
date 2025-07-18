@@ -90,11 +90,20 @@ impl Kuma {
         // initialize single hop strategy
         let strategy = CrossChainSingleHop {
             slow_pair: slow_pair.clone(),
+            slow_chain: slow_chain.clone(),
             fast_pair: fast_pair.clone(),
+            fast_chain: fast_chain.clone(),
             // TODO: ??
             min_profit_threshold: 0.5,
             // TODO: make token -> chain -> bigint inventory map from config
-            available_inventory: BigUint::from(max_trade_size),
+            available_inventory_slow: (
+                BigUint::from(max_trade_size),
+                BigUint::from(max_trade_size),
+            ),
+            available_inventory_fast: (
+                BigUint::from(max_trade_size),
+                BigUint::from(max_trade_size),
+            ),
             binary_search_steps,
             max_slippage_bps: (max_slippage_bps as i32)
                 .try_into()
@@ -145,14 +154,14 @@ impl Kuma {
                 .await
                 .expect("chain b stream should yield initial block");
 
-            info!(block = %slow_state.block_number, "reaped initial block from chain a");
-            info!(block = %fast_state.block_number, "reaped initial block from chain b");
+            info!(block = %slow_state.block_height, "reaped initial block from chain a");
+            info!(block = %fast_state.block_height, "reaped initial block from chain b");
 
             // precompute data for signal
-            let precompute = strategy.precompute(&slow_state, &slow_chain);
+            let precompute = strategy.precompute(slow_state);
 
             // compute arb signal
-            if let Some(signal) = strategy.generate_signal(&precompute, &fast_state, &fast_chain) {
+            if let Some(signal) = strategy.generate_signal(precompute, fast_state) {
                 // TODO: display impl for signal
                 info!(signal = ?signal,"generated signal");
                 Some(signal)

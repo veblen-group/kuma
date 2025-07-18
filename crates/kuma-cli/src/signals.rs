@@ -1,33 +1,42 @@
-use std::{collections::HashMap, fmt::Display, ops::Deref as _, path::Display};
+use std::fmt::Display;
 
 use color_eyre::eyre::{self, Context};
 use num_bigint::BigUint;
-use tracing::{debug, error, trace};
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 
-use crate::{
-    chain::Chain,
-    state::{
-        self,
-        pair::{Pair, PairState},
-    },
-    strategy::Direction,
-};
+use std::cmp;
+
+use crate::{chain::Chain, state::pair::Pair};
+
+#[derive(Debug)]
+pub enum Direction {
+    AtoB,
+    BtoA,
+}
+
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Direction::AtoB => write!(f, "A to B"),
+            Direction::BtoA => write!(f, "B to A"),
+        }
+    }
+}
 
 // TODO: display impl
 #[derive(Debug)]
 pub struct SimulationResult {
-    token_in: Token,
-    amount_in: BigUint,
-    token_out: Token,
-    amount_out: BigUint,
-    gas_cost: BigUint,
-    new_state: Box<dyn ProtocolSim>,
+    pub token_in: Token,
+    pub amount_in: BigUint,
+    pub token_out: Token,
+    pub amount_out: BigUint,
+    pub gas_cost: BigUint,
+    pub new_state: Box<dyn ProtocolSim>,
 }
 
 impl SimulationResult {
     pub fn from_protocol_sim(
-        amount_in: BigUint,
+        amount_in: &BigUint,
         token_in: &Token,
         token_out: &Token,
         protocol_sim: &dyn ProtocolSim,
@@ -37,7 +46,7 @@ impl SimulationResult {
             .wrap_err("simulation failed")?;
         Ok(Self {
             token_in: token_in.clone(),
-            amount_in,
+            amount_in: amount_in.clone(),
             token_out: token_in.clone(),
             amount_out: sim_result.amount,
             gas_cost: sim_result.gas,
@@ -53,7 +62,6 @@ pub struct Signal {
     pub fast_pair: Pair,
     pub slow_chain: Chain,
     pub fast_chain: Chain,
-    pub path: Direction,
     pub slow_chain_amount_out: BigUint,
     pub fast_chain_amount_out: BigUint,
     pub profit_percentage: f64,
@@ -62,8 +70,13 @@ pub struct Signal {
 }
 
 impl Signal {
-    // TODO: from_simulation_result(sim_result) -> Self
-    // TODO: cmp(other_signal) -> Ordering
+    pub fn from_simulations(slow_sim: SimulationResult, fast_sim: SimulationResult) {
+        todo!()
+    }
+
+    pub fn compare_expected_profits(&self, other: &Self) -> cmp::Ordering {
+        self.expected_profit.cmp(&other.expected_profit)
+    }
 }
 
 impl Display for Signal {
@@ -87,7 +100,11 @@ pub(crate) fn with_risk_factor(amount: &BigUint, risk_factor_bps: u64) -> BigUin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain::Chain;
+    use crate::{
+        chain::Chain,
+        state::{self, pair::PairState},
+        strategy::CrossChainSingleHop,
+    };
     use std::{
         collections::{HashMap, HashSet},
         str::FromStr as _,
@@ -158,33 +175,37 @@ mod tests {
 
     #[test]
     fn compute_arb_sanity_check() {
+        let slow_chain = Chain::eth_mainnet();
+        let fast_chain = Chain::base_mainnet();
+
         let strategy = Arc::new(CrossChainSingleHop {
+            slow_chain,
             slow_pair: Pair::new(make_mainnet_usdc(), make_mainnet_weth()),
+            available_inventory_slow: (BigUint::from(1000u64), BigUint::from(500u64)),
+            fast_chain,
             fast_pair: Pair::new(make_base_usdc(), make_base_weth()),
+            available_inventory_fast: (BigUint::from(1200u64), BigUint::from(600u64)),
+            max_slippage_bps: 25, // 0.25%
+            congestion_risk_discount_bps: 25,
             min_profit_threshold: 0.5, // 0.5%
-            available_inventory: BigUint::from(1000u64),
             binary_search_steps: 5,
-            max_slippage_bps: 0.0025,         // 0.25%
-            congestion_risk_discount_bps: 25, // 0.25%
         });
 
         // Create slow state (favors token B)
-        let slow_chain = Chain::eth_mainnet();
         let slow_state = PairState {
             states: HashMap::from([(
                 state::Id::from("0x123"),
                 create_uniswap_v2_state_with_liquidity("950000", "1000000"),
             )]),
-            block_number: 100,
+            block_height: 100,
             modified_pools: Arc::new(HashSet::from([state::Id::from("0x123")])),
             unmodified_pools: Arc::new(HashSet::new()),
             metadata: HashMap::new(),
         };
 
         // Create fast state (favors token A)
-        let fast_chain = Chain::base_mainnet();
         let fast_state = PairState {
-            block_number: 200,
+            block_height: 200,
             states: HashMap::from([(
                 state::Id::from("0x456"),
                 create_uniswap_v2_state_with_liquidity("1000000", "950000"),
@@ -195,40 +216,41 @@ mod tests {
         };
 
         // Test precompute
-        let precompute = strategy.precompute(&slow_state, &slow_chain);
-        assert!(!precompute.calculations.is_empty());
-        assert_eq!(precompute.calculations.len(), 10); // 5 steps × 2 paths
-        assert_eq!(precompute.chain, slow_chain);
+        todo!("fix this test");
+        // let precompute = strategy.precompute(&slow_state, &slow_chain);
+        // assert!(!precompute.calculations.is_empty());
+        // assert_eq!(precompute.calculations.len(), 10); // 5 steps × 2 paths
+        // assert_eq!(precompute.chain, slow_chain);
 
-        // Verify precompute calculations
-        let first_calc = &precompute.calculations[0];
-        assert_eq!(first_calc.amount_in, BigUint::from(200u64)); // 1000 / 5 steps
-        assert!(matches!(first_calc.path, Direction::AtoB)); // First path should be AtoB
+        // // Verify precompute calculations
+        // let first_calc = &precompute.calculations[0];
+        // assert_eq!(first_calc.amount_in, BigUint::from(200u64)); // 1000 / 5 steps
+        // assert!(matches!(first_calc.path, Direction::AtoB)); // First path should be AtoB
 
-        let second_calc = &precompute.calculations[1];
-        assert_eq!(second_calc.amount_in, BigUint::from(200u64));
-        assert!(matches!(second_calc.path, Direction::BtoA)); // Second path should be BtoA
+        // let second_calc = &precompute.calculations[1];
+        // assert_eq!(second_calc.amount_in, BigUint::from(200u64));
+        // assert!(matches!(second_calc.path, Direction::BtoA)); // Second path should be BtoA
 
-        // compute_arb
-        let signal = strategy
-            .generate_signal(&precompute, &fast_state, &fast_chain)
-            .unwrap();
+        // // compute_arb
+        // let signal = strategy
+        //     .generate_signal(&precompute, &fast_state, &fast_chain)
+        //     .unwrap();
 
-        // With given reserves and slippage, profit should be in a specific range
-        assert!(signal.profit_percentage >= 0.5 && signal.profit_percentage <= 10.0);
-        assert!(signal.expected_profit > BigUint::from(0u64));
+        // // With given reserves and slippage, profit should be in a specific range
+        // assert!(signal.profit_percentage >= 0.5 && signal.profit_percentage <= 10.0);
+        // assert!(signal.expected_profit > BigUint::from(0u64));
 
-        // Verify the optimal path and chain assignments
-        assert!(matches!(signal.path, Direction::AtoB)); // The profitable direction with these reserves
-        assert_eq!(
-            signal.slow_chain.chain_id(),
-            Chain::eth_mainnet().chain_id()
-        );
+        // // Verify the optimal path and chain assignments
+        // assert!(matches!(signal.path, Direction::AtoB)); // The profitable direction with these reserves
+        // assert_eq!(
+        //     signal.slow_chain.chain_id(),
+        //     Chain::eth_mainnet().chain_id()
+        // );
 
-        assert_eq!(
-            signal.fast_chain.chain_id(),
-            Chain::base_mainnet().chain_id()
-        );
+        // assert_eq!(
+        //     signal.fast_chain.chain_id(),
+        //     Chain::base_mainnet().chain_id()
+        // );
 
         // Verify token assignments
         // assert_eq!(signal.asset_a.symbol, "USDC");

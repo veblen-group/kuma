@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     pin::Pin,
     sync::Arc,
     task::{self, Poll},
@@ -15,6 +16,7 @@ use super::block::Block;
 use crate::state;
 
 // TODO: maybe move to assets.rs?
+/// Represents a pair of tokens, without directionality (i.e. (a, b) and (b, a) will be treated as the same pair).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Pair(Token, Token);
 
@@ -36,9 +38,15 @@ impl Pair {
     }
 }
 
+impl Display for Pair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.0.symbol, self.1.symbol)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct PairState {
-    pub(crate) block_number: u64,
+    pub(crate) block_height: u64,
     pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
     pub(crate) modified_pools: Arc<HashSet<state::Id>>,
 

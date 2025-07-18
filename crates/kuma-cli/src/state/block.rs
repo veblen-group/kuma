@@ -174,7 +174,7 @@ impl Block {
             .collect();
 
         PairState {
-            block_number: self.height,
+            block_height: self.height,
             modified_pools: Arc::clone(&self.modified_pools),
             unmodified_pools: Arc::clone(&self.unmodified_pools),
             states: pair_states,
