@@ -40,7 +40,11 @@ impl Pair {
 
 impl Display for Pair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.0.symbol, self.1.symbol)
+        write!(
+            f,
+            "{}-{} ({}, {})",
+            self.0.symbol, self.1.symbol, self.0.address, self.1.address
+        )
     }
 }
 

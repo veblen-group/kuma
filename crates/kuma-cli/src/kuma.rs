@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use color_eyre::eyre::{self, Context as _, ensure};
+use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
 use num_bigint::BigUint;
 use tracing::info;
@@ -94,7 +94,7 @@ impl Kuma {
             fast_pair: fast_pair.clone(),
             fast_chain: fast_chain.clone(),
             // TODO: ??
-            min_profit_threshold: 0.5,
+            // min_profit_threshold: 0.5,
             // TODO: make token -> chain -> bigint inventory map from config
             available_inventory_slow: (
                 BigUint::from(max_trade_size),
@@ -154,22 +154,15 @@ impl Kuma {
                 .await
                 .expect("chain b stream should yield initial block");
 
-            info!(block = %slow_state.block_height, "reaped initial block from chain a");
-            info!(block = %fast_state.block_height, "reaped initial block from chain b");
+            info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
+            info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
             // precompute data for signal
             let precompute = strategy.precompute(slow_state);
 
             // compute arb signal
-            if let Some(signal) = strategy.generate_signal(precompute, fast_state) {
-                // TODO: display impl for signal
-                info!(signal = ?signal,"generated signal");
-                Some(signal)
-            } else {
-                info!("no signal generated");
-                None
-            }
-        };
+            strategy.generate_signal(precompute, fast_state)
+            }.wrap_err("failed to generate signal")?;
 
         if let Commands::DryRun = command {
             // set up tycho encoder
