@@ -14,12 +14,12 @@ use crate::state;
 pub(crate) struct Block {
     pub(crate) height: u64,
     /// The current states
-    pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
+    pub(crate) states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
     /// The pools that have been modified in the latest block update
-    pub(crate) modified_pools: Arc<HashSet<state::Id>>,
+    pub(crate) modified_pools: Arc<HashSet<state::PoolId>>,
     /// The pools that have not been modified in the latest block update
-    pub(crate) unmodified_pools: Arc<HashSet<state::Id>>,
-    pub(crate) metadata: HashMap<state::Id, Arc<ProtocolComponent>>,
+    pub(crate) unmodified_pools: Arc<HashSet<state::PoolId>>,
+    pub(crate) metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 impl Block {
@@ -33,12 +33,12 @@ impl Block {
 
         let states = states
             .into_iter()
-            .map(|(id, state)| (state::Id::from(id), Arc::from(state)))
+            .map(|(id, state)| (state::PoolId::from(id), Arc::from(state)))
             .collect();
 
-        let metadata: HashMap<state::Id, Arc<ProtocolComponent>> = new_pairs
+        let metadata: HashMap<state::PoolId, Arc<ProtocolComponent>> = new_pairs
             .into_iter()
-            .map(|(id, metadata)| (state::Id::from(id), Arc::from(metadata)))
+            .map(|(id, metadata)| (state::PoolId::from(id), Arc::from(metadata)))
             .collect();
 
         Self {
@@ -91,7 +91,7 @@ impl Block {
         // remove pools that are no longer active
         for (id, _) in removed_pairs {
             // update block state map
-            let id = state::Id(id);
+            let id = state::PoolId(id);
             let _removed_state = states
                 .remove(&id)
                 .expect("BlockUpdate.removed_pairs should only contain existing pairs");
@@ -120,7 +120,7 @@ impl Block {
             let pair_state = updated_states
                 .remove(&id)
                 .expect("BlockUpdate.state should contain every new pool's state");
-            let pair_id = state::Id(id);
+            let pair_id = state::PoolId(id);
             states.insert(pair_id.clone(), Arc::from(pair_state));
 
             // update metadata map
@@ -137,7 +137,7 @@ impl Block {
         // update existing pools
         for (id, state) in updated_states {
             // update block state map
-            let pair_id = state::Id::from(id);
+            let pair_id = state::PoolId::from(id);
             states.insert(pair_id.clone(), Arc::from(state));
 
             // add to modified pairs
@@ -159,7 +159,7 @@ impl Block {
     }
 
     pub fn get_pair_state(&self, pair: &Pair) -> PairState {
-        let pair_metadata: HashMap<state::Id, Arc<ProtocolComponent>> = self
+        let pair_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>> = self
             .metadata
             .iter()
             .filter(|(_id, metadata)| pair.in_token_vec(&metadata.tokens))

@@ -4681,6 +4681,7 @@ dependencies = [
  "kuma-core",
  "mockall",
  "num-bigint",
+ "num-traits",
  "proptest",
  "serde",
  "serde_json",

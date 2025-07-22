@@ -1,13 +1,14 @@
+use num_traits::CheckedSub;
 use std::fmt::Display;
 
-use color_eyre::eyre::{self, Context};
+use color_eyre::eyre::{self, Context, ContextCompat};
 use num_bigint::BigUint;
-use tracing::instrument;
-use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
+use tracing::{instrument, trace};
 
 use crate::{
     chain::Chain,
     state::{self, pair::Pair},
+    strategy::Swap,
 };
 
 // TODO: rename to buy/sell? need to clarify the direction
@@ -23,41 +24,6 @@ impl Display for Direction {
             Direction::AtoB => write!(f, "A to B"),
             Direction::BtoA => write!(f, "B to A"),
         }
-    }
-}
-
-// TODO: display impl
-// TODO: maybe simulation::Output?
-#[derive(Debug, Clone)]
-pub struct SimulationResult {
-    pub token_in: Token,
-    pub amount_in: BigUint,
-    pub token_out: Token,
-    pub amount_out: BigUint,
-    #[allow(dead_code)]
-    pub gas_cost: BigUint,
-    #[allow(dead_code)]
-    pub new_state: Box<dyn ProtocolSim>,
-}
-
-impl SimulationResult {
-    pub fn from_protocol_sim(
-        amount_in: &BigUint,
-        token_in: &Token,
-        token_out: &Token,
-        protocol_sim: &dyn ProtocolSim,
-    ) -> eyre::Result<Self> {
-        let sim_result = protocol_sim
-            .get_amount_out(amount_in.clone(), token_in, token_out)
-            .wrap_err("simulation failed")?;
-        Ok(Self {
-            token_in: token_in.clone(),
-            amount_in: amount_in.clone(),
-            token_out: token_in.clone(),
-            amount_out: sim_result.amount,
-            gas_cost: sim_result.gas,
-            new_state: sim_result.new_state,
-        })
     }
 }
 
@@ -81,13 +47,13 @@ pub struct CrossChainSingleHop {
     // TODO: use this in display impl
     #[allow(dead_code)]
     congestion_risk_discount_bps: u64,
-    surplus: BigUint,
+    surplus: (BigUint, BigUint),
     // tx parameters
-    pub slow_id: state::Id,
-    pub slow_sim: SimulationResult,
-    pub fast_id: state::Id,
-    pub fast_sim: SimulationResult,
-    pub expected_profit: BigUint,
+    pub slow_id: state::PoolId,
+    pub slow_sim: Swap,
+    pub fast_id: state::PoolId,
+    pub fast_sim: Swap,
+    pub expected_profit: (BigUint, BigUint),
 }
 
 impl CrossChainSingleHop {
@@ -96,17 +62,18 @@ impl CrossChainSingleHop {
     // -> failing to construct a signal should be part of the search process
     //
     // constructing a `SimulationRresult` is faillible becasuse it propagates the tycho error
+    // this is faillble because it propagates biguint errors - suplus, slippage and expected profit must be greater than zero
     pub fn try_from_simulations(
-        slow_chain: Chain,
-        slow_pair: Pair,
-        slow_id: state::Id,
+        slow_chain: &Chain,
+        slow_pair: &Pair,
+        slow_id: &state::PoolId,
         slow_height: u64,
-        slow_sim: SimulationResult,
-        fast_chain: Chain,
-        fast_pair: Pair,
-        fast_id: state::Id,
+        slow_sim: Swap,
+        fast_chain: &Chain,
+        fast_pair: &Pair,
+        fast_id: &state::PoolId,
         fast_height: u64,
-        fast_sim: SimulationResult,
+        fast_sim: Swap,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
@@ -114,37 +81,55 @@ impl CrossChainSingleHop {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
-        // TODO: calculate surplus expected profit
-        let surplus =
-            &slow_sim.amount_out - &slow_sim.amount_in + &fast_sim.amount_out - &fast_sim.amount_in;
+        trace!(slow_sim = %slow_sim, fast_sim = %fast_sim, "Generating signal");
+        // TODO: handle overflow calculations
+        let (surplus_a, surplus_b) =
+            calculate_surplus(&slow_sim, &fast_sim).wrap_err("failed to calculate surplus")?;
 
-        let min_slow_amount =
-            bps_discount(&slow_sim.amount_out, max_slippage_bps) - &slow_sim.amount_in;
+        trace!(surplus.a = %surplus_a, surplus.b = %surplus_b, "Computed surplus");
 
-        let min_fast_amount =
-            bps_discount(&fast_sim.amount_out, max_slippage_bps) - &fast_sim.amount_in;
+        let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
+        let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
+
+        trace!(
+            slow.amount_in = %slow_sim.amount_in,
+            slow.min_amount_out = %min_slow_amount_out,
+            fast.amount_in = %fast_sim.amount_in,
+            fast.min_amount_out = %min_fast_amount_out,
+            "Computed min amounts out after slippage"
+        );
 
         // TODO: compound two separate congestion risks, one for each side
-        let expected_profit = bps_discount(
-            &(&min_slow_amount + &min_fast_amount),
-            congestion_risk_discount_bps,
+        let (expected_profit_a, expected_profit_b) = {
+            let min_surplus_a = &min_fast_amount_out - &slow_sim.amount_in;
+            let min_surplus_b = &min_slow_amount_out - &fast_sim.amount_in;
+            (
+                bps_discount(&min_surplus_a, congestion_risk_discount_bps),
+                bps_discount(&min_surplus_b, congestion_risk_discount_bps),
+            )
+        };
+
+        trace!(
+            expected_profit.a = %expected_profit_a,
+            expected_profit.b = %expected_profit_b,
+            "Computed expected profit"
         );
 
         // TODO: save max slippage for each side?
 
         Ok(Self {
-            slow_chain,
-            slow_pair,
+            slow_chain: slow_chain.clone(),
+            slow_pair: slow_pair.clone(),
             slow_height,
-            slow_id,
+            slow_id: slow_id.clone(),
             slow_sim,
-            fast_chain,
-            fast_pair,
+            fast_chain: fast_chain.clone(),
+            fast_pair: fast_pair.clone(),
             fast_height,
-            fast_id,
+            fast_id: fast_id.clone(),
             fast_sim,
-            surplus,
-            expected_profit,
+            surplus: (surplus_a, surplus_b),
+            expected_profit: (expected_profit_a, expected_profit_b),
             max_slippage_bps,
             congestion_risk_discount_bps,
         })
@@ -176,8 +161,8 @@ impl Display for CrossChainSingleHop {
                 Amount In: {}
                 Amount Out: {}
                 Max Slippage: {}
-            Expected Profit: {}
-                Surplus: {}
+            Expected Profit: {} ({}) {} ({})
+                Surplus: {} ({}) {} ({})
             ",
             self.slow_chain,
             self.slow_pair,
@@ -193,8 +178,14 @@ impl Display for CrossChainSingleHop {
             self.fast_sim.amount_in,
             self.fast_sim.amount_out,
             max_slippage_fast,
-            self.expected_profit,
-            self.surplus
+            self.expected_profit.0,
+            self.slow_pair.token_a().symbol,
+            self.expected_profit.1,
+            self.slow_pair.token_b().symbol,
+            self.surplus.0,
+            self.slow_pair.token_a().symbol,
+            self.surplus.1,
+            self.slow_pair.token_b().symbol,
         )
     }
 }
@@ -202,4 +193,16 @@ impl Display for CrossChainSingleHop {
 pub(crate) fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
     (amount * slippage_multiplier) / BigUint::from(10000u64)
+}
+
+pub fn calculate_surplus(slow_sim: &Swap, fast_sim: &Swap) -> eyre::Result<(BigUint, BigUint)> {
+    let surplus_a = fast_sim
+        .amount_out
+        .checked_sub(&slow_sim.amount_in)
+        .wrap_err("surplus of token a cannot be negative")?;
+    let surplus_b = slow_sim
+        .amount_out
+        .checked_sub(&fast_sim.amount_in)
+        .wrap_err("surplus of token b cannot be negative")?;
+    Ok((surplus_a, surplus_b))
 }

@@ -42,8 +42,9 @@ impl Display for Pair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{} ({}, {})",
-            self.0.symbol, self.1.symbol, self.0.address, self.1.address
+            "{}-{}", // ({}, {})",
+            self.0.symbol,
+            self.1.symbol, // self.0.address, self.1.address
         )
     }
 }
@@ -51,13 +52,13 @@ impl Display for Pair {
 #[derive(Debug, Clone)]
 pub(crate) struct PairState {
     pub(crate) block_height: u64,
-    pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
-    pub(crate) modified_pools: Arc<HashSet<state::Id>>,
+    pub(crate) states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
+    pub(crate) modified_pools: Arc<HashSet<state::PoolId>>,
 
-    pub(crate) unmodified_pools: Arc<HashSet<state::Id>>,
+    pub(crate) unmodified_pools: Arc<HashSet<state::PoolId>>,
 
     #[allow(dead_code)]
-    pub(crate) metadata: HashMap<state::Id, Arc<ProtocolComponent>>,
+    pub(crate) metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 #[derive(Debug)]
