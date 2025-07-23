@@ -52,7 +52,7 @@ impl Display for Swap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "SimulationResult(in: {:} ({:}) out: {:} ({:}), gas_cost: {:})",
+            "Swap({:} ({:}) -> {:} ({:}), gas_cost: {:})",
             self.amount_in,
             self.token_in.symbol,
             self.amount_out,
@@ -65,7 +65,7 @@ impl Display for Swap {
 // NOTE: This is kind of an order book representation of the amm - the price at different depths
 #[derive(Debug, Clone)]
 pub struct PoolSteps {
-    // do i need this here?
+    #[allow(dead_code)]
     pub a_to_b: Vec<Swap>,
     pub b_to_a: Vec<Swap>,
 }

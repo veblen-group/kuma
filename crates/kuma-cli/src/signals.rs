@@ -1,9 +1,8 @@
 use num_traits::CheckedSub;
 use std::fmt::Display;
 
-use color_eyre::eyre::{self, Context, ContextCompat};
+use color_eyre::eyre::{self, ContextCompat};
 use num_bigint::BigUint;
-use tracing::{instrument, trace};
 
 use crate::{
     chain::Chain,
@@ -47,17 +46,16 @@ pub struct CrossChainSingleHop {
     // TODO: use this in display impl
     #[allow(dead_code)]
     congestion_risk_discount_bps: u64,
-    surplus: (BigUint, BigUint),
+    pub surplus: (BigUint, BigUint),
+    pub expected_profit: (BigUint, BigUint),
     // tx parameters
     pub slow_id: state::PoolId,
     pub slow_sim: Swap,
     pub fast_id: state::PoolId,
     pub fast_sim: Swap,
-    pub expected_profit: (BigUint, BigUint),
 }
 
 impl CrossChainSingleHop {
-    #[instrument]
     // TODO: should this be fallible?
     // -> failing to construct a signal should be part of the search process
     //
@@ -81,39 +79,16 @@ impl CrossChainSingleHop {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
-        trace!(slow_sim = %slow_sim, fast_sim = %fast_sim, "Generating signal");
         // TODO: handle overflow calculations
-        let (surplus_a, surplus_b) =
-            calculate_surplus(&slow_sim, &fast_sim).wrap_err("failed to calculate surplus")?;
-
-        trace!(surplus.a = %surplus_a, surplus.b = %surplus_b, "Computed surplus");
-
-        let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
-        let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
-
-        trace!(
-            slow.amount_in = %slow_sim.amount_in,
-            slow.min_amount_out = %min_slow_amount_out,
-            fast.amount_in = %fast_sim.amount_in,
-            fast.min_amount_out = %min_fast_amount_out,
-            "Computed min amounts out after slippage"
-        );
+        let (surplus_a, surplus_b) = calculate_surplus(&slow_sim, &fast_sim)?;
 
         // TODO: compound two separate congestion risks, one for each side
-        let (expected_profit_a, expected_profit_b) = {
-            let min_surplus_a = &min_fast_amount_out - &slow_sim.amount_in;
-            let min_surplus_b = &min_slow_amount_out - &fast_sim.amount_in;
-            (
-                bps_discount(&min_surplus_a, congestion_risk_discount_bps),
-                bps_discount(&min_surplus_b, congestion_risk_discount_bps),
-            )
-        };
-
-        trace!(
-            expected_profit.a = %expected_profit_a,
-            expected_profit.b = %expected_profit_b,
-            "Computed expected profit"
-        );
+        let expected_profits = calculate_expected_profits(
+            &slow_sim,
+            &fast_sim,
+            max_slippage_bps,
+            congestion_risk_discount_bps,
+        )?;
 
         // TODO: save max slippage for each side?
 
@@ -129,7 +104,7 @@ impl CrossChainSingleHop {
             fast_id: fast_id.clone(),
             fast_sim,
             surplus: (surplus_a, surplus_b),
-            expected_profit: (expected_profit_a, expected_profit_b),
+            expected_profit: expected_profits,
             max_slippage_bps,
             congestion_risk_discount_bps,
         })
@@ -205,4 +180,34 @@ pub fn calculate_surplus(slow_sim: &Swap, fast_sim: &Swap) -> eyre::Result<(BigU
         .checked_sub(&fast_sim.amount_in)
         .wrap_err("surplus of token b cannot be negative")?;
     Ok((surplus_a, surplus_b))
+}
+
+pub fn calculate_expected_profits(
+    slow_sim: &Swap,
+    fast_sim: &Swap,
+    max_slippage_bps: u64,
+    congestion_risk_discount_bps: u64,
+) -> eyre::Result<(BigUint, BigUint)> {
+    let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
+    let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
+
+    // trace!(
+    //     slow.amount_in = %slow_sim.amount_in,
+    //     slow.min_amount_out = %min_slow_amount_out,
+    //     fast.amount_in = %fast_sim.amount_in,
+    //     fast.min_amount_out = %min_fast_amount_out,
+    //     "Computed min amounts out after slippage"
+    // );
+
+    let min_surplus_a = min_fast_amount_out
+        .checked_sub(&slow_sim.amount_in)
+        .wrap_err("min surplus of token a cannot be negative")?;
+    let min_surplus_b = min_slow_amount_out
+        .checked_sub(&fast_sim.amount_in)
+        .wrap_err("min surplus of token b cannot be negative")?;
+
+    Ok((
+        bps_discount(&min_surplus_a, congestion_risk_discount_bps),
+        bps_discount(&min_surplus_b, congestion_risk_discount_bps),
+    ))
 }

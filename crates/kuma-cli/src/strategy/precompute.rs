@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
-use tracing::{debug, error, instrument};
+use tracing::{error, instrument, trace};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
     strategy::simulation::{self, make_sorted_spot_prices},
 };
 
+#[derive(Debug, Clone)]
 pub struct Precomputes {
     pub block_height: u64,
     pub sorted_spot_prices: (Vec<(state::PoolId, f64)>, Vec<(state::PoolId, f64)>),
@@ -80,22 +81,18 @@ impl Precomputes {
             make_sorted_spot_prices(&state, &pair, Direction::BtoA);
 
         if spot_prices_a_to_b_sorted.is_empty() || spot_prices_b_to_a_sorted.is_empty() {
-            debug!(pair= %pair, "No spot prices found");
+            trace!(pair= %pair, "No spot prices found");
         } else {
-            debug!(
+            trace!(
                 // min a->b
-                min.a_to_b.pool_id = %spot_prices_a_to_b_sorted[0].0,
+                min.pool_id = %spot_prices_a_to_b_sorted[0].0,
                 min.a_to_b.price = %spot_prices_a_to_b_sorted[0].1,
-                // min b->a
-                min.b_to_a.pool_id = %spot_prices_b_to_a_sorted[0].0,
                 min.b_to_a.price = %spot_prices_b_to_a_sorted[0].1,
                 // max a->b
-                max.a_to_b.pool_id = %spot_prices_a_to_b_sorted[spot_prices_a_to_b_sorted.len() - 1].0,
+                max.pool_id = %spot_prices_a_to_b_sorted[spot_prices_a_to_b_sorted.len() - 1].0,
                 max.a_to_b.price = %spot_prices_a_to_b_sorted[spot_prices_a_to_b_sorted.len() - 1].1,
-                // max b->a
-                max.b_to_a.pool_id = %spot_prices_b_to_a_sorted[spot_prices_b_to_a_sorted.len() - 1].0,
                 max.b_to_a.price = %spot_prices_b_to_a_sorted[spot_prices_b_to_a_sorted.len() - 1].1,
-                "Computed spot prices");
+                "Computed spot prices for slow chain");
         }
 
         Self {
