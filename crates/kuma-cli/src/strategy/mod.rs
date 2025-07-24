@@ -312,7 +312,7 @@ impl CrossChainSingleHop {
         };
 
         Swap::from_protocol_sim(&amount_in, &token_in, &token_out, fast_state)
-            .wrap_err("failed to compute fast simulation for next")
+            .wrap_err("swap simulation failed")
     }
 
     fn try_signal_from_precompute(
@@ -333,9 +333,8 @@ impl CrossChainSingleHop {
         ) {
             Ok(swap) => swap,
             Err(err) => {
-                return Err(err).wrap_err(format!(
-                    "failed to simulate fast swap from slow sim: {}",
-                    slow_sim
+                return Err(eyre!(
+                    "failed to simulate fast swap from {slow_sim} with err: {err}"
                 ));
             }
         };
@@ -432,7 +431,8 @@ mod tests {
 
     fn make_18_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000420").unwrap(),
+            // 0x0..00 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000000").unwrap(),
             symbol,
             18,
             1000,
@@ -442,9 +442,11 @@ mod tests {
         )
     }
 
+    #[allow(dead_code)]
     fn make_6_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000123").unwrap(),
+            // 0x0..03 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000003").unwrap(),
             symbol,
             6,
             1000,
@@ -464,7 +466,8 @@ mod tests {
 
     fn make_mainnet_weth() -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2").unwrap(),
+            // 0x0..02 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000002").unwrap(),
             "WETH",
             18,
             1000,
@@ -476,7 +479,8 @@ mod tests {
 
     fn make_mainnet_usdc() -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48").unwrap(),
+            // 0x0..01 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000001").unwrap(),
             "USDC",
             6,
             1000,
@@ -488,7 +492,8 @@ mod tests {
 
     fn make_base_weth() -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0x4200000000000000000000000000000000000006").unwrap(),
+            // 0x0..02 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000002").unwrap(),
             "WETH",
             18,
             1000,
@@ -500,7 +505,8 @@ mod tests {
 
     fn make_base_usdc() -> Token {
         Token::new(
-            &tycho_common::Bytes::from_str("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913").unwrap(),
+            // 0x0..01 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000001").unwrap(),
             "USDC",
             6,
             1000,
@@ -512,37 +518,6 @@ mod tests {
 
     fn scale_by_decimals(amount: &BigUint, decimals: u32) -> BigUint {
         amount * BigUint::from(10u64).pow(decimals)
-    }
-
-    fn make_same_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
-        init_tracing();
-
-        let slow_chain = Chain::eth_mainnet();
-        let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
-        let available_inventory_slow = (
-            scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
-            scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
-        );
-
-        let fast_chain = Chain::base_mainnet();
-        let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
-        let available_inventory_fast = (
-            scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
-            scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
-        );
-
-        Arc::new(CrossChainSingleHop {
-            slow_chain,
-            slow_pair,
-            available_inventory_slow,
-            fast_chain,
-            fast_pair,
-            available_inventory_fast,
-            max_slippage_bps: 25, // 0.25%
-            congestion_risk_discount_bps: 25,
-            // min_profit_threshold: 0.5, // 0.5%
-            binary_search_steps: 16,
-        })
     }
 
     fn make_univ2_protocol_sim(reserve_a: &BigUint, reserve_b: &BigUint) -> Arc<dyn ProtocolSim> {
@@ -589,8 +564,76 @@ mod tests {
         Swap::from_protocol_sim(&amount_in, token_in, token_out, pool_state.as_ref()).unwrap()
     }
 
+    fn make_same_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
+        init_tracing();
+
+        // custom pepe addr 0x0..0
+        // custom weth addr 0x0..2
+        // so pair order is always (pepe, weth) for uniswap zero2one
+        let slow_chain = Chain::eth_mainnet();
+        let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
+        let available_inventory_slow = (
+            scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
+        );
+
+        let fast_chain = Chain::base_mainnet();
+        let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
+        let available_inventory_fast = (
+            scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
+        );
+
+        Arc::new(CrossChainSingleHop {
+            slow_chain,
+            slow_pair,
+            available_inventory_slow,
+            fast_chain,
+            fast_pair,
+            available_inventory_fast,
+            max_slippage_bps: 25, // 0.25%
+            congestion_risk_discount_bps: 25,
+            // min_profit_threshold: 0.5, // 0.5%
+            binary_search_steps: 16,
+        })
+    }
+
+    fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
+        init_tracing();
+
+        // custom usdc addr 0x0..1
+        // custom weth addr 0x0..2
+        // so pair order is always (usdc, weth) for uniswap zero2one
+        let slow_chain = Chain::eth_mainnet();
+        let slow_pair = Pair::new(make_mainnet_usdc(), make_mainnet_weth());
+        let available_inventory_slow = (
+            scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
+        );
+
+        let fast_chain = Chain::base_mainnet();
+        let fast_pair = Pair::new(make_base_usdc(), make_base_weth());
+        let available_inventory_fast = (
+            scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
+        );
+
+        Arc::new(CrossChainSingleHop {
+            slow_chain,
+            slow_pair,
+            available_inventory_slow,
+            fast_chain,
+            fast_pair,
+            available_inventory_fast,
+            max_slippage_bps: 25, // 0.25%
+            congestion_risk_discount_bps: 25,
+            // min_profit_threshold: 0.5, // 0.5%
+            binary_search_steps: 16,
+        })
+    }
+
     #[test]
-    fn precompute_same_decimals_a_to_b() {
+    fn precompute_same_decimals() {
         // Arrange
         // slow chain inventory is 100,000 PEPE and 50 ETH
         let strategy = make_same_decimals_strategy();
@@ -659,10 +702,79 @@ mod tests {
     }
 
     #[test]
-    fn precompute_different_decimals_a_to_b() {}
+    fn precompute_different_decimals() {
+        // Arrange
+        // slow chain inventory is 100,000 PEPE and 50 ETH
+        let strategy = make_different_decimals_strategy();
+
+        // 0x123 -> univ2(1m, 1k)
+        // spot price should be ~1000/ or 0.001
+        let slow_state =
+            make_single_univ2_pair_state(&strategy.slow_pair, 0, "0x123", 1_000_000, 1_000);
+
+        // Act
+        let precompute = strategy.precompute(slow_state.clone());
+        assert_eq!(precompute.block_height, 0);
+
+        // Assert
+        // correct spot prices
+        assert_eq!(
+            precompute.sorted_spot_prices.0[0],
+            (state::PoolId::from("0x123"), "0.001".parse().unwrap())
+        );
+        assert_eq!(
+            precompute.sorted_spot_prices.1[0],
+            (
+                state::PoolId::from("0x123"),
+                "1000.0000000000001".parse().unwrap()
+            )
+        );
+
+        // assert that only one pool is simulated
+        assert_eq!(precompute.pool_sims.len(), 1);
+        assert_eq!(
+            precompute.pool_sims[&state::PoolId::from("0x123")]
+                .a_to_b
+                .len(),
+            strategy.binary_search_steps
+        );
+        assert_eq!(
+            precompute.pool_sims[&state::PoolId::from("0x123")]
+                .b_to_a
+                .len(),
+            strategy.binary_search_steps
+        );
+
+        // check valid first and last step inputs
+        // 100,000 PEPE inventory / 5 steps  = 20,000 PEPE
+        let first_a_to_b = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b[0];
+        assert_eq!(
+            first_a_to_b.amount_in,
+            BigUint::from_str("3125000000").unwrap()
+        );
+        // 50 ETH / 5 steps = 10 ETH
+        let first_b_to_a = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a[0];
+        assert_eq!(
+            first_b_to_a.amount_in,
+            BigUint::from_str("6250000000000000000").unwrap()
+        );
+
+        // check valid last step inputs
+        // 100,000 PEPE
+        let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b
+            [strategy.binary_search_steps - 1]
+            .amount_in;
+        assert_eq!(*last_amount_in_a, strategy.available_inventory_slow.0);
+
+        // 50 ETH
+        let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a
+            [strategy.binary_search_steps - 1]
+            .amount_in;
+        assert_eq!(*last_amount_in_b, strategy.available_inventory_slow.1);
+    }
 
     #[test]
-    fn generate_signal_same_decimals_a_to_b() {
+    fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
         let slow_state =
@@ -727,5 +839,196 @@ mod tests {
     }
 
     #[test]
-    fn generate_signal_different_decimals_sanity_check() {}
+    fn generate_signal_same_decimals_bab() {
+        let strategy = make_same_decimals_strategy();
+
+        let slow_state =
+            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 5_000, 10_000);
+
+        let fast_state =
+            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 2_000, 10_000);
+
+        let precompute = strategy.precompute(slow_state);
+        let signal = strategy
+            .generate_signal(precompute.clone(), fast_state.clone())
+            .unwrap();
+
+        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+
+        // assert pepe->weth and weth->pepe legs
+        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
+        assert_eq!(signal.slow_sim.token_out, make_mainnet_pepe());
+        assert_eq!(signal.fast_sim.token_in, make_base_pepe());
+        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+
+        let expected_slow_sim = precompute
+            .pool_sims
+            .get(&PoolId::from("0x123"))
+            .unwrap()
+            .b_to_a
+            .last()
+            .unwrap();
+        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+
+        // assert fast amount in = slow amount out with slippage adjustment
+        let expected_fast_amount_in =
+            bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
+        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+
+        // assert fast amount out is calculated from the right pool
+        let expected_fast_sim = simulate_swap_for_pool_id(
+            "0x456",
+            expected_fast_amount_in,
+            &make_base_pepe(),
+            &make_base_weth(),
+            fast_state,
+        );
+        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+
+        assert_eq!(
+            signal.surplus,
+            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+        );
+        assert_eq!(
+            signal.expected_profit,
+            calculate_expected_profits(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                strategy.max_slippage_bps,
+                strategy.congestion_risk_discount_bps
+            )
+            .unwrap()
+        )
+    }
+    #[test]
+    fn generate_signal_different_decimals_aba() {
+        let strategy = make_different_decimals_strategy();
+
+        let slow_state =
+            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 10_000, 5_000);
+
+        let fast_state =
+            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 10_000, 2_000);
+
+        let precompute = strategy.precompute(slow_state);
+        let signal = strategy
+            .generate_signal(precompute.clone(), fast_state.clone())
+            .unwrap();
+
+        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+
+        // assert pepe->weth and weth->pepe legs
+        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
+        assert_eq!(signal.slow_sim.token_out, make_mainnet_usdc());
+        assert_eq!(signal.fast_sim.token_in, make_base_usdc());
+        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+
+        let expected_slow_sim = precompute
+            .pool_sims
+            .get(&PoolId::from("0x123"))
+            .unwrap()
+            .b_to_a
+            .last()
+            .unwrap();
+        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+
+        // assert fast amount in = slow amount out with slippage adjustment
+        let expected_fast_amount_in =
+            bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
+        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+
+        // assert fast amount out is calculated from the right pool
+        let expected_fast_sim = simulate_swap_for_pool_id(
+            "0x456",
+            expected_fast_amount_in,
+            &make_base_pepe(),
+            &make_base_weth(),
+            fast_state,
+        );
+        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+
+        assert_eq!(
+            signal.surplus,
+            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+        );
+        assert_eq!(
+            signal.expected_profit,
+            calculate_expected_profits(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                strategy.max_slippage_bps,
+                strategy.congestion_risk_discount_bps
+            )
+            .unwrap()
+        )
+    }
+
+    #[test]
+    fn generate_signal_different_decimals_bab() {
+        let strategy = make_different_decimals_strategy();
+
+        let slow_state =
+            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 5_000, 10_000);
+
+        let fast_state =
+            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 2_000, 10_000);
+
+        let precompute = strategy.precompute(slow_state);
+        let signal = strategy
+            .generate_signal(precompute.clone(), fast_state.clone())
+            .unwrap();
+
+        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+
+        // assert pepe->weth and weth->pepe legs
+        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
+        assert_eq!(signal.slow_sim.token_out, make_mainnet_usdc());
+        assert_eq!(signal.fast_sim.token_in, make_base_usdc());
+        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+
+        let expected_slow_sim = precompute
+            .pool_sims
+            .get(&PoolId::from("0x123"))
+            .unwrap()
+            .b_to_a
+            .last()
+            .unwrap();
+        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+
+        // assert fast amount in = slow amount out with slippage adjustment
+        let expected_fast_amount_in =
+            bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
+        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+
+        // assert fast amount out is calculated from the right pool
+        let expected_fast_sim = simulate_swap_for_pool_id(
+            "0x456",
+            expected_fast_amount_in,
+            &make_base_pepe(),
+            &make_base_weth(),
+            fast_state,
+        );
+        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+
+        assert_eq!(
+            signal.surplus,
+            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+        );
+        assert_eq!(
+            signal.expected_profit,
+            calculate_expected_profits(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                strategy.max_slippage_bps,
+                strategy.congestion_risk_discount_bps
+            )
+            .unwrap()
+        )
+    }
 }

@@ -191,14 +191,6 @@ pub fn calculate_expected_profits(
     let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
     let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
 
-    // trace!(
-    //     slow.amount_in = %slow_sim.amount_in,
-    //     slow.min_amount_out = %min_slow_amount_out,
-    //     fast.amount_in = %fast_sim.amount_in,
-    //     fast.min_amount_out = %min_fast_amount_out,
-    //     "Computed min amounts out after slippage"
-    // );
-
     let min_surplus_a = min_fast_amount_out
         .checked_sub(&slow_sim.amount_in)
         .wrap_err("min surplus of token a cannot be negative")?;
