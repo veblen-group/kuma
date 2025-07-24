@@ -157,11 +157,13 @@ impl CrossChainSingleHop {
             (Some(aba), Some(bab)) => {
                 if aba.expected_profit > bab.expected_profit {
                     debug!(
+                        aba.expected_profit = ?aba.expected_profit, bab.expected_profit = ?bab.expected_profit,
                         "choosing A->B (fast) over B->A (slow) because it has a higher expected profit"
                     );
                     Ok(aba)
                 } else {
                     debug!(
+                        aba.expected_profit = ?aba.expected_profit, bab.expected_profit = ?bab.expected_profit,
                         "choosing B->A (slow) over A->B (fast) because it has a higher expected profit"
                     );
                     Ok(bab)
@@ -615,7 +617,7 @@ mod tests {
         let fast_pair = Pair::new(make_base_usdc(), make_base_weth());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
-            scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
+            scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),
         );
 
         Arc::new(CrossChainSingleHop {
@@ -907,10 +909,10 @@ mod tests {
         let strategy = make_different_decimals_strategy();
 
         let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 10_000, 5_000);
+            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 10_000_000, 5_000);
 
         let fast_state =
-            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 10_000, 2_000);
+            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 10_000_000, 2_000);
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
@@ -921,16 +923,16 @@ mod tests {
         assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
 
         // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
-        assert_eq!(signal.slow_sim.token_out, make_mainnet_usdc());
-        assert_eq!(signal.fast_sim.token_in, make_base_usdc());
-        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+        assert_eq!(signal.slow_sim.token_in, make_mainnet_usdc());
+        assert_eq!(signal.slow_sim.token_out, make_mainnet_weth());
+        assert_eq!(signal.fast_sim.token_in, make_base_weth());
+        assert_eq!(signal.fast_sim.token_out, make_base_usdc());
 
         let expected_slow_sim = precompute
             .pool_sims
             .get(&PoolId::from("0x123"))
             .unwrap()
-            .b_to_a
+            .a_to_b
             .last()
             .unwrap();
         assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
@@ -945,8 +947,8 @@ mod tests {
         let expected_fast_sim = simulate_swap_for_pool_id(
             "0x456",
             expected_fast_amount_in,
-            &make_base_pepe(),
             &make_base_weth(),
+            &make_base_usdc(),
             fast_state,
         );
         assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);

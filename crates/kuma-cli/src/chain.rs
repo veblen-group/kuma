@@ -47,7 +47,7 @@ impl Chain {
             name: tycho_models::Chain::Ethereum,
             metadata: alloy_chains::Chain::from_named(NamedChain::Mainnet),
             rpc_url: "https://mainnet.infura.io/v3/".to_string(),
-            tycho_url: "https://eth.tycho.example.com".to_string(),
+            tycho_url: "tycho-beta.propellerheads.xyz".to_string(),
         }
     }
 
@@ -57,7 +57,7 @@ impl Chain {
             name: tycho_models::Chain::Base,
             metadata: alloy_chains::Chain::from_named(NamedChain::Base),
             rpc_url: "https://base-mainnet.infura.io/v3/".to_string(),
-            tycho_url: "https://base.tycho.example.com".to_string(),
+            tycho_url: "tycho-base-beta.propellerheads.xyz".to_string(),
         }
     }
 
@@ -68,7 +68,7 @@ impl Chain {
             name: tycho_models::Chain::Unichain,
             metadata: alloy_chains::Chain::from_named(NamedChain::Unichain),
             rpc_url: "https://unichain-mainnet.infura.io/v3/".to_string(),
-            tycho_url: "https://unichain.tycho.example.com".to_string(),
+            tycho_url: "tycho-unichain-beta.propellerheads.xyz".to_string(),
         }
     }
 }
