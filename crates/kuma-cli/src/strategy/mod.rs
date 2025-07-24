@@ -1,4 +1,4 @@
-use color_eyre::eyre::{self, Context, OptionExt};
+use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
@@ -78,47 +78,105 @@ impl CrossChainSingleHop {
             (a_to_b, b_to_a)
         };
 
-        // pools with the best A-> B (slow) and B-> A (fast) trades
-        let aba = find_first_crossed_pools(
-            &precompute.sorted_spot_prices.0,
-            &fast_sorted_spot_prices.1,
-            Direction::AtoB,
-        );
-        if let Some(aba) = aba.as_ref() {
-            debug!(
-                slow.pool_id = %aba.0,
-                fast.pool_id = %aba.1,
-                spread = %aba.2,
-                "found A-> B and B-> A crossing pools"
-            );
-        } else {
-            debug!("no A-> B and B-> A crossing pools")
-        };
+        // get crossed pools
+        let aba_crossed_pools =
+            find_first_crossed_pools(&precompute.sorted_spot_prices.0, &fast_sorted_spot_prices.1)
+                .map(|(slow_id, fast_id, spread)| {
+                    debug!(
+                        slow.pool_id = %slow_id,
+                        fast.pool_id = %fast_id,
+                        spread = %spread,
+                        "found A->B and B->A crossed pools"
+                    );
 
-        // TODO: other direction
+                    (slow_id, fast_id, spread)
+                })
+                .or_else(|| {
+                    trace!("no crossing pools found for A->B (slow) and B->A (fast)");
+                    None
+                });
 
         // 2. binary search over swap amounts
-        if let Some((slow_id, fast_id, _spread)) = aba.as_ref() {
-            let signal = self
+        let aba_signal = aba_crossed_pools.and_then(|(slow_id, fast_id, _spread)| {
+            self
                 .find_optimal_signal(
-                    &precompute.pool_sims[slow_id].a_to_b,
+                    &precompute.pool_sims[&slow_id].a_to_b,
                     &slow_id,
                     precompute.block_height,
-                    fast_state.states[fast_id].as_ref(),
+                    fast_state.states[&fast_id].as_ref(),
                     &fast_id,
                     fast_state.block_height,
                     &self.available_inventory_fast.1,
-                )
-                .ok_or_eyre("unable to find optimal swap for A -> B -> A path")?;
+                ).map(|signal| {
+                    trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for A->B (slow) and B->A (fast)");
+                    signal
+                }).or_else(|| {
+                    trace!("no optimal swap found for A->B (slow) and B->A (fast)");
+                    None
+                })
+        });
 
-            trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap");
-            Ok(signal)
-        } else {
-            Err(eyre::eyre!("no A-> B (slow) and B-> A (fast) trades"))
+        let bab_crossed_pools =
+            find_first_crossed_pools(&precompute.sorted_spot_prices.1, &fast_sorted_spot_prices.0)
+                .map(|(slow_id, fast_id, spread)| {
+                    debug!(
+                        slow.pool_id = %slow_id,
+                        fast.pool_id = %fast_id,
+                        spread = %spread,
+                        "found A->B (slow) and B->A (fast) crossed pools"
+                    );
+
+                    (slow_id, fast_id, spread)
+                })
+                .or_else(|| {
+                    trace!("no crossing pools found for B->A (slow) and A->B (fast)");
+                    None
+                });
+
+        let bab_signal = bab_crossed_pools.and_then(|(slow_id, fast_id, _spread)| {
+            self.find_optimal_signal(
+                &precompute.pool_sims[&slow_id].b_to_a,
+                &slow_id,
+                precompute.block_height,
+                fast_state.states[&fast_id].as_ref(),
+                &fast_id,
+                fast_state.block_height,
+                &self.available_inventory_fast.0
+            )
+            .map(|signal| {
+                trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
+                signal
+            })
+            .or_else(|| {
+                trace!("no optimal swap found for B->A (slow) and A->B (fast)");
+                None
+            })
+        });
+
+        match (aba_signal, bab_signal) {
+            (Some(aba), Some(bab)) => {
+                if aba.expected_profit > bab.expected_profit {
+                    debug!(
+                        "choosing A->B (fast) over B->A (slow) because it has a higher expected profit"
+                    );
+                    Ok(aba)
+                } else {
+                    debug!(
+                        "choosing B->A (slow) over A->B (fast) because it has a higher expected profit"
+                    );
+                    Ok(bab)
+                }
+            }
+            (Some(aba), None) => {
+                debug!("only found aba signal");
+                Ok(aba)
+            }
+            (None, Some(bab)) => {
+                debug!("only found bab signal");
+                Ok(bab)
+            }
+            (None, None) => Err(eyre!("no optimal signal found")),
         }
-
-        // TODO: other direction
-        // TODO: compare aba and bab signals
     }
 
     /// Finds the optimal swap for a given direction.
@@ -314,7 +372,6 @@ impl CrossChainSingleHop {
 fn find_first_crossed_pools(
     sorted_slow_prices: &[(state::PoolId, f64)],
     sorted_fast_prices: &[(state::PoolId, f64)],
-    slow_direction: Direction,
 ) -> Option<(state::PoolId, state::PoolId, f64)> {
     if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
         return None;
