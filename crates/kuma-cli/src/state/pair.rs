@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     pin::Pin,
     sync::Arc,
     task::{self, Poll},
@@ -8,7 +9,6 @@ use std::{
 use futures::{Stream, StreamExt};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
-use tracing::warn;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
@@ -16,6 +16,7 @@ use super::block::Block;
 use crate::state;
 
 // TODO: maybe move to assets.rs?
+/// Represents a pair of tokens, without directionality (i.e. (a, b) and (b, a) will be treated as the same pair).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct Pair(Token, Token);
 
@@ -27,15 +28,37 @@ impl Pair {
     pub fn in_token_vec(&self, tokens: &[Token]) -> bool {
         tokens.contains(&self.0) && tokens.contains(&self.1)
     }
+
+    pub fn token_a(&self) -> &Token {
+        &self.0
+    }
+
+    pub fn token_b(&self) -> &Token {
+        &self.1
+    }
+}
+
+impl Display for Pair {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}-{}", // ({}, {})",
+            self.0.symbol,
+            self.1.symbol, // self.0.address, self.1.address
+        )
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct PairState {
-    pub(crate) block_number: u64,
-    pub(crate) states: HashMap<state::Id, Arc<dyn ProtocolSim>>,
-    pub(crate) modified_pools: Arc<HashSet<state::Id>>,
-    pub(crate) unmodified_pools: Arc<HashSet<state::Id>>,
-    pub(crate) metadata: HashMap<state::Id, Arc<ProtocolComponent>>,
+    pub(crate) block_height: u64,
+    pub(crate) states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
+    pub(crate) modified_pools: Arc<HashSet<state::PoolId>>,
+
+    pub(crate) unmodified_pools: Arc<HashSet<state::PoolId>>,
+
+    #[allow(dead_code)]
+    pub(crate) metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 #[derive(Debug)]
@@ -70,15 +93,11 @@ impl Stream for PairStateStream {
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
-                    warn!("some block");
                     let state = block.get_pair_state(&self.pair);
                     Poll::Ready(Some(state))
                 }
                 // Only start yielding values after the initial block is received
-                None => {
-                    warn!("none");
-                    Poll::Pending
-                }
+                None => Poll::Pending,
             },
         }
     }

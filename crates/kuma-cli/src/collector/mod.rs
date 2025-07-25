@@ -11,13 +11,21 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
-use crate::{chain::Chain, state::block::Block};
+use crate::{
+    chain::Chain,
+    state::{
+        block::Block,
+        pair::{Pair, PairStateStream},
+    },
+};
 
 pub(crate) use builder::Builder;
 mod builder;
 
 pub(crate) struct Handle {
+    #[allow(unused)]
     chain: Chain,
+    #[allow(unused)]
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
     // TODO: get rid of option
@@ -25,6 +33,7 @@ pub(crate) struct Handle {
 }
 
 impl Handle {
+    #[allow(unused)]
     pub(crate) async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self
@@ -33,14 +42,20 @@ impl Handle {
             .expect("shutdown must not be called twice")
             .await
         {
-            error!(chain=?self.chain, "Tycho simulation stream worker failed: {}", e);
+            error!(chain=%self.chain, "Tycho simulation stream worker failed: {}", e);
             return Err(e.into());
         }
         Ok(())
     }
 
-    pub(crate) fn block_rx(&self) -> watch::Receiver<Arc<Option<Block>>> {
+    #[allow(unused)]
+    pub fn get_block_rx(&self) -> watch::Receiver<Arc<Option<Block>>> {
         self.block_rx.clone()
+    }
+
+    pub(crate) fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
+        let block_rx = self.block_rx.clone();
+        PairStateStream::from_block_rx(pair.clone(), block_rx)
     }
 }
 
@@ -76,7 +91,7 @@ struct Worker {
 }
 
 impl Worker {
-    #[instrument(skip(self), fields(chain.name = %self.chain.name))]
+    #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
             protocol_stream_builder,
@@ -89,12 +104,12 @@ impl Worker {
             .await
             .build()
             .await
-            .wrap_err("failed building protocol stream")?;
+            .wrap_err("Failed building protocol stream")?;
 
         info!(
             chain.name = ?chain.name,
             chain.id = ?chain.metadata.id(),
-            "==================== Starting Tycho Stream ===================="
+            "Initialized protocol stream"
         );
 
         while let Some(message_result) = protocol_stream.next().await {
@@ -108,7 +123,7 @@ impl Worker {
 
             info!(
                 block.height = ?block_update.block_number_or_timestamp,
-                "Received block update"
+                "🎁 Received block update"
             );
             let block = {
                 if let Some(old_block) = block_tx.borrow().as_ref().clone() {
