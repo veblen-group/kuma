@@ -8,7 +8,6 @@ use tycho_simulation::evm::tycho_models;
 use crate::{
     Cli,
     chain::Chain,
-    collector,
     config::{ChainConfig, TokenConfig},
     state::pair::Pair,
 };
@@ -48,7 +47,7 @@ pub(crate) fn parse_chain_assets(
                         &symbol,
                         token_config.decimals,
                         token_config.tax,
-                        &vec![None],
+                        &token_config.gas.clone(),
                         chain.name,
                         token_config.quality,
                     );
@@ -60,15 +59,6 @@ pub(crate) fn parse_chain_assets(
         .collect::<eyre::Result<HashMap<Chain, HashMap<tycho_common::Bytes, Token>>>>()?)
 }
 
-pub(crate) fn log_chain_tokens(chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>) {
-    info!("Parsed {} chains from config:", chain_tokens.len());
-
-    for (chain, _tokens) in chain_tokens {
-        info!(chain.name = %chain.name,
-            chain.id = %chain.metadata.id(),
-            "🔗");
-    }
-}
 pub(crate) fn get_chain_pairs(
     token_a: &str,
     token_b: &str,
@@ -88,13 +78,13 @@ pub(crate) fn get_chain_pairs(
 
         match (a, b) {
             (None, _) | (_, None) => {
-                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🚫 Token pair not configured on chain");
+                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "Failed to initialized token pair for chain");
             }
             (Some((_, a)), Some((_, b))) => {
                 let pair = Pair::new(a.clone(), b.clone());
                 pairs.insert(chain.clone(), pair);
 
-                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🔄 Token pair configured");
+                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🪙 Successfully initialized token pair for chain");
             }
         }
     }
@@ -122,51 +112,4 @@ pub(crate) fn get_chains_from_cli(
         .clone();
 
     (chain_a, chain_b)
-}
-
-pub(crate) fn make_collectors(
-    chain_a: Chain,
-    chain_b: Chain,
-    chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
-    tycho_api_key: &str,
-    add_tvl_threshold: f64,
-    remove_tvl_threshold: f64,
-) -> eyre::Result<(collector::Handle, collector::Handle)> {
-    let tokens_a = chain_tokens
-        .get(&chain_a)
-        .expect("No tokens found for base");
-    let res_a = collector::Builder {
-        tycho_url: chain_a.tycho_url.clone(),
-        api_key: tycho_api_key.to_string(),
-        add_tvl_threshold,
-        remove_tvl_threshold,
-        tokens: tokens_a.clone(),
-        chain: chain_a.clone(),
-    }
-    .build();
-
-    let tokens_b = chain_tokens
-        .get(&chain_b)
-        .expect("No tokens found for base");
-    let res_b = collector::Builder {
-        tycho_url: chain_b.tycho_url.clone(),
-        api_key: tycho_api_key.to_string(),
-        add_tvl_threshold,
-        remove_tvl_threshold,
-        tokens: tokens_b.clone(),
-        chain: chain_b.clone(),
-    }
-    .build();
-
-    // wait for startup
-    Ok((
-        match res_a {
-            Ok(handle) => handle,
-            Err(e) => Err(e).wrap_err("failed to start stream for chain a: {chain_a}")?,
-        },
-        match res_b {
-            Ok(handle) => handle,
-            Err(e) => Err(e).wrap_err("failed to start stream for chain b: {chain_b}")?,
-        },
-    ))
 }
