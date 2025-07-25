@@ -21,6 +21,7 @@ use crate::{
 mod chain;
 mod collector;
 mod config;
+mod encoder;
 mod signals;
 mod state;
 mod utils;

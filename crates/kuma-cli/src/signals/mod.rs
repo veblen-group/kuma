@@ -1,7 +1,11 @@
+use alloy::signers::local::PrivateKeySigner;
 use num_bigint::BigUint;
-use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
+use tycho_common::{
+    Bytes, models::protocol::ProtocolComponent, models::token::Token,
+    simulation::protocol_sim::ProtocolSim,
+};
 
-use crate::chain::Chain;
+use crate::{chain::Chain, state::pair::PairState};
 
 // Core state structures for the new architecture
 #[derive(Debug, Clone)]
@@ -37,6 +41,8 @@ pub struct ArbSignal {
     pub asset_a: Token,
     pub asset_b: Token,
     pub slow_chain: Chain,
+    pub slow_chain_protocol_component: ProtocolComponent,
+    pub fast_chain_protocol_component: ProtocolComponent,
     pub fast_chain: Chain,
     pub path: Direction,
     pub slow_chain_amount_out: BigUint,
@@ -44,6 +50,7 @@ pub struct ArbSignal {
     pub profit_percentage: f64,
     pub optimal_amount_in: BigUint,
     pub expected_profit: BigUint,
+    pub signer_private_key: String, // Private key for signing transactions
 }
 
 // Implementation of the arbitrage strategy
@@ -104,6 +111,11 @@ impl CrossChainArbitrageStrategy {
     }
 
     fn compute_arb(&self, precompute: &Precompute, fast_state: &State) -> Option<ArbSignal> {
+        let component = ProtocolComponent {
+            id: "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc".to_string(),
+            protocol_system: "uniswap_v2".to_string(),
+            ..Default::default()
+        };
         let mut best_signal: Option<ArbSignal> = None;
         let mut best_profit = BigUint::from(0u64);
 
@@ -135,12 +147,15 @@ impl CrossChainArbitrageStrategy {
                             asset_b: self.asset_b.clone(),
                             slow_chain: precompute.slow_state.chain_info.clone(),
                             fast_chain: fast_state.chain_info.clone(),
+                            slow_chain_protocol_component: component.clone(), // todo use the correct component
+                            fast_chain_protocol_component: component.clone(), // todo use the correct component
                             path: slow_calc.path.clone(),
                             slow_chain_amount_out: slow_calc.amount_out.clone(),
                             fast_chain_amount_out: fast_amount_out,
                             profit_percentage,
                             optimal_amount_in: slow_calc.amount_in.clone(),
                             expected_profit: profit,
+                            signer_private_key: "0xYOUR_PRIVATE_KEY".into(), // TODO: set the signer private key if needed
                         });
                     }
                 }
