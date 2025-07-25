@@ -8,8 +8,11 @@ default_env := 'local'
 copy-env type=default_env:
     cp {{ type }}.env.example .env
 
-run:
+cli:
     cargo run
+
+dev-webapp:
+    cd webapp && npm run dev
 
 generate-signals:
     RUST_LOG=info cargo run -p kuma-cli -- \
