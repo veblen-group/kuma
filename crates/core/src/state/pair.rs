@@ -18,7 +18,7 @@ use crate::state;
 // TODO: maybe move to assets.rs?
 /// Represents a pair of tokens, without directionality (i.e. (a, b) and (b, a) will be treated as the same pair).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct Pair(Token, Token);
+pub struct Pair(Token, Token);
 
 impl Pair {
     pub fn new(token_a: Token, token_b: Token) -> Self {
@@ -50,25 +50,25 @@ impl Display for Pair {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct PairState {
-    pub(crate) block_height: u64,
-    pub(crate) states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
-    pub(crate) modified_pools: Arc<HashSet<state::PoolId>>,
+pub struct PairState {
+    pub block_height: u64,
+    pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
+    pub modified_pools: Arc<HashSet<state::PoolId>>,
 
-    pub(crate) unmodified_pools: Arc<HashSet<state::PoolId>>,
+    pub unmodified_pools: Arc<HashSet<state::PoolId>>,
 
     #[allow(dead_code)]
-    pub(crate) metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
+    pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 #[derive(Debug)]
-pub(crate) struct PairStateStream {
+pub struct PairStateStream {
     pair: Pair,
     block_rx: WatchStream<Arc<Option<Block>>>,
 }
 
 impl PairStateStream {
-    pub(crate) fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
+    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
         Self {
             pair,
             block_rx: WatchStream::from_changes(block_rx),

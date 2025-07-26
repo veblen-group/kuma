@@ -4699,6 +4699,23 @@ dependencies = [
 [[package]]
 name = "kuma-core"
 version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-chains",
+ "color-eyre",
+ "figment",
+ "futures 0.3.31",
+ "num-bigint",
+ "num-traits",
+ "serde",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+ "tycho-common",
+ "tycho-simulation",
+]
 
 [[package]]
 name = "kumad"

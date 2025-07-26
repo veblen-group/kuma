@@ -7,7 +7,7 @@ edition = "2024"
 alloy = { workspace = true }
 alloy-chains = { workspace = true }
 clap = { version = "4.5.40", features = ["derive"] }
-core = { package = "kuma-core", path = "../kuma-core" }
+core = { package = "kuma-core", path = "../core" }
 color-eyre = { workspace = true }
 figment = { workspace = true, features = ["env", "yaml"] }
 futures = { workspace = true }
@@ -27,9 +27,7 @@ tracing = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tokio-util = { workspace = true }
 tokio-stream = { workspace = true }
-tycho-execution = "0.111.0"
-tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.127.1", features = [
-    "evm",
-] }
-tycho-common = "0.77.1"
 tokio-test = "0.4.4"
+tycho-execution = { workspace = true }
+tycho-simulation = { workspace = true }
+tycho-common = { workspace = true }

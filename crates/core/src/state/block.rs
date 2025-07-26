@@ -11,15 +11,15 @@ use super::pair::{Pair, PairState};
 use crate::state;
 
 #[derive(Clone, Debug)]
-pub(crate) struct Block {
-    pub(crate) height: u64,
+pub struct Block {
+    pub height: u64,
     /// The current states
-    pub(crate) states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
+    pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
     /// The pools that have been modified in the latest block update
-    pub(crate) modified_pools: Arc<HashSet<state::PoolId>>,
+    pub modified_pools: Arc<HashSet<state::PoolId>>,
     /// The pools that have not been modified in the latest block update
-    pub(crate) unmodified_pools: Arc<HashSet<state::PoolId>>,
-    pub(crate) metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
+    pub unmodified_pools: Arc<HashSet<state::PoolId>>,
+    pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 impl Block {

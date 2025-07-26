@@ -10,7 +10,7 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 100000.0
+    inventory: 100000
 
   WETH:
     addresses:
@@ -22,7 +22,7 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 50.0
+    inventory: 50
 
 # Chain configurations
 chains:
@@ -38,14 +38,15 @@ chains:
     rpc_url: "https://mainnet.unichain.org"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
+binary_search_steps: 16
+
 # Risk and trading parameters
-congestion_risk_discount: 0.9
-max_slippage: 0.5
+congestion_risk_discount_bps: 5
+max_slippage_bps: 25
+
+# Tycho simulation stream filter
 add_tvl_threshold: 10.0
 remove_tvl_threshold: 5.0
 
 # tycho simulation
 tycho_api_key: "sampletoken"
-
-# Private key
-private_key: "0x35bfec585b1a17b4e5b339adb1ea0e87e26d398c152054745677b95019e6a834"
