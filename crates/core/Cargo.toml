@@ -1,0 +1,21 @@
+[package]
+name = "kuma-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+alloy = { workspace = true }
+alloy-chains = { workspace = true }
+color-eyre = { workspace = true }
+figment = { workspace = true }
+futures = { workspace = true }
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tycho-simulation = { workspace = true }
+tycho-common = { workspace = true }
+tracing-subscriber = { workspace = true }

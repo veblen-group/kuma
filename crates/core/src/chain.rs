@@ -10,11 +10,11 @@ use tycho_common::models as tycho_models;
 
 // TODO: impl Eq with just the name for simplicity?
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub(crate) struct Chain {
-    pub(crate) name: tycho_models::Chain,
-    pub(crate) metadata: alloy_chains::Chain,
-    pub(crate) rpc_url: String,
-    pub(crate) tycho_url: String,
+pub struct Chain {
+    pub name: tycho_models::Chain,
+    pub metadata: alloy_chains::Chain,
+    pub rpc_url: String,
+    pub tycho_url: String,
 }
 
 impl Chain {

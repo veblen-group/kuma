@@ -19,10 +19,10 @@ use crate::{
     },
 };
 
-pub(crate) use builder::Builder;
+pub use builder::Builder;
 mod builder;
 
-pub(crate) struct Handle {
+pub struct Handle {
     #[allow(unused)]
     chain: Chain,
     #[allow(unused)]
@@ -53,7 +53,7 @@ impl Handle {
         self.block_rx.clone()
     }
 
-    pub(crate) fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
+    pub fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
         let block_rx = self.block_rx.clone();
         PairStateStream::from_block_rx(pair.clone(), block_rx)
     }

@@ -26,8 +26,8 @@ pub struct CrossChainSingleHop {
     pub slow_chain: Chain,
     pub fast_pair: Pair,
     pub fast_chain: Chain,
-    pub available_inventory_slow: (BigUint, BigUint),
-    pub available_inventory_fast: (BigUint, BigUint),
+    pub slow_inventory: (BigUint, BigUint),
+    pub fast_inventory: (BigUint, BigUint),
     pub binary_search_steps: usize,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
@@ -39,7 +39,7 @@ impl CrossChainSingleHop {
         Precomputes::from_pair_state(
             slow_state,
             &self.slow_pair,
-            &self.available_inventory_slow,
+            &self.slow_inventory,
             None,
             self.binary_search_steps,
         )
@@ -53,7 +53,7 @@ impl CrossChainSingleHop {
         fast.pair = %self.fast_pair,
         fast.height = %fast_state.block_height
     ))]
-    pub(crate) fn generate_signal(
+    pub fn generate_signal(
         &self,
         precompute: Precomputes,
         fast_state: PairState,
@@ -106,7 +106,7 @@ impl CrossChainSingleHop {
                     fast_state.states[&fast_id].as_ref(),
                     &fast_id,
                     fast_state.block_height,
-                    &self.available_inventory_fast.1,
+                    &self.fast_inventory.1,
                 ).map(|signal| {
                     trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for A->B (slow) and B->A (fast)");
                     signal
@@ -141,7 +141,7 @@ impl CrossChainSingleHop {
                 fast_state.states[&fast_id].as_ref(),
                 &fast_id,
                 fast_state.block_height,
-                &self.available_inventory_fast.0
+                &self.fast_inventory.0
             )
             .map(|signal| {
                 trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
@@ -589,10 +589,10 @@ mod tests {
         Arc::new(CrossChainSingleHop {
             slow_chain,
             slow_pair,
-            available_inventory_slow,
+            slow_inventory: available_inventory_slow,
             fast_chain,
             fast_pair,
-            available_inventory_fast,
+            fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
             // min_profit_threshold: 0.5, // 0.5%
@@ -623,10 +623,10 @@ mod tests {
         Arc::new(CrossChainSingleHop {
             slow_chain,
             slow_pair,
-            available_inventory_slow,
+            slow_inventory: available_inventory_slow,
             fast_chain,
             fast_pair,
-            available_inventory_fast,
+            fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
             // min_profit_threshold: 0.5, // 0.5%
@@ -694,13 +694,13 @@ mod tests {
         let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b
             [strategy.binary_search_steps - 1]
             .amount_in;
-        assert_eq!(*last_amount_in_a, strategy.available_inventory_slow.0);
+        assert_eq!(*last_amount_in_a, strategy.slow_inventory.0);
 
         // 50 ETH
         let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a
             [strategy.binary_search_steps - 1]
             .amount_in;
-        assert_eq!(*last_amount_in_b, strategy.available_inventory_slow.1);
+        assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
     }
 
     #[test]
@@ -766,13 +766,13 @@ mod tests {
         let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b
             [strategy.binary_search_steps - 1]
             .amount_in;
-        assert_eq!(*last_amount_in_a, strategy.available_inventory_slow.0);
+        assert_eq!(*last_amount_in_a, strategy.slow_inventory.0);
 
         // 50 ETH
         let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a
             [strategy.binary_search_steps - 1]
             .amount_in;
-        assert_eq!(*last_amount_in_b, strategy.available_inventory_slow.1);
+        assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
     }
 
     #[test]
