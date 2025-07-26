@@ -1,10 +1,15 @@
+use color_eyre::eyre::{self, Context as _, OptionExt as _, eyre};
 use figment::{
     Figment,
     providers::{Env, Format, Yaml},
 };
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tycho_common::{Bytes, models::Chain};
+use tracing::{info, warn};
+use tycho_common::{Bytes, models::token::Token};
+
+use crate::{chain::Chain, state::pair::Pair};
 
 // TODO: add log level from env
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,18 +36,12 @@ pub struct Config {
     pub max_slippage_bps: u64,
 
     pub binary_search_steps: usize,
-
-    pub max_trade_size: u64,
-
-    /// Private key bytes for transaction signing
-    // TODO: replace with private key path
-    pub private_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenConfig {
     /// Token addresses on different chains
-    pub addresses: HashMap<Chain, Bytes>,
+    pub addresses: HashMap<tycho_common::models::Chain, Bytes>,
 
     /// Token decimals
     pub decimals: u32,
@@ -57,7 +56,7 @@ pub struct TokenConfig {
     pub quality: u32,
 
     /// Existing inventory for this token
-    pub inventory: f64,
+    pub inventory: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,4 +81,103 @@ impl Config {
 
         Ok(config)
     }
+}
+
+pub fn parse_chain_assets(
+    chain_configs: Vec<ChainConfig>,
+    token_configs: HashMap<String, TokenConfig>,
+) -> eyre::Result<(
+    HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
+    HashMap<Chain, HashMap<Token, BigUint>>,
+)> {
+    let chains = chain_configs
+        .iter()
+        .map(
+            |ChainConfig {
+                 name,
+                 rpc_url,
+                 tycho_url,
+             }| {
+                Chain::new(&name, &rpc_url, &tycho_url).wrap_err("failed to parse chain info")
+            },
+        )
+        .collect::<eyre::Result<Vec<Chain>>>()
+        .expect("failed to parse chain configs");
+
+    let mut inventories_by_chain: HashMap<Chain, HashMap<Token, BigUint>> = HashMap::new();
+
+    let mut tokens_by_chain = HashMap::new();
+    for chain in chains {
+        let mut tokens = HashMap::new();
+        for (symbol, token_config) in &token_configs {
+            let addr = token_config
+                .addresses
+                .get(&chain.name)
+                .ok_or_eyre("token address for {symbol} on chain {chain.name} not found")?
+                .clone();
+
+            let token = Token::new(
+                &addr,
+                &symbol,
+                token_config.decimals,
+                token_config.tax,
+                &token_config.gas.clone(),
+                chain.name.clone(),
+                token_config.quality,
+            );
+
+            let token_inventory =
+                BigUint::from(token_config.inventory) * 10u128.pow(token.decimals);
+
+            if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
+                match token_inventories.insert(token.clone(), token_inventory) {
+                    Some(_) => return Err(eyre!("duplicate token inventory")),
+                    None => (),
+                }
+            } else {
+                inventories_by_chain.insert(
+                    chain.clone(),
+                    HashMap::from([(token.clone(), token_inventory)]),
+                );
+            }
+
+            tokens.insert(addr, token);
+        }
+        tokens_by_chain.insert(chain, tokens);
+    }
+
+    Ok((tokens_by_chain, inventories_by_chain))
+}
+
+pub fn get_chain_pairs(
+    token_a: &str,
+    token_b: &str,
+    chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
+) -> HashMap<Chain, Pair> {
+    let mut pairs = HashMap::new();
+
+    for (chain, tokens) in chain_tokens {
+        let a = tokens
+            .iter()
+            .filter(|(_addr, token)| token.symbol == token_a.to_ascii_uppercase())
+            .next();
+        let b = tokens
+            .iter()
+            .filter(|(_addr, token)| token.symbol == token_b.to_ascii_uppercase())
+            .next();
+
+        match (a, b) {
+            (None, _) | (_, None) => {
+                warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "Failed to initialized token pair for chain");
+            }
+            (Some((_, a)), Some((_, b))) => {
+                let pair = Pair::new(a.clone(), b.clone());
+                pairs.insert(chain.clone(), pair);
+
+                info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🪙 Successfully initialized token pair for chain");
+            }
+        }
+    }
+
+    pairs
 }

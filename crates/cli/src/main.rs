@@ -10,10 +10,9 @@ use tracing_subscriber::{self, EnvFilter};
 
 use crate::kuma::Kuma;
 
-use core::{chain, config::Config, state, strategy};
+use core::config::Config;
 
 mod kuma;
-mod utils;
 
 #[derive(Parser)]
 #[command(name = "kuma", about)]
@@ -92,7 +91,15 @@ async fn main() -> ExitCode {
     let result = select! {
         res = command_jh => {
             // TODO: make sure this is correct
-            res.and_then(|_| Ok(ExitCode::SUCCESS))
+            res.and_then(|commands_result| {
+                match commands_result {
+                    Ok(_) => Ok(ExitCode::SUCCESS),
+                    Err(e) => {
+                        error!(error=%e, "command failed");
+                        Ok(ExitCode::FAILURE)
+                    },
+                }
+            })
         }
         _ = sigterm.recv() => {
             info!("received SIGTERM signal");

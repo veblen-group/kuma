@@ -1,19 +1,19 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
-use num_bigint::BigUint;
-use tracing::info;
+use tracing::{info, instrument};
 use tycho_common::models::token::Token;
 
-use crate::{
-    Cli, Commands,
-    chain::Chain,
-    strategy::CrossChainSingleHop,
-    utils::{get_chain_pairs, get_chains_from_cli, parse_chain_assets},
-};
+use crate::{Cli, Commands};
 
-use core::{collector, config::Config, state::pair::Pair};
+use core::{
+    chain::Chain,
+    collector,
+    config::{Config, get_chain_pairs, parse_chain_assets},
+    state::pair::Pair,
+    strategy::CrossChainSingleHop,
+};
 
 pub(crate) struct Kuma {
     command: Commands,
@@ -41,23 +41,22 @@ impl Kuma {
             max_slippage_bps,
             congestion_risk_discount_bps,
             binary_search_steps,
-            max_trade_size,
             ..
         } = cfg;
 
-        let chain_assets =
+        let (tokens_by_chain, inventory) =
             parse_chain_assets(chains, tokens).expect("Failed to parse chain assets");
 
-        info!("Parsed {} chains from config:", chain_assets.len());
+        info!("Parsed {} chains from config:", tokens_by_chain.len());
 
-        for (chain, _tokens) in &chain_assets {
+        for (chain, _tokens) in &tokens_by_chain {
             info!(chain.name = %chain.name,
-                    chain.id = %chain.metadata.id(),
-                    "🔗 Initialized chain info from config");
+                        chain.id = %chain.metadata.id(),
+                        "🔗 Initialized chain info from config");
         }
 
-        let pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &chain_assets);
-        let (slow_chain, fast_chain) = get_chains_from_cli(&cli, &chain_assets);
+        let pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &tokens_by_chain);
+        let (slow_chain, fast_chain) = get_chains_from_cli(&cli, &tokens_by_chain);
         let slow_pair = pairs.get(&slow_chain).expect(&format!(
             "could not find pair info for {:}",
             slow_chain.name
@@ -70,7 +69,7 @@ impl Kuma {
         // set up tycho stream collectors
         let slow_collector_handle = make_collector(
             slow_chain.clone(),
-            chain_assets[&slow_chain].clone(),
+            tokens_by_chain[&slow_chain].clone(),
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
@@ -79,7 +78,7 @@ impl Kuma {
 
         let fast_collector_handle = make_collector(
             fast_chain.clone(),
-            chain_assets[&fast_chain].clone(),
+            tokens_by_chain[&fast_chain].clone(),
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
@@ -87,32 +86,30 @@ impl Kuma {
         .wrap_err("failed to start chain a collector")?;
 
         // initialize single hop strategy
+        let slow_inventory = (
+            inventory[&slow_chain][slow_pair.token_a()].clone(),
+            inventory[&slow_chain][slow_pair.token_b()].clone(),
+        );
+        let fast_inventory = (
+            inventory[&fast_chain][fast_pair.token_a()].clone(),
+            inventory[&fast_chain][fast_pair.token_b()].clone(),
+        );
+
         let strategy = CrossChainSingleHop {
             slow_pair: slow_pair.clone(),
             slow_chain: slow_chain.clone(),
             fast_pair: fast_pair.clone(),
             fast_chain: fast_chain.clone(),
-            // TODO: ??
-            // min_profit_threshold: 0.5,
-            // TODO: make token -> chain -> bigint inventory map from config
-            available_inventory_slow: (
-                BigUint::from(max_trade_size),
-                BigUint::from(max_trade_size),
-            ),
-            available_inventory_fast: (
-                BigUint::from(max_trade_size),
-                BigUint::from(max_trade_size),
-            ),
+            slow_inventory,
+            fast_inventory,
             binary_search_steps,
-            max_slippage_bps: (max_slippage_bps as i32)
-                .try_into()
-                .expect("Failed to convert max_slippage_bps to f64"),
+            max_slippage_bps,
             congestion_risk_discount_bps,
         };
 
         Ok(Self {
             command: cli.command,
-            all_tokens: chain_assets,
+            all_tokens: tokens_by_chain,
             slow_chain,
             slow_pair: slow_pair.clone(),
             fast_chain,
@@ -123,6 +120,7 @@ impl Kuma {
         })
     }
 
+    #[instrument(skip(self))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
             command,
@@ -136,32 +134,33 @@ impl Kuma {
             ..
         } = self;
 
-        let _signal = {
-            // TODO: do i need Commands::GenerateSignal if this is always run?
-            info!(command = "generating signal");
+        // TODO: do i need Commands::GenerateSignal if this is always run?
+        info!(command = "generating signal");
 
-            let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
-            let mut fast_chain_states = fast_collector_handle.get_pair_state_stream(&fast_pair);
+        let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
+        let mut fast_chain_states = fast_collector_handle.get_pair_state_stream(&fast_pair);
+        // read state from stream
+        let slow_state = slow_chain_states
+            .next()
+            .await
+            .expect("chain a stream should yield initial block");
+        let fast_state = fast_chain_states
+            .next()
+            .await
+            .expect("chain b stream should yield initial block");
 
-            // read state from stream
-            let slow_state = slow_chain_states
-                .next()
-                .await
-                .expect("chain a stream should yield initial block");
-            let fast_state = fast_chain_states
-                .next()
-                .await
-                .expect("chain b stream should yield initial block");
+        info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
+        info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
-            info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
-            info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
+        // precompute data for signal
+        let precompute = strategy.precompute(slow_state);
 
-            // precompute data for signal
-            let precompute = strategy.precompute(slow_state);
+        info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
 
-            // compute arb signal
-            strategy.generate_signal(precompute, fast_state)
-            }.wrap_err("failed to generate signal")?;
+        // compute arb signal
+        let signal = strategy.generate_signal(precompute, fast_state)?;
+
+        info!(signal = ?signal, "📊 generated signal");
 
         if let Commands::DryRun = command {
             // set up tycho encoder
@@ -194,4 +193,30 @@ pub(crate) fn make_collector(
     .build();
 
     handle.wrap_err("failed to start tycho collector for chain : {chain}")
+}
+
+pub(crate) fn get_chains_from_cli(
+    cli: &Cli,
+    chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
+) -> (Chain, Chain) {
+    let chain_a = chain_tokens
+        .keys()
+        .find(|chain| {
+            chain.name
+                == tycho_common::models::Chain::from_str(&cli.chain_a)
+                    .expect("Invalid chain a name")
+        })
+        .expect("Chain A not configured")
+        .clone();
+    let chain_b = chain_tokens
+        .keys()
+        .find(|chain| {
+            chain.name
+                == tycho_common::models::Chain::from_str(&cli.chain_b)
+                    .expect("Invalid chain b name")
+        })
+        .expect("Chain B not configured")
+        .clone();
+
+    (chain_a, chain_b)
 }
