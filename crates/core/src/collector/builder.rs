@@ -18,13 +18,13 @@ use tycho_simulation::{
 use super::Worker;
 use crate::{chain::Chain, state::block::Block};
 
-pub(crate) struct Builder {
-    pub(crate) chain: Chain,
-    pub(crate) tycho_url: String,
-    pub(crate) api_key: String,
-    pub(crate) tokens: HashMap<Bytes, Token>,
-    pub(crate) add_tvl_threshold: f64,
-    pub(crate) remove_tvl_threshold: f64,
+pub struct Builder {
+    pub chain: Chain,
+    pub tycho_url: String,
+    pub api_key: String,
+    pub tokens: HashMap<Bytes, Token>,
+    pub add_tvl_threshold: f64,
+    pub remove_tvl_threshold: f64,
 }
 
 impl Builder {

@@ -9,12 +9,11 @@ use tycho_common::models::token::Token;
 use crate::{
     Cli, Commands,
     chain::Chain,
-    collector,
-    config::Config,
-    state::pair::Pair,
     strategy::CrossChainSingleHop,
     utils::{get_chain_pairs, get_chains_from_cli, parse_chain_assets},
 };
+
+use core::{collector, config::Config, state::pair::Pair};
 
 pub(crate) struct Kuma {
     command: Commands,
@@ -26,8 +25,8 @@ pub(crate) struct Kuma {
     fast_pair: Pair,
     fast_chain: Chain,
 
-    slow_collector_handle: crate::collector::Handle,
-    fast_collector_handle: crate::collector::Handle,
+    slow_collector_handle: collector::Handle,
+    fast_collector_handle: collector::Handle,
     strategy: CrossChainSingleHop,
 }
 

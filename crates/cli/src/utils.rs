@@ -5,12 +5,8 @@ use tracing::{info, warn};
 use tycho_common::models::token::Token;
 use tycho_simulation::evm::tycho_models;
 
-use crate::{
-    Cli,
-    chain::Chain,
-    config::{ChainConfig, TokenConfig},
-    state::pair::Pair,
-};
+use crate::{Cli, chain::Chain, state::pair::Pair};
+use core::config::{ChainConfig, TokenConfig};
 
 pub(crate) fn parse_chain_assets(
     chains: Vec<ChainConfig>,

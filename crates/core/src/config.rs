@@ -76,7 +76,7 @@ impl Config {
     /// Load configuration from environment and optional config file
     pub fn load() -> Result<Self, figment::Error> {
         let config: Config = Figment::new()
-            .merge(Yaml::file("Config.yaml"))
+            .merge(Yaml::file("kuma.yaml"))
             .merge(Env::prefixed("KUMA_CLI_"))
             .extract()?;
 

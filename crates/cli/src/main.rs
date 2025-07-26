@@ -10,13 +10,9 @@ use tracing_subscriber::{self, EnvFilter};
 
 use crate::kuma::Kuma;
 
-mod chain;
-mod collector;
-mod config;
+use core::{chain, config::Config, state, strategy};
+
 mod kuma;
-mod signals;
-mod state;
-mod strategy;
 mod utils;
 
 #[derive(Parser)]
@@ -58,7 +54,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> ExitCode {
     // Load configuration
-    let config = match config::Config::load() {
+    let config = match Config::load() {
         Ok(config) => config,
         Err(err) => {
             eprintln!("Failed to load configuration: {}", err);

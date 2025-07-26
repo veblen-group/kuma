@@ -53,7 +53,7 @@ impl CrossChainSingleHop {
         fast.pair = %self.fast_pair,
         fast.height = %fast_state.block_height
     ))]
-    pub(crate) fn generate_signal(
+    pub fn generate_signal(
         &self,
         precompute: Precomputes,
         fast_state: PairState,
