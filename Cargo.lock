@@ -1024,24 +1024,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
-name = "api-server"
-version = "0.1.0"
-dependencies = [
- "axum 0.7.9",
- "axum-test",
- "color-eyre",
- "num-bigint",
- "proptest",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.19",
-]
-
-[[package]]
 name = "arbitrary"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4925,6 +4907,25 @@ checksum = "505d1856a39b200489082f90d897c3f07c455563880bc5952e38eabf731c83b6"
 dependencies = [
  "digest 0.10.7",
  "sha3-asm",
+]
+
+[[package]]
+name = "kuma-backend"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.9",
+ "axum-test",
+ "color-eyre",
+ "figment",
+ "num-bigint",
+ "proptest",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.19",
 ]
 
 [[package]]
