@@ -9,11 +9,14 @@ CREATE TABLE IF NOT EXISTS spot_prices (
     block_height BIGINT NOT NULL,
     price TEXT NOT NULL,
     pool_id VARCHAR(100) NOT NULL,
+    chain VARCHAR(50) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_spot_prices_pool_block ON spot_prices(pool_id, block_height DESC);
 CREATE INDEX IF NOT EXISTS idx_spot_prices_block_height ON spot_prices(block_height DESC);
+CREATE INDEX IF NOT EXISTS idx_spot_prices_chain ON spot_prices(chain);
+CREATE INDEX IF NOT EXISTS idx_spot_prices_chain_block ON spot_prices(chain, block_height DESC);
 
 CREATE TABLE IF NOT EXISTS arbitrage_signals (
     id BIGSERIAL PRIMARY KEY,

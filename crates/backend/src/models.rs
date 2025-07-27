@@ -101,6 +101,7 @@ pub struct SpotPrice {
     pub block_height: u64,
     pub price: String, // BigUint as string
     pub pool_id: String,
+    pub chain: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

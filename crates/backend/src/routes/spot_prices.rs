@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     routing::get,
     Json, Router,
 };
@@ -15,6 +15,12 @@ use crate::{
 pub struct SpotPriceQuery {
     pub block_height: u64,
     pub pair: Option<String>, // Format: "TokenA-TokenB"
+    #[serde(flatten)]
+    pub pagination: PaginationQuery,
+}
+
+#[derive(Deserialize)]
+pub struct ChainQuery {
     #[serde(flatten)]
     pub pagination: PaginationQuery,
 }
@@ -53,8 +59,44 @@ pub async fn get_spot_prices(
     }
 }
 
+pub async fn get_spot_prices_by_chain(
+    State(state): State<AppState>,
+    Path(chain): Path<String>,
+    Query(params): Query<ChainQuery>,
+) -> Json<PaginatedResponse<SpotPrice>> {
+    let (page, page_size) = params.pagination.sanitize();
+    let (offset, limit) = params.pagination.to_offset_limit();
+    
+    info!(
+        chain = %chain,
+        page = %page, 
+        page_size = %page_size,
+        "Fetching spot prices by chain"
+    );
+
+    let repo = state.db.spot_price_repository();
+    
+    // Get total count and data in parallel
+    let (count_result, data_result) = tokio::join!(
+        repo.count_by_chain(&chain),
+        repo.get_by_chain(&chain, limit, offset)
+    );
+    
+    match (count_result, data_result) {
+        (Ok(total_count), Ok(prices)) => {
+            Json(PaginatedResponse::new(prices, page, page_size, Some(total_count)))
+        }
+        (Err(e), _) | (_, Err(e)) => {
+            tracing::error!("Failed to fetch spot prices by chain: {}", e);
+            Json(PaginatedResponse::new(vec![], page, page_size, Some(0)))
+        }
+    }
+}
+
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/", get(get_spot_prices))
+    Router::new()
+        .route("/", get(get_spot_prices))
+        .route("/by_chain/:chain", get(get_spot_prices_by_chain))
 }
 
 #[cfg(test)]
@@ -104,5 +146,23 @@ mod tests {
         let (page, page_size) = pagination.sanitize();
         assert_eq!(page, 1);
         assert_eq!(page_size, 1);
+    }
+
+    #[test]
+    fn test_chain_query_deserialization() {
+        let query = "page=2&page_size=50";
+        let parsed: ChainQuery = serde_urlencoded::from_str(query).unwrap();
+        
+        assert_eq!(parsed.pagination.page, Some(2));
+        assert_eq!(parsed.pagination.page_size, Some(50));
+    }
+
+    #[test]
+    fn test_chain_query_defaults() {
+        let query = "";
+        let parsed: ChainQuery = serde_urlencoded::from_str(query).unwrap();
+        
+        assert_eq!(parsed.pagination.page, None);
+        assert_eq!(parsed.pagination.page_size, None);
     }
 }

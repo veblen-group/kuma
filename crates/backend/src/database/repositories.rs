@@ -21,8 +21,8 @@ impl SpotPriceRepository {
             INSERT INTO spot_prices (
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
-                block_height, price, pool_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                block_height, price, pool_id, chain
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
         )
         .bind(&spot_price.pair.token_a.symbol)
@@ -32,6 +32,7 @@ impl SpotPriceRepository {
         .bind(spot_price.block_height as i64)
         .bind(&spot_price.price)
         .bind(&spot_price.pool_id)
+        .bind(&spot_price.chain)
         .execute(&*self.pool)
         .await?;
 
@@ -46,7 +47,7 @@ impl SpotPriceRepository {
             SELECT 
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
-                block_height, price, pool_id
+                block_height, price, pool_id, chain
             FROM spot_prices 
             WHERE pool_id = $1 
             ORDER BY block_height DESC 
@@ -71,6 +72,7 @@ impl SpotPriceRepository {
             block_height: r.get::<i64, _>("block_height") as u64,
             price: r.get("price"),
             pool_id: r.get("pool_id"),
+            chain: r.get("chain"),
         }))
     }
 
@@ -86,7 +88,7 @@ impl SpotPriceRepository {
             SELECT 
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
-                block_height, price, pool_id
+                block_height, price, pool_id, chain
             FROM spot_prices 
             WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
             ORDER BY block_height ASC
@@ -114,6 +116,7 @@ impl SpotPriceRepository {
                 block_height: r.get::<i64, _>("block_height") as u64,
                 price: r.get("price"),
                 pool_id: r.get("pool_id"),
+                chain: r.get("chain"),
             })
             .collect())
     }
@@ -186,7 +189,7 @@ impl SpotPriceRepository {
                     SELECT 
                         token_a_symbol, token_a_address,
                         token_b_symbol, token_b_address,
-                        block_height, price, pool_id
+                        block_height, price, pool_id, chain
                     FROM spot_prices 
                     WHERE block_height = $1 
                     AND ((token_a_symbol = $2 AND token_b_symbol = $3) 
@@ -209,7 +212,7 @@ impl SpotPriceRepository {
                     SELECT 
                         token_a_symbol, token_a_address,
                         token_b_symbol, token_b_address,
-                        block_height, price, pool_id
+                        block_height, price, pool_id, chain
                     FROM spot_prices 
                     WHERE block_height = $1
                     ORDER BY pool_id
@@ -240,8 +243,71 @@ impl SpotPriceRepository {
                 block_height: r.get::<i64, _>("block_height") as u64,
                 price: r.get("price"),
                 pool_id: r.get("pool_id"),
+                chain: r.get("chain"),
             })
             .collect())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_by_chain(
+        &self,
+        chain: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<SpotPrice>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                token_a_symbol, token_a_address,
+                token_b_symbol, token_b_address,
+                block_height, price, pool_id, chain
+            FROM spot_prices 
+            WHERE chain = $1
+            ORDER BY block_height DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(chain)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| SpotPrice {
+                pair: crate::models::Pair {
+                    token_a: crate::models::Token {
+                        symbol: r.get("token_a_symbol"),
+                        address: r.get("token_a_address"),
+                    },
+                    token_b: crate::models::Token {
+                        symbol: r.get("token_b_symbol"),
+                        address: r.get("token_b_address"),
+                    },
+                },
+                block_height: r.get::<i64, _>("block_height") as u64,
+                price: r.get("price"),
+                pool_id: r.get("pool_id"),
+                chain: r.get("chain"),
+            })
+            .collect())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn count_by_chain(&self, chain: &str) -> Result<u64> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) as count
+            FROM spot_prices 
+            WHERE chain = $1
+            "#,
+        )
+        .bind(chain)
+        .fetch_one(&*self.pool)
+        .await?;
+
+        Ok(count as u64)
     }
 }
 
@@ -602,5 +668,251 @@ impl ArbitrageSignalRepository {
                 max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
             })
             .collect())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_by_chain(
+        &self,
+        chain: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ArbitrageSignal>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
+                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
+                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
+                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_in_address,
+                slow_swap_token_out_symbol, slow_swap_token_out_address,
+                slow_swap_amount_in, slow_swap_amount_out,
+                fast_swap_token_in_symbol, fast_swap_token_in_address,
+                fast_swap_token_out_symbol, fast_swap_token_out_address,
+                fast_swap_amount_in, fast_swap_amount_out,
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
+            FROM arbitrage_signals 
+            WHERE slow_chain = $1 OR fast_chain = $1
+            ORDER BY block_height DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(chain)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ArbitrageSignal {
+                block_height: row.get::<i64, _>("block_height") as u64,
+                slow_chain: row.get("slow_chain"),
+                slow_pair: crate::models::Pair {
+                    token_a: crate::models::Token {
+                        symbol: row.get("slow_pair_token_a_symbol"),
+                        address: row.get("slow_pair_token_a_address"),
+                    },
+                    token_b: crate::models::Token {
+                        symbol: row.get("slow_pair_token_b_symbol"),
+                        address: row.get("slow_pair_token_b_address"),
+                    },
+                },
+                slow_pool_id: row.get("slow_pool_id"),
+                fast_chain: row.get("fast_chain"),
+                fast_pair: crate::models::Pair {
+                    token_a: crate::models::Token {
+                        symbol: row.get("fast_pair_token_a_symbol"),
+                        address: row.get("fast_pair_token_a_address"),
+                    },
+                    token_b: crate::models::Token {
+                        symbol: row.get("fast_pair_token_b_symbol"),
+                        address: row.get("fast_pair_token_b_address"),
+                    },
+                },
+                fast_pool_id: row.get("fast_pool_id"),
+                slow_swap: crate::models::SwapInfo {
+                    token_in: crate::models::Token {
+                        symbol: row.get("slow_swap_token_in_symbol"),
+                        address: row.get("slow_swap_token_in_address"),
+                    },
+                    token_out: crate::models::Token {
+                        symbol: row.get("slow_swap_token_out_symbol"),
+                        address: row.get("slow_swap_token_out_address"),
+                    },
+                    amount_in: row.get("slow_swap_amount_in"),
+                    amount_out: row.get("slow_swap_amount_out"),
+                },
+                fast_swap: crate::models::SwapInfo {
+                    token_in: crate::models::Token {
+                        symbol: row.get("fast_swap_token_in_symbol"),
+                        address: row.get("fast_swap_token_in_address"),
+                    },
+                    token_out: crate::models::Token {
+                        symbol: row.get("fast_swap_token_out_symbol"),
+                        address: row.get("fast_swap_token_out_address"),
+                    },
+                    amount_in: row.get("fast_swap_amount_in"),
+                    amount_out: row.get("fast_swap_amount_out"),
+                },
+                surplus_a: row.get("surplus_a"),
+                surplus_b: row.get("surplus_b"),
+                expected_profit_a: row.get("expected_profit_a"),
+                expected_profit_b: row.get("expected_profit_b"),
+                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
+            })
+            .collect())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn count_by_chain(&self, chain: &str) -> Result<u64> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) as count
+            FROM arbitrage_signals 
+            WHERE slow_chain = $1 OR fast_chain = $1
+            "#,
+        )
+        .bind(chain)
+        .fetch_one(&*self.pool)
+        .await?;
+
+        Ok(count as u64)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_by_pair(
+        &self,
+        pair: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ArbitrageSignal>> {
+        let parts: Vec<&str> = pair.split('-').collect();
+        if parts.len() != 2 {
+            return Ok(vec![]);
+        }
+        let token_a = parts[0];
+        let token_b = parts[1];
+
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
+                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
+                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
+                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_in_address,
+                slow_swap_token_out_symbol, slow_swap_token_out_address,
+                slow_swap_amount_in, slow_swap_amount_out,
+                fast_swap_token_in_symbol, fast_swap_token_in_address,
+                fast_swap_token_out_symbol, fast_swap_token_out_address,
+                fast_swap_amount_in, fast_swap_amount_out,
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
+            FROM arbitrage_signals 
+            WHERE (
+                (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
+                (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
+                (fast_pair_token_a_symbol = $1 AND fast_pair_token_b_symbol = $2) OR
+                (fast_pair_token_a_symbol = $2 AND fast_pair_token_b_symbol = $1)
+            )
+            ORDER BY block_height DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(token_a)
+        .bind(token_b)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ArbitrageSignal {
+                block_height: row.get::<i64, _>("block_height") as u64,
+                slow_chain: row.get("slow_chain"),
+                slow_pair: crate::models::Pair {
+                    token_a: crate::models::Token {
+                        symbol: row.get("slow_pair_token_a_symbol"),
+                        address: row.get("slow_pair_token_a_address"),
+                    },
+                    token_b: crate::models::Token {
+                        symbol: row.get("slow_pair_token_b_symbol"),
+                        address: row.get("slow_pair_token_b_address"),
+                    },
+                },
+                slow_pool_id: row.get("slow_pool_id"),
+                fast_chain: row.get("fast_chain"),
+                fast_pair: crate::models::Pair {
+                    token_a: crate::models::Token {
+                        symbol: row.get("fast_pair_token_a_symbol"),
+                        address: row.get("fast_pair_token_a_address"),
+                    },
+                    token_b: crate::models::Token {
+                        symbol: row.get("fast_pair_token_b_symbol"),
+                        address: row.get("fast_pair_token_b_address"),
+                    },
+                },
+                fast_pool_id: row.get("fast_pool_id"),
+                slow_swap: crate::models::SwapInfo {
+                    token_in: crate::models::Token {
+                        symbol: row.get("slow_swap_token_in_symbol"),
+                        address: row.get("slow_swap_token_in_address"),
+                    },
+                    token_out: crate::models::Token {
+                        symbol: row.get("slow_swap_token_out_symbol"),
+                        address: row.get("slow_swap_token_out_address"),
+                    },
+                    amount_in: row.get("slow_swap_amount_in"),
+                    amount_out: row.get("slow_swap_amount_out"),
+                },
+                fast_swap: crate::models::SwapInfo {
+                    token_in: crate::models::Token {
+                        symbol: row.get("fast_swap_token_in_symbol"),
+                        address: row.get("fast_swap_token_in_address"),
+                    },
+                    token_out: crate::models::Token {
+                        symbol: row.get("fast_swap_token_out_symbol"),
+                        address: row.get("fast_swap_token_out_address"),
+                    },
+                    amount_in: row.get("fast_swap_amount_in"),
+                    amount_out: row.get("fast_swap_amount_out"),
+                },
+                surplus_a: row.get("surplus_a"),
+                surplus_b: row.get("surplus_b"),
+                expected_profit_a: row.get("expected_profit_a"),
+                expected_profit_b: row.get("expected_profit_b"),
+                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
+            })
+            .collect())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn count_by_pair(&self, pair: &str) -> Result<u64> {
+        let parts: Vec<&str> = pair.split('-').collect();
+        if parts.len() != 2 {
+            return Ok(0);
+        }
+        let token_a = parts[0];
+        let token_b = parts[1];
+
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) as count
+            FROM arbitrage_signals 
+            WHERE (
+                (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
+                (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
+                (fast_pair_token_a_symbol = $1 AND fast_pair_token_b_symbol = $2) OR
+                (fast_pair_token_a_symbol = $2 AND fast_pair_token_b_symbol = $1)
+            )
+            "#,
+        )
+        .bind(token_a)
+        .bind(token_b)
+        .fetch_one(&*self.pool)
+        .await?;
+
+        Ok(count as u64)
     }
 }
