@@ -75,7 +75,7 @@ impl Future for Handle {
 
 struct Worker {
     // TODO: set up strategy object from core
-    strategy_config: StrategyConfig,
+    strategy: StrategyConfig,
     slow_stream: PairStateStream,
     fast_stream: PairStateStream,
     signal_tx: broadcast::Sender<CrossChainSingleHop>,
@@ -90,7 +90,7 @@ impl Worker {
 
         // TODO: use fusedfutures for signal emission and db write
         let mut slow_state: Option<PairState> = None;
-        let mut precompute_result: Option<Arc<Vec<_>>> = None;
+        let mut precompute_result = None;
         let mut timer_deadline: Option<Instant> = None;
 
         // biased loop
@@ -118,10 +118,10 @@ impl Worker {
 
                     // Step 1: Read slow chain state and precompute
                     // TODO: take ref
-                    let precompute = self.strategy_config.precompute(&new_slow_state);
+                    let precompute = self.strategy.precompute(new_slow_state);
 
                     trace!(
-                        precompute_count = precompute.len(),
+                        block.height = precompute.block_height,
                         "✅ Precomputed trade sizes for slow chain"
                     );
                     precompute_result = Some(Arc::new(precompute));
@@ -162,7 +162,7 @@ impl Worker {
                                 "🚀 Generating signal from latest states"
                             );
 
-                            match self.strategy_config.generate_signal(slow_state, &fast_state, precompute) {
+                            match self.strategy.generate_signal(slow_state, &fast_state, precompute) {
                                 Ok(signal) => {
                                     info!(
                                         slow_height = slow_state.block_height,

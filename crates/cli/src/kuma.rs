@@ -8,11 +8,7 @@ use tycho_common::models::token::Token;
 use crate::{Cli, Commands, tokens::load_all_tokens};
 
 use core::{
-    chain::Chain,
-    collector,
-    config::{Config, get_chain_pairs, parse_chain_assets},
-    state::pair::Pair,
-    strategy::CrossChainSingleHop,
+    chain::Chain, collector, config::Config, state::pair::Pair, strategy::CrossChainSingleHop,
 };
 
 pub(crate) struct Kuma {
@@ -32,20 +28,9 @@ pub(crate) struct Kuma {
 
 impl Kuma {
     pub fn spawn(cfg: Config, cli: Cli) -> eyre::Result<Self> {
-        let Config {
-            chains,
-            tokens,
-            tycho_api_key,
-            add_tvl_threshold,
-            remove_tvl_threshold,
-            max_slippage_bps,
-            congestion_risk_discount_bps,
-            binary_search_steps,
-            ..
-        } = cfg;
-
-        let (tokens_by_chain, inventory) =
-            parse_chain_assets(chains, tokens).expect("Failed to parse chain assets");
+        let (tokens_by_chain, inventory) = cfg
+            .parse_chain_assets()
+            .expect("Failed to parse chain assets");
 
         info!("Parsed {} chains from config:", tokens_by_chain.len());
 
@@ -55,7 +40,18 @@ impl Kuma {
                         "🔗 Initialized chain info from config");
         }
 
-        let pairs = get_chain_pairs(&cli.token_a, &cli.token_b, &tokens_by_chain);
+        let pairs = cfg.get_chain_pairs(&cli.token_a, &cli.token_b)?;
+
+        let Config {
+            tycho_api_key,
+            add_tvl_threshold,
+            remove_tvl_threshold,
+            max_slippage_bps,
+            congestion_risk_discount_bps,
+            binary_search_steps,
+            ..
+        } = cfg;
+
         let (slow_chain, fast_chain) = get_chains_from_cli(&cli, &tokens_by_chain);
         let slow_pair = pairs.get(&slow_chain).expect(&format!(
             "could not find pair info for {:}",

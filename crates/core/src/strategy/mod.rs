@@ -37,7 +37,7 @@ impl CrossChainSingleHop {
     #[instrument(skip_all)]
     pub fn precompute(&self, slow_state: PairState) -> Precomputes {
         Precomputes::from_pair_state(
-            slow_state,
+            &slow_state,
             &self.slow_pair,
             &self.slow_inventory,
             None,

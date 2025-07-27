@@ -31,7 +31,7 @@ impl Precomputes {
         with_unmodified_precomputes = %unmodified_precomputes.is_some(),
     ))]
     pub fn from_pair_state(
-        state: PairState,
+        state: &PairState,
         pair: &Pair,
         inventory: &(BigUint, BigUint),
         unmodified_precomputes: Option<Precomputes>,
@@ -99,7 +99,7 @@ impl Precomputes {
             block_height,
             pool_sims,
             sorted_spot_prices: (spot_prices_a_to_b_sorted, spot_prices_b_to_a_sorted),
-            pool_metadata: state.metadata,
+            pool_metadata: state.metadata.clone(),
             // chain: todo!(),
             // pair: todo!(),
         }

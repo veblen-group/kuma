@@ -1,18 +1,13 @@
 use std::time::Duration;
 
 use color_eyre::eyre::{self, Context};
+use num_bigint::BigUint;
 use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
 use crate::{config::Config, strategy};
-use kuma_core::{
-    chain::Chain,
-    collector,
-    state::pair::{Pair, PairStateStream},
-    strategy::CrossChainSingleHop as StrategyConfig,
-};
-use tycho_common::models::token::Token;
+use kuma_core::{chain::Chain, collector, state::pair::Pair};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
@@ -68,12 +63,13 @@ impl Kuma {
 
         // TODO: init from config
         let strategy_handle = strategy::Builder {
-            slow_pair,
+            slow_pair: todo!(),
             slow_chain,
-            fast_pair,
+            fast_pair: todo!(),
             fast_chain,
-            slow_inventory: 1000u64.into(),   // TODO: from config
-            fast_inventory: 1000u64.into(),   // TODO: from config
+            // TODO: use the helper methods for this
+            slow_inventory: (BigUint::from(1000u64), BigUint::from(1000u64)),
+            fast_inventory: (BigUint::from(1000u64), BigUint::from(1000u64)),
             binary_search_steps: 10,          // TODO: from config
             max_slippage_bps: 50,             // TODO: from config
             congestion_risk_discount_bps: 25, // TODO: from config
@@ -86,6 +82,8 @@ impl Kuma {
 
         Ok(Self {
             shutdown_token,
+            slow_collector,
+            fast_collector,
             strategy_handle,
         })
     }
@@ -129,7 +127,7 @@ impl Kuma {
     }
 
     #[instrument(skip_all)]
-    async fn shutdown(self, reason: eyre::Result<&'static str>) {
+    async fn shutdown(mut self, reason: eyre::Result<&'static str>) {
         const WAIT_BEFORE_ABORT: Duration = Duration::from_secs(25);
 
         // trigger the shutdown token in case it wasn't triggered yet

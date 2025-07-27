@@ -1,18 +1,27 @@
-use std::sync::Arc;
-
-use color_eyre::eyre::{self, Context as _};
+use color_eyre::eyre::{self};
+use num_bigint::BigUint;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
 use kuma_core::{
-    signals::CrossChainSingleHop, state::pair::PairStateStream,
-    strategy::CrossChainSingleHop as StrategyConfig,
+    chain::Chain,
+    signals::CrossChainSingleHop,
+    state::pair::{Pair, PairStateStream},
+    strategy,
 };
 
 use super::{Handle, Worker};
 
 pub struct Builder {
-    pub(crate) strategy_config: StrategyConfig,
+    pub slow_pair: Pair,
+    pub slow_chain: Chain,
+    pub fast_pair: Pair,
+    pub fast_chain: Chain,
+    pub slow_inventory: (BigUint, BigUint),
+    pub fast_inventory: (BigUint, BigUint),
+    pub binary_search_steps: usize,
+    pub max_slippage_bps: u64,
+    pub congestion_risk_discount_bps: u64,
     pub(crate) slow_stream: PairStateStream,
     pub(crate) fast_stream: PairStateStream,
     pub(crate) slow_block_time_ms: u64,
@@ -22,11 +31,19 @@ pub struct Builder {
 impl Builder {
     pub fn build(self) -> eyre::Result<Handle> {
         let Self {
-            strategy_config,
             slow_stream,
             fast_stream,
             slow_block_time_ms,
             signal_buffer_size,
+            slow_pair,
+            slow_chain,
+            fast_pair,
+            fast_chain,
+            slow_inventory,
+            fast_inventory,
+            binary_search_steps,
+            max_slippage_bps,
+            congestion_risk_discount_bps,
         } = self;
 
         // Create broadcast channel for signals
@@ -34,9 +51,20 @@ impl Builder {
 
         let shutdown_token = CancellationToken::new();
 
-        // TODO: set up strategy object from core and pass it to worker
+        let strategy = strategy::CrossChainSingleHop {
+            slow_pair,
+            slow_chain,
+            fast_pair,
+            fast_chain,
+            slow_inventory,
+            fast_inventory,
+            binary_search_steps,
+            max_slippage_bps,
+            congestion_risk_discount_bps,
+        };
+
         let worker = Worker {
-            strategy_config,
+            strategy,
             slow_stream,
             fast_stream,
             signal_tx,

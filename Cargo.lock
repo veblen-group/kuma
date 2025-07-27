@@ -4990,6 +4990,8 @@ dependencies = [
  "futures 0.3.31",
  "humantime",
  "kuma-core",
+ "num-bigint",
+ "num-traits",
  "serde",
  "serde_json",
  "taplo",
