@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 
 pub mod config;
 mod kuma;
+mod strategy;
 pub mod telemetry;
 
 /// The [`Kuma`] service returned by [`Kuma::spawn`].

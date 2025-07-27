@@ -24,5 +24,6 @@ tracing-subscriber = { workspace = true, features = [
     "once_cell",
     "tracing",
 ] }
+kuma-core = { path = "../core" }
 uniswap-sdk-core = { workspace = true }
 uniswap-v3-sdk = { workspace = true, features = ["extensions"] }

@@ -1,4 +1,6 @@
-use figment::{providers::Env, Figment};
+use color_eyre::eyre;
+use figment::{Figment, providers::Env};
+use num_bigint::BigUint;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -8,6 +10,7 @@ pub struct Config {
 }
 
 pub fn get() -> Result<Config, figment::Error> {
+    // TODO: clean up config
     let figment = Figment::new().merge(Env::prefixed("KUMA_"));
 
     figment.extract::<Config>()

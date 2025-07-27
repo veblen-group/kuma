@@ -4989,6 +4989,7 @@ dependencies = [
  "figment",
  "futures 0.3.31",
  "humantime",
+ "kuma-core",
  "serde",
  "serde_json",
  "taplo",
