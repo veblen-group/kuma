@@ -64,7 +64,19 @@ async fn main() -> ExitCode {
 
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive(
+                    "tycho_client=warn"
+                        .parse()
+                        .expect("well-formed tracing directive should parse"),
+                )
+                .add_directive(
+                    "tycho_simulation=warn"
+                        .parse()
+                        .expect("well-formed tracing directive should parse"),
+                ),
+        )
         .with_target(false)
         .init();
 
