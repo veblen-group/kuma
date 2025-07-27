@@ -18,17 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { CrossChainSingleHop } from "./columns"
+import { columns } from "./columns"
+import { ArbitrageSignal } from "@/lib/types"
+import { apiClient } from "@/lib/api-client"
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
-}
-
-export function SignalTable<TData extends CrossChainSingleHop, TValue>({
-  columns,
-  data
-}: DataTableProps<TData, TValue>) {
+export function SignalTable() {
+  const [data, setData] = React.useState<ArbitrageSignal[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -44,6 +41,32 @@ export function SignalTable<TData extends CrossChainSingleHop, TValue>({
       pagination,
     },
   })
+
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const signals = await apiClient.getSignals()
+        setData(signals)
+        setError(null)
+      } catch (err) {
+        setError('Failed to load signals')
+        console.error('Error loading signals:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-24">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-24 text-red-500">Error: {error}</div>
+  }
 
   return (
     <div>

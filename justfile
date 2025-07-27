@@ -106,6 +106,7 @@ db-reset:
 
 # Run database migrations  
 db-migrate:
+    #!/usr/bin/env bash
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
 
 # Backend API server commands
