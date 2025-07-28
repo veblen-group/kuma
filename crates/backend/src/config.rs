@@ -39,7 +39,7 @@ impl DatabaseConfig {
 impl Config {
     pub fn load() -> Result<Self> {
         let config: Config = Figment::new()
-            .merge(Yaml::file("Config.yaml"))
+            .merge(Yaml::file("kuma.yaml"))
             .merge(Env::prefixed("KUMA_"))
             .extract()?;
 
