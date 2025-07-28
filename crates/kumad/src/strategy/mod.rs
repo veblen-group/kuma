@@ -80,7 +80,7 @@ struct Worker {
     fast_stream: PairStateStream,
     signal_tx: broadcast::Sender<CrossChainSingleHop>,
     shutdown_token: CancellationToken,
-    slow_block_time_ms: u64,
+    slow_block_time: Duration,
 }
 
 impl Worker {

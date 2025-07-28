@@ -1,15 +1,16 @@
-use std::{collections::HashMap, str::FromStr as _, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use color_eyre::eyre::{self, Context};
 use tokio::select;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, warn};
 
 use crate::{config::Config, strategy};
-use kuma_core::{chain::Chain, collector, config::StrategyConfig, state::pair::Pair};
+use kuma_core::{chain::Chain, collector, config::StrategyConfig};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
+    #[allow(dead_code)]
     collector_handles: HashMap<Chain, collector::Handle>,
     strategy_handle: strategy::Handle,
 }
@@ -60,57 +61,37 @@ impl Kuma {
                 fast_chain,
             } = &cfg.strategies[0];
 
-            //  get the pairs for the chains from strategy config
-            let chain_pairs =
-                kuma_core::config::Config::get_chain_pairs(&token_a, &token_b, &inventory);
-            //  initialize pair and chain info
-            let (slow_chain, fast_chain) = (
-                chain_pairs
-                    .keys()
-                    .find(|chain| {
-                        chain.name
-                            == tycho_common::models::Chain::from_str(&slow_chain)
-                                .expect("invalid slow chain name: {slow_chain}")
-                    })
-                    .expect("invalid slow chain name"),
-                chain_pairs
-                    .keys()
-                    .find(|chain| {
-                        chain.name
-                            == tycho_common::models::Chain::from_str(&fast_chain)
-                                .expect("invalid fast chain name: {fast_chain}")
-                    })
-                    .expect("invalid fast chain name"),
-            );
-            let (slow_pair, fast_pair) = (&chain_pairs[&slow_chain], &chain_pairs[&fast_chain]);
-
-            // get inventory
-            let slow_inventory = (
-                inventory[slow_chain][slow_pair.token_a()].clone(),
-                inventory[slow_chain][slow_pair.token_b()].clone(),
-            );
-            let fast_inventory = (
-                inventory[fast_chain][fast_pair.token_a()].clone(),
-                inventory[fast_chain][fast_pair.token_b()].clone(),
-            );
-
-            // get streams from collector handles
-            let slow_stream = collector_handles[slow_chain].get_pair_state_stream(&slow_pair);
-            let fast_stream = collector_handles[fast_chain].get_pair_state_stream(&fast_pair);
-
-            let strategy = kuma_core::strategy::CrossChainSingleHop {
-                slow_pair: slow_pair.clone(),
-                slow_chain: slow_chain.clone(),
-                fast_pair: fast_pair.clone(),
-                fast_chain: fast_chain.clone(),
-                slow_inventory,
-                fast_inventory,
+            let strategy = kuma_core::strategy::Builder {
+                token_a: token_a.clone(),
+                token_b: token_b.clone(),
+                slow_chain_name: slow_chain.clone(),
+                fast_chain_name: fast_chain.clone(),
+                inventory,
                 binary_search_steps: cfg.binary_search_steps,
                 max_slippage_bps: cfg.max_slippage_bps,
                 congestion_risk_discount_bps: cfg.congestion_risk_discount_bps,
-            };
-            let strategy_handle = todo!("build the strategy worker handle");
-            strategy_handle
+            }
+            .build()
+            .wrap_err("failed to build strategy")?;
+
+            let slow_stream =
+                collector_handles[&strategy.slow_chain].get_pair_state_stream(&strategy.slow_pair);
+            let fast_stream =
+                collector_handles[&strategy.fast_chain].get_pair_state_stream(&strategy.fast_pair);
+
+            let slow_block_time = strategy.slow_chain.metadata.average_blocktime_hint().unwrap_or_else(|| {
+                warn!(chain = %strategy.slow_chain, "average block time metadata is missing for chain. defaulting to 12s");
+                Duration::from_secs(12)
+            });
+
+            strategy::Builder {
+                strategy,
+                slow_stream,
+                fast_stream,
+                slow_block_time,
+            }
+            .build()
+            .wrap_err("failed to build strategy worker")?
         };
 
         Ok(Self {

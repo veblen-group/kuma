@@ -13,8 +13,10 @@ use crate::{
     strategy::{precompute::Precomputes, simulation::make_sorted_spot_prices},
 };
 
+mod builder;
 mod precompute;
 mod simulation;
+pub use builder::Builder;
 pub use simulation::Swap;
 
 // Implementation of the arbitrage strategy
