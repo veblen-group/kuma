@@ -1,89 +1,121 @@
-use std::time::Duration;
+use std::{collections::HashMap, str::FromStr as _, time::Duration};
 
 use color_eyre::eyre::{self, Context};
-use num_bigint::BigUint;
 use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
 use crate::{config::Config, strategy};
-use kuma_core::{chain::Chain, collector, state::pair::Pair};
+use kuma_core::{chain::Chain, collector, config::StrategyConfig, state::pair::Pair};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
-    // TODO: do this for all configured chains
-    slow_collector: collector::Handle,
-    fast_collector: collector::Handle,
+    collector_handles: HashMap<Chain, collector::Handle>,
     strategy_handle: strategy::Handle,
 }
 
 impl Kuma {
     pub(super) fn new(cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
-        // TODO: these should be methods on config instead of utils in core
-        let (slow_chain, fast_chain) = Kuma::get_slow_fast_chains(&cfg);
-        let (slow_pair, fast_pair) = (
-            Kuma::get_pair(&cfg, &slow_chain),
-            Kuma::get_pair(&cfg, &fast_chain),
-        );
+        let cfg = cfg.core;
 
-        let kuma_core::config::Config {
-            tokens,
-            chains,
-            tycho_api_key,
-            add_tvl_threshold,
-            remove_tvl_threshold,
-            congestion_risk_discount_bps,
-            max_slippage_bps,
-            binary_search_steps,
-        } = cfg.core;
+        // 1. extract from config, for each chain:
+        //  1. token addrs
+        //  2. inventory
+        let (addrs_for_chain, inventory) = cfg
+            .build_addrs_and_inventory()
+            .wrap_err("failed to parse chain assets")?;
 
-        let slow_collector = collector::Builder {
-            chain: slow_chain,
-            tycho_url: tycho_api_key,
-            api_key: todo!(),
-            tokens: todo!(),
-            add_tvl_threshold: todo!(),
-            remove_tvl_threshold: todo!(),
+        info!("Parsed {} chains from config:", addrs_for_chain.len());
+        for (chain, tokens) in &addrs_for_chain {
+            info!(name = %chain.name,
+                        chain_id = %chain.metadata.id(),
+                        token_count = %tokens.len(),
+                        "🔗 Initialized chain info from config")
         }
-        .build()
-        .wrap_err("failed to start tycho collector for chain: {slow_chain:?}")?;
-        let fast_collector = collector::Builder {
-            chain: slow_chain,
-            tycho_url: todo!(),
-            api_key: todo!(),
-            tokens: todo!(),
-            add_tvl_threshold,
-            remove_tvl_threshold,
-        }
-        .build()
-        .wrap_err("failed to start tycho collector for chain: {fast_chain:?}")?;
 
-        let slow_stream = slow_collector.get_pair_state_stream(&slow_pair);
-        let fast_stream = fast_collector.get_pair_state_stream(&fast_pair);
+        // 2. set up collectors for each chain
+        let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
+            .into_iter()
+            .map(|(chain, addrs)| {
+                let handle = collector::Builder {
+                    chain: chain.clone(),
+                    tycho_url: chain.tycho_url.clone(),
+                    api_key: cfg.tycho_api_key.clone(),
+                    tokens: addrs,
+                    add_tvl_threshold: cfg.add_tvl_threshold,
+                    remove_tvl_threshold: cfg.remove_tvl_threshold,
+                }
+                .build()
+                .wrap_err("failed to start tycho collector for chain : {chain}")?;
+                Ok((chain.clone(), handle))
+            })
+            .collect::<eyre::Result<HashMap<Chain, collector::Handle>>>()?;
 
-        // TODO: init from config
-        let strategy_handle = strategy::Builder {
-            slow_pair: todo!(),
-            slow_chain,
-            fast_pair: todo!(),
-            fast_chain,
-            // TODO: use the helper methods for this
-            slow_inventory: (BigUint::from(1000u64), BigUint::from(1000u64)),
-            fast_inventory: (BigUint::from(1000u64), BigUint::from(1000u64)),
-            binary_search_steps: 10,          // TODO: from config
-            max_slippage_bps: 50,             // TODO: from config
-            congestion_risk_discount_bps: 25, // TODO: from config
-            slow_stream,
-            fast_stream,
-            slow_block_time_ms: 12000, // TODO: from config (12s for Ethereum)
-            signal_buffer_size: 100,   // TODO: from config
-        }
-        .build()?;
+        // TODO: this should run for each strategy config
+        let strategy_handle = {
+            let StrategyConfig {
+                token_a,
+                token_b,
+                slow_chain,
+                fast_chain,
+            } = &cfg.strategies[0];
+
+            //  get the pairs for the chains from strategy config
+            let chain_pairs =
+                kuma_core::config::Config::get_chain_pairs(&token_a, &token_b, &inventory);
+            //  initialize pair and chain info
+            let (slow_chain, fast_chain) = (
+                chain_pairs
+                    .keys()
+                    .find(|chain| {
+                        chain.name
+                            == tycho_common::models::Chain::from_str(&slow_chain)
+                                .expect("invalid slow chain name: {slow_chain}")
+                    })
+                    .expect("invalid slow chain name"),
+                chain_pairs
+                    .keys()
+                    .find(|chain| {
+                        chain.name
+                            == tycho_common::models::Chain::from_str(&fast_chain)
+                                .expect("invalid fast chain name: {fast_chain}")
+                    })
+                    .expect("invalid fast chain name"),
+            );
+            let (slow_pair, fast_pair) = (&chain_pairs[&slow_chain], &chain_pairs[&fast_chain]);
+
+            // get inventory
+            let slow_inventory = (
+                inventory[slow_chain][slow_pair.token_a()].clone(),
+                inventory[slow_chain][slow_pair.token_b()].clone(),
+            );
+            let fast_inventory = (
+                inventory[fast_chain][fast_pair.token_a()].clone(),
+                inventory[fast_chain][fast_pair.token_b()].clone(),
+            );
+
+            // get streams from collector handles
+            let slow_stream = collector_handles[slow_chain].get_pair_state_stream(&slow_pair);
+            let fast_stream = collector_handles[fast_chain].get_pair_state_stream(&fast_pair);
+
+            let strategy = kuma_core::strategy::CrossChainSingleHop {
+                slow_pair: slow_pair.clone(),
+                slow_chain: slow_chain.clone(),
+                fast_pair: fast_pair.clone(),
+                fast_chain: fast_chain.clone(),
+                slow_inventory,
+                fast_inventory,
+                binary_search_steps: cfg.binary_search_steps,
+                max_slippage_bps: cfg.max_slippage_bps,
+                congestion_risk_discount_bps: cfg.congestion_risk_discount_bps,
+            };
+            let strategy_handle = todo!("build the strategy worker handle");
+            strategy_handle
+        };
 
         Ok(Self {
             shutdown_token,
-            slow_collector,
-            fast_collector,
+            collector_handles,
             strategy_handle,
         })
     }
@@ -116,14 +148,6 @@ impl Kuma {
         };
 
         Ok(self.shutdown(reason).await)
-    }
-
-    fn get_slow_fast_chains(config: &Config) -> (Chain, Chain) {
-        unimplemented!()
-    }
-
-    fn get_pair(config: &Config, chain: &Chain) -> Pair {
-        unimplemented!()
     }
 
     #[instrument(skip_all)]

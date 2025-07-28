@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+kuma-core = { path = "../core" }
+
 alloy = { workspace = true }
 alloy-primitives = { workspace = true }
 binance = { workspace = true }
@@ -26,6 +28,4 @@ tracing-subscriber = { workspace = true, features = [
     "once_cell",
     "tracing",
 ] }
-kuma-core = { path = "../core" }
-uniswap-sdk-core = { workspace = true }
-uniswap-v3-sdk = { workspace = true, features = ["extensions"] }
+tycho-common = { workspace = true }

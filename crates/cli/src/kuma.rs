@@ -29,7 +29,7 @@ pub(crate) struct Kuma {
 impl Kuma {
     pub fn spawn(cfg: Config, cli: Cli) -> eyre::Result<Self> {
         let (tokens_by_chain, inventory) = cfg
-            .parse_chain_assets()
+            .build_addrs_and_inventory()
             .expect("Failed to parse chain assets");
 
         info!("Parsed {} chains from config:", tokens_by_chain.len());
@@ -40,7 +40,7 @@ impl Kuma {
                         "🔗 Initialized chain info from config");
         }
 
-        let pairs = cfg.get_chain_pairs(&cli.token_a, &cli.token_b)?;
+        let pairs = Config::get_chain_pairs(&cli.token_a, &cli.token_b, &inventory);
 
         let Config {
             tycho_api_key,

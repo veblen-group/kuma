@@ -14,6 +14,9 @@ use crate::{chain::Chain, state::pair::Pair};
 // TODO: add log level from env
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Arbitrage paths to create strategies for
+    pub strategies: Vec<StrategyConfig>,
+
     /// Token configurations
     pub tokens: HashMap<String, TokenConfig>,
 
@@ -36,6 +39,14 @@ pub struct Config {
     pub max_slippage_bps: u64,
 
     pub binary_search_steps: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrategyConfig {
+    pub token_a: String,
+    pub token_b: String,
+    pub slow_chain: String,
+    pub fast_chain: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +82,14 @@ pub struct ChainConfig {
     pub tycho_url: String,
 }
 
+pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;
+pub type TokenAddressesForChain = HashMap<Chain, AddressForToken>;
+
+pub type InventoryForToken = HashMap<Token, BigUint>;
+pub type InventoriesForChain = HashMap<Chain, InventoryForToken>;
+
+pub type PairForChain = HashMap<Chain, Pair>;
+
 impl Config {
     /// Load configuration from environment and optional config file
     pub fn load() -> Result<Self, figment::Error> {
@@ -81,16 +100,11 @@ impl Config {
 
         Ok(config)
     }
-}
 
-impl Config {
     /// Parse chain assets from the config, returning tokens and their inventories by chain
-    pub fn parse_chain_assets(
+    pub fn build_addrs_and_inventory(
         &self,
-    ) -> eyre::Result<(
-        HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
-        HashMap<Chain, HashMap<Token, BigUint>>,
-    )> {
+    ) -> eyre::Result<(TokenAddressesForChain, InventoriesForChain)> {
         let chains = self
             .chains
             .iter()
@@ -153,28 +167,27 @@ impl Config {
 
     /// Get trading pairs for given token symbols across configured chains
     pub fn get_chain_pairs(
-        &self,
         token_a: &str,
         token_b: &str,
-    ) -> eyre::Result<HashMap<Chain, Pair>> {
-        let (chain_tokens, _) = self.parse_chain_assets()?;
+        tokens_for_chain: &InventoriesForChain,
+    ) -> PairForChain {
         let mut pairs = HashMap::new();
 
-        for (chain, tokens) in &chain_tokens {
+        for (chain, tokens) in tokens_for_chain {
             let a = tokens
-                .iter()
-                .filter(|(_addr, token)| token.symbol == token_a.to_ascii_uppercase())
+                .keys()
+                .filter(|token| token.symbol == token_a.to_ascii_uppercase())
                 .next();
             let b = tokens
-                .iter()
-                .filter(|(_addr, token)| token.symbol == token_b.to_ascii_uppercase())
+                .keys()
+                .filter(|token| token.symbol == token_b.to_ascii_uppercase())
                 .next();
 
             match (a, b) {
                 (None, _) | (_, None) => {
                     warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "Failed to initialize token pair for chain");
                 }
-                (Some((_, a)), Some((_, b))) => {
+                (Some(a), Some(b)) => {
                     let pair = Pair::new(a.clone(), b.clone());
                     pairs.insert(chain.clone(), pair);
 
@@ -183,6 +196,6 @@ impl Config {
             }
         }
 
-        Ok(pairs)
+        pairs
     }
 }

@@ -67,7 +67,6 @@ dependencies = [
  "alloy-core",
  "alloy-eips",
  "alloy-genesis",
- "alloy-json-rpc",
  "alloy-network",
  "alloy-node-bindings",
  "alloy-provider",
@@ -1977,16 +1976,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bnum"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f781dba93de3a5ef6dc5b17c9958b208f6f3f021623b360fb605ea51ce443f10"
-dependencies = [
- "num-integer",
- "num-traits",
-]
-
-[[package]]
 name = "bon"
 version = "3.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2520,12 +2509,6 @@ checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
 ]
-
-[[package]]
-name = "critical-section"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
 name = "crossbeam-channel"
@@ -3190,17 +3173,6 @@ checksum = "7cd915d99f24784cdc19fd37ef22b97e3ff0ae756c7e492e9fbfe897d61e2aec"
 dependencies = [
  "indenter",
  "once_cell",
-]
-
-[[package]]
-name = "fastnum"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4451747a4f0b0237f73f79227f7842926ba640e774d46b70b86eebb8c60e5af"
-dependencies = [
- "autocfg",
- "bnum",
- "num-traits",
 ]
 
 [[package]]
@@ -5001,8 +4973,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
- "uniswap-sdk-core",
- "uniswap-v3-sdk",
+ "tycho-common",
 ]
 
 [[package]]
@@ -5603,10 +5574,6 @@ name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
-dependencies = [
- "critical-section",
- "portable-atomic",
-]
 
 [[package]]
 name = "once_cell_polyfill"
@@ -9272,52 +9239,6 @@ name = "unicode_categories"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
-
-[[package]]
-name = "uniswap-lens"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d052f721e7beb41b8cbed47285172144ce6ba75cebe5745568e4bedf654609d9"
-dependencies = [
- "alloy",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "uniswap-sdk-core"
-version = "5.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e7b744a68fe85f59de6dd73447a0bc3e0541e16abc023697c0b6d2154557da6"
-dependencies = [
- "alloy-primitives",
- "bnum",
- "derive_more 2.0.1",
- "fastnum",
- "lazy_static",
- "num-integer",
- "num-traits",
- "thiserror 2.0.12",
-]
-
-[[package]]
-name = "uniswap-v3-sdk"
-version = "5.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04da80bf02080f16066a13530b03c519387ca765966f001b5a36d9b35463a2fd"
-dependencies = [
- "alloy",
- "alloy-primitives",
- "alloy-sol-types",
- "base64 0.22.1",
- "derive_more 2.0.1",
- "num-integer",
- "num-traits",
- "once_cell",
- "serde_json",
- "thiserror 2.0.12",
- "uniswap-lens",
- "uniswap-sdk-core",
-]
 
 [[package]]
 name = "unsafe-libyaml"
