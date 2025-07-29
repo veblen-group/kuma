@@ -13,6 +13,7 @@ use crate::kuma::Kuma;
 use core::config::Config;
 
 mod kuma;
+mod tokens;
 
 #[derive(Parser)]
 #[command(name = "kuma", about)]
@@ -48,6 +49,9 @@ enum Commands {
 
     /// Execute arbitrage transaction
     Execute,
+
+    /// Get all tokens from tycho api
+    Tokens,
 }
 
 #[tokio::main]
