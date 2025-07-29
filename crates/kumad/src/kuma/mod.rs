@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use color_eyre::eyre::{self, Context};
+use color_eyre::eyre::{self, Context, eyre};
 use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
@@ -27,7 +27,7 @@ impl Kuma {
         //  2. inventory
         let (addrs_for_chain, inventory) = cfg
             .build_addrs_and_inventory()
-            .wrap_err("failed to parse chain assets")?;
+            .map_err(|e| eyre!("failed to parse chain assets: {}", e))?;
 
         info!("Parsed {} chains from config:", addrs_for_chain.len());
         for (chain, tokens) in &addrs_for_chain {

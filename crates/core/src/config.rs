@@ -176,22 +176,20 @@ impl Config {
         for (chain, tokens) in tokens_for_chain {
             let a = tokens
                 .keys()
-                .filter(|token| token.symbol == token_a.to_ascii_uppercase())
-                .next();
+                .find(|token| token.symbol.to_ascii_uppercase() == token_a.to_ascii_uppercase());
             let b = tokens
                 .keys()
-                .filter(|token| token.symbol == token_b.to_ascii_uppercase())
-                .next();
+                .find(|token| token.symbol.to_ascii_uppercase() == token_b.to_ascii_uppercase());
 
             match (a, b) {
                 (None, _) | (_, None) => {
-                    warn!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "Failed to initialize token pair for chain");
+                    warn!(a.expected = %token_a, a.parsed = %a.is_some(), b.expected = %token_b, b.parsed = %b.is_some(), chain = %chain.name, "Failed to initialize token pair for chain");
                 }
                 (Some(a), Some(b)) => {
                     let pair = Pair::new(a.clone(), b.clone());
                     pairs.insert(chain.clone(), pair);
 
-                    info!(pair.token_a = %token_a, pair.token_b = %token_b, chain.name = %chain.name, "🪙 Successfully initialized token pair for chain");
+                    info!(%token_a, %token_b, chain = %chain.name, "🪙 Successfully initialized token pair for chain");
                 }
             }
         }
