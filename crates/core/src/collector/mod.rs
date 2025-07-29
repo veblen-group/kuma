@@ -8,7 +8,7 @@ use color_eyre::eyre::WrapErr as _;
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, trace};
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
 use crate::{
@@ -128,14 +128,14 @@ impl Worker {
             let block = {
                 if let Some(old_block) = block_tx.borrow().as_ref().clone() {
                     let new_block = old_block.apply_update(block_update);
-                    info!(
+                    trace!(
                         block.number = new_block.height,
                         "Applied block update from Tycho Simulation stream."
                     );
 
                     Some(new_block)
                 } else {
-                    info!(
+                    trace!(
                         block.number = block_update.block_number_or_timestamp,
                         "Received initial block from Tycho Simulation stream."
                     );

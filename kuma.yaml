@@ -29,7 +29,7 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 100000
+    inventory: 1000
 
   WETH:
     addresses:
@@ -41,7 +41,7 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 50
+    inventory: 1
 
 # Chain configurations
 chains:
@@ -57,7 +57,7 @@ chains:
   #   rpc_url: "https://mainnet.unichain.org"
   #   tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
-binary_search_steps: 256
+binary_search_steps: 1024
 
 # Risk and trading parameters
 congestion_risk_discount_bps: 0

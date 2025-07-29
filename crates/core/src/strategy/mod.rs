@@ -1,6 +1,6 @@
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{info, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::{
@@ -77,14 +77,14 @@ impl CrossChainSingleHop {
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
                 |(slow_id, slow_price, fast_id, fast_price)| {
-                    let spread = fast_price - slow_price;
-                    let direction = if spread > 0.0 {
-                        Direction::BtoA
-                    } else {
+                    let spread = slow_price - fast_price;
+                    let slow_direction = if spread > 0.0 {
                         Direction::AtoB
+                    } else {
+                        Direction::BtoA
                     };
-                    info!(
-                        %direction,
+                    debug!(
+                        %slow_direction,
                         %spread,
                         %slow_price,
                         %fast_price,
@@ -93,13 +93,12 @@ impl CrossChainSingleHop {
                         "found crossed pools"
                     );
 
-                    (slow_id, fast_id, direction)
+                    (slow_id, fast_id, slow_direction)
                 },
             )
         {
             match direction {
                 Direction::AtoB => {
-                    info!("Direction is AtoB");
                     if let Some(signal) = self.find_optimal_signal(
                         &precompute.pool_sims[&slow_id].a_to_b,
                         &slow_id,
@@ -109,7 +108,13 @@ impl CrossChainSingleHop {
                         fast_state.block_height,
                         &self.fast_inventory.1,
                     ) {
-                        trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for A->B (slow) and B->A (fast)");
+                        trace!(
+                            slow_sim = %signal.slow_sim,
+                            fast_sim = %signal.fast_sim,
+                            signal.surplus = ?signal.surplus,
+                            signal.expected_profit = ?signal.expected_profit,
+                            "found optimal swap for A->B (slow) and B->A (fast)"
+                        );
                         Ok(signal)
                     } else {
                         Err(eyre!(
@@ -118,7 +123,6 @@ impl CrossChainSingleHop {
                     }
                 }
                 Direction::BtoA => {
-                    info!("Direction is BtoA");
                     if let Some(signal) = self.find_optimal_signal(
                         &precompute.pool_sims[&slow_id].b_to_a,
                         &slow_id,
@@ -138,7 +142,6 @@ impl CrossChainSingleHop {
                 }
             }
         } else {
-            trace!("no crossing pools found for A->B (slow) and B->A (fast)");
             Err(eyre!(
                 "no crossing pools found for A->B (slow) and B->A (fast)"
             ))
@@ -350,17 +353,14 @@ fn find_first_crossed_pools(
         .iter()
         .rev()
         .find_map(|(slow_id, slow_price)| {
-            sorted_fast_prices
-                .iter()
-                .find_map(|(fast_id, fast_price)| {
-                    let spread = fast_price - slow_price;
-                    trace!( %spread, %slow_price, %fast_price, %slow_id, %fast_id, "checking for crossed prices");
-                    if spread.abs() > 0.0 {
-                        Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
-                    } else {
-                        None
-                    }
-                })
+            sorted_fast_prices.iter().find_map(|(fast_id, fast_price)| {
+                let spread = slow_price - fast_price;
+                if spread.abs() > 0.0 {
+                    Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
+                } else {
+                    None
+                }
+            })
         })
 }
 

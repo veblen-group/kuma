@@ -123,7 +123,7 @@ impl PoolSteps {
                     amount_in
                 ))?;
 
-            trace!(step = %i, simulation = %sim, "computed simulation");
+            // trace!(step = %i, simulation = %sim, "computed simulation");
             sims.push(sim);
         }
 

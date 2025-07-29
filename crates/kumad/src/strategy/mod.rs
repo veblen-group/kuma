@@ -125,7 +125,7 @@ impl Worker {
                     }
                 }, if curr_signal.is_some() => {
                     let signal = curr_signal.take().expect("Signal checked to be Some");
-                    info!(%signal, "📡 Emitting signal");
+                    debug!(%signal, "📡 Emitting signal");
 
                     let signal_tx = self.signal_tx.clone();
                     signal_tx.send(signal).wrap_err("Signal sent")?;
@@ -135,7 +135,7 @@ impl Worker {
                 Some(slow_state) = self.slow_stream.next() => {
                     let new_precompute = self.strategy.precompute(slow_state);
 
-                    trace!(
+                    debug!(
                         block.height = new_precompute.block_height,
                         "✅ Precomputed trade sizes for slow chain"
                     );
@@ -147,7 +147,7 @@ impl Worker {
                     submission_deadline = Some(Instant::now() + submission_delay);
 
                     // TODO: clean up log
-                    trace!(
+                    debug!(
                         ?submission_deadline,
                         "⏰ Started timer for next signal generation"
                     );
@@ -172,9 +172,10 @@ impl Worker {
                                     "📡 Generated cross-chain signal"
                                 );
                                 curr_signal = Some(signal);
+                                panic!("Signal generated")
                             }
                             Err(e) => {
-                                info!(
+                                debug!(
                                     %slow_height,
                                     %fast_height,
                                     error = %e,
@@ -183,7 +184,7 @@ impl Worker {
                             }
                         }
                     } else {
-                        debug!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
+                        trace!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
                     }
                 }
             }

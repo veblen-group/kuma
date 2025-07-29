@@ -174,11 +174,21 @@ pub fn calculate_surplus(slow_sim: &Swap, fast_sim: &Swap) -> eyre::Result<(BigU
     let surplus_a = fast_sim
         .amount_out
         .checked_sub(&slow_sim.amount_in)
-        .wrap_err("surplus of token a cannot be negative")?;
+        .wrap_err_with(|| {
+            format!(
+                "surplus of token a cannot be negative: fast.amount_out - slow.amount_in = {} - {} ",
+                fast_sim.amount_out, slow_sim.amount_in
+            )
+        })?;
     let surplus_b = slow_sim
         .amount_out
         .checked_sub(&fast_sim.amount_in)
-        .wrap_err("surplus of token b cannot be negative")?;
+        .wrap_err_with(|| {
+            format!(
+                "surplus of token b cannot be negative: slow.amount_out={} - fast.amount_in={} ",
+                slow_sim.amount_out, fast_sim.amount_in
+            )
+        })?;
     Ok((surplus_a, surplus_b))
 }
 
