@@ -1,11 +1,11 @@
-use std::{collections::HashMap, str::FromStr as _};
+use std::{collections::HashMap, fs, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
 use tracing::{info, instrument};
 use tycho_common::models::token::Token;
 
-use crate::{Cli, Commands};
+use crate::{Cli, Commands, tokens::load_all_tokens};
 
 use core::{
     chain::Chain,
@@ -133,6 +133,42 @@ impl Kuma {
             strategy,
             ..
         } = self;
+
+        if let Commands::Tokens = command {
+            let slow_chain_token_addrs = load_all_tokens(
+                &slow_chain.tycho_url,
+                false,
+                Some("sampletoken"),
+                slow_chain.name,
+                Some(95),
+                Some(7),
+            )
+            .await;
+            let slow_chain_json = serde_json::to_string_pretty(&slow_chain_token_addrs)
+                .expect("implements serde::Serialize");
+            let slow_chain_file_name = format!("tokens.{}.json", slow_chain.name);
+            fs::write(slow_chain_file_name, slow_chain_json)
+                .wrap_err("failed to save slow chain tokens json")?;
+            info!("loaded slow chain tokens");
+
+            let fast_chain_token_addrs = load_all_tokens(
+                &fast_chain.tycho_url,
+                false,
+                Some("sampletoken"),
+                fast_chain.name,
+                Some(95),
+                Some(7),
+            )
+            .await;
+            let fast_chain_json = serde_json::to_string_pretty(&fast_chain_token_addrs)
+                .expect("implements serde::Serialize");
+            let fast_chain_file_name = format!("tokens.{}.json", fast_chain.name);
+            fs::write(fast_chain_file_name, fast_chain_json)
+                .wrap_err("failed to save fast chain tokens json")?;
+            info!("loaded fast chain tokens");
+
+            return Ok(());
+        }
 
         // TODO: do i need Commands::GenerateSignal if this is always run?
         info!(command = "generating signal");
