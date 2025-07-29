@@ -1,11 +1,11 @@
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{debug, info, instrument, trace};
+use tracing::{info, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::{
     chain::Chain,
-    signals::{self, bps_discount},
+    signals::{self, Direction, bps_discount},
     state::{
         self, PoolId,
         pair::{Pair, PairState},
@@ -74,110 +74,74 @@ impl CrossChainSingleHop {
                 chain = %self.fast_chain,
                 "Computed spot prices for fast chain");
 
-        // get crossed pools
-        let aba_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices)
-                .map(|(slow_id, slow_price, fast_id, fast_price)| {
+        if let Some((slow_id, fast_id, direction)) =
+            find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
+                |(slow_id, slow_price, fast_id, fast_price)| {
+                    let spread = fast_price - slow_price;
+                    let direction = if spread > 0.0 {
+                        Direction::BtoA
+                    } else {
+                        Direction::AtoB
+                    };
                     info!(
-                        spread = %(fast_price - slow_price),
-                        slow.spot_price = %slow_price,
-                        fast.spot_price = %fast_price,
-                        slow.pool_id = %slow_id,
-                        fast.pool_id = %fast_id,
-                        "found A->B (slow) and A->B (fast) crossed pools"
+                        %direction,
+                        %spread,
+                        %slow_price,
+                        %fast_price,
+                        %slow_id,
+                        %fast_id,
+                        "found crossed pools"
                     );
 
-                    (slow_id, fast_id)
-                })
-                .or_else(|| {
-                    trace!("no crossing pools found for A->B (slow) and B->A (fast)");
-                    None
-                });
-
-        // 2. binary search over swap amounts
-        let aba_signal = aba_crossed_pools.and_then(|(slow_id, fast_id)| {
-            self
-                .find_optimal_signal(
-                    &precompute.pool_sims[&slow_id].a_to_b,
-                    &slow_id,
-                    precompute.block_height,
-                    fast_state.states[&fast_id].as_ref(),
-                    &fast_id,
-                    fast_state.block_height,
-                    &self.fast_inventory.1,
-                ).map(|signal| {
-                    trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for A->B (slow) and B->A (fast)");
-                    signal
-                }).or_else(|| {
-                    trace!("no optimal swap found for A->B (slow) and B->A (fast)");
-                    None
-                })
-        });
-
-        let bab_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices)
-                .map(|(slow_id, slow_price, fast_id, fast_price)| {
-                    info!(
-                        spread = %(fast_price - slow_price),
-                        slow.spot_price = %slow_price,
-                        fast.spot_price = %fast_price,
-                        slow.pool_id = %slow_id,
-                        fast.pool_id = %fast_id,
-                        "found B->A (slow) and A->B (fast) crossed pools"
-                    );
-
-                    (slow_id, fast_id)
-                })
-                .or_else(|| {
-                    trace!("no crossing pools found for B->A (slow) and A->B (fast)");
-                    None
-                });
-
-        let bab_signal = bab_crossed_pools.and_then(|(slow_id, fast_id)| {
-            self.find_optimal_signal(
-                &precompute.pool_sims[&slow_id].b_to_a,
-                &slow_id,
-                precompute.block_height,
-                fast_state.states[&fast_id].as_ref(),
-                &fast_id,
-                fast_state.block_height,
-                &self.fast_inventory.0
+                    (slow_id, fast_id, direction)
+                },
             )
-            .map(|signal| {
-                trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
-                signal
-            })
-            .or_else(|| {
-                trace!("no optimal swap found for B->A (slow) and A->B (fast)");
-                None
-            })
-        });
-
-        match (aba_signal, bab_signal) {
-            (Some(aba), Some(bab)) => {
-                if aba.expected_profit > bab.expected_profit {
-                    debug!(
-                        aba.expected_profit = ?aba.expected_profit, bab.expected_profit = ?bab.expected_profit,
-                        "choosing A->B (fast) over B->A (slow) because it has a higher expected profit"
-                    );
-                    Ok(aba)
-                } else {
-                    debug!(
-                        aba.expected_profit = ?aba.expected_profit, bab.expected_profit = ?bab.expected_profit,
-                        "choosing B->A (slow) over A->B (fast) because it has a higher expected profit"
-                    );
-                    Ok(bab)
+        {
+            match direction {
+                Direction::AtoB => {
+                    info!("Direction is AtoB");
+                    if let Some(signal) = self.find_optimal_signal(
+                        &precompute.pool_sims[&slow_id].a_to_b,
+                        &slow_id,
+                        precompute.block_height,
+                        fast_state.states[&fast_id].as_ref(),
+                        &fast_id,
+                        fast_state.block_height,
+                        &self.fast_inventory.1,
+                    ) {
+                        trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for A->B (slow) and B->A (fast)");
+                        Ok(signal)
+                    } else {
+                        Err(eyre!(
+                            "no optimal signal found for A->B (slow) and B->A (fast)"
+                        ))
+                    }
+                }
+                Direction::BtoA => {
+                    info!("Direction is BtoA");
+                    if let Some(signal) = self.find_optimal_signal(
+                        &precompute.pool_sims[&slow_id].b_to_a,
+                        &slow_id,
+                        precompute.block_height,
+                        fast_state.states[&fast_id].as_ref(),
+                        &fast_id,
+                        fast_state.block_height,
+                        &self.fast_inventory.0,
+                    ) {
+                        trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
+                        Ok(signal)
+                    } else {
+                        Err(eyre!(
+                            "no optimal signal found for B->A (slow) and A->B (fast)"
+                        ))
+                    }
                 }
             }
-            (Some(aba), None) => {
-                debug!("only found aba signal");
-                Ok(aba)
-            }
-            (None, Some(bab)) => {
-                debug!("only found bab signal");
-                Ok(bab)
-            }
-            (None, None) => Err(eyre!("no optimal signal found")),
+        } else {
+            trace!("no crossing pools found for A->B (slow) and B->A (fast)");
+            Err(eyre!(
+                "no crossing pools found for A->B (slow) and B->A (fast)"
+            ))
         }
     }
 
@@ -370,10 +334,10 @@ impl CrossChainSingleHop {
 /// slow and fast chains respectively, and the spread between the two prices.
 #[instrument]
 fn find_first_crossed_pools(
-    sorted_slow_prices_base_to_quote: &[(state::PoolId, f64)],
-    sorted_fast_prices_quote_to_base: &[(state::PoolId, f64)],
+    sorted_slow_prices: &[(state::PoolId, f64)],
+    sorted_fast_prices: &[(state::PoolId, f64)],
 ) -> Option<(state::PoolId, f64, state::PoolId, f64)> {
-    if sorted_slow_prices_base_to_quote.is_empty() || sorted_fast_prices_quote_to_base.is_empty() {
+    if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
         return None;
     }
     // need to find the max spread
@@ -382,17 +346,16 @@ fn find_first_crossed_pools(
     // slow:   [1, 2, 3]
     // spread:  ↱ =2  ↲  <- highest spread
     // fast:   [1, 2, 3]
-    // TODO: do this with binary search instead?
-    sorted_slow_prices_base_to_quote
+    sorted_slow_prices
         .iter()
         .rev()
         .find_map(|(slow_id, slow_price)| {
-            sorted_fast_prices_quote_to_base
+            sorted_fast_prices
                 .iter()
                 .find_map(|(fast_id, fast_price)| {
                     let spread = fast_price - slow_price;
                     trace!( %spread, %slow_price, %fast_price, %slow_id, %fast_id, "checking for crossed prices");
-                    if spread > 0.0 {
+                    if spread.abs() > 0.0 {
                         Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
                     } else {
                         None
