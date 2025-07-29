@@ -11,7 +11,7 @@ use futures::Future;
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, info, instrument, trace};
 
 use kuma_core::{
     signals,
@@ -25,6 +25,7 @@ mod builder;
 pub struct Handle {
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
+    #[allow(dead_code)]
     signal_rx: broadcast::Receiver<signals::CrossChainSingleHop>,
 }
 
@@ -43,6 +44,7 @@ impl Handle {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_signal_rx(&self) -> broadcast::Receiver<signals::CrossChainSingleHop> {
         self.signal_rx.resubscribe()
     }
@@ -170,7 +172,6 @@ impl Worker {
                                     "📡 Generated cross-chain signal"
                                 );
                                 curr_signal = Some(signal);
-                                panic!("Signal generated");
                             }
                             Err(e) => {
                                 info!(

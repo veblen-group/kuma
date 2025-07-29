@@ -132,26 +132,18 @@ impl PoolSteps {
 }
 
 // NOTE: these are analogous to midprice
-pub fn make_sorted_spot_prices(
-    state: &PairState,
-    pair: &Pair,
-    direction: Direction,
-) -> Vec<(PoolId, f64)> {
+pub fn make_sorted_spot_prices(state: &PairState, pair: &Pair) -> Vec<(PoolId, f64)> {
     let mut spots: Vec<(PoolId, f64)> = state
         .states
         .iter()
         .filter_map(|(id, pool)| {
-            let spot_price = match direction {
-                Direction::AtoB => pool.spot_price(pair.token_a(), pair.token_b()),
-                Direction::BtoA => pool.spot_price(pair.token_b(), pair.token_a()),
-            };
+            let spot_price = pool.spot_price(pair.token_a(), pair.token_b());
             match spot_price {
                 Ok(price) => Some((id.clone(), price)),
                 Err(err) => {
                     debug!(
                         error = %err,
                         pair = %pair,
-                        direction = %direction,
                         "failed to get spot price, skipping pool"
                     );
                     None

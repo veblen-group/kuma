@@ -5,7 +5,6 @@ use tracing::{error, instrument, trace};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
-    signals::Direction,
     state::{
         self, PoolId,
         pair::{Pair, PairState},
@@ -16,7 +15,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Precomputes {
     pub block_height: u64,
-    pub sorted_spot_prices: (Vec<(state::PoolId, f64)>, Vec<(state::PoolId, f64)>),
+    pub sorted_spot_prices: Vec<(PoolId, f64)>,
     pub pool_sims: HashMap<state::PoolId, simulation::PoolSteps>,
     #[allow(dead_code)]
     pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
@@ -75,30 +74,25 @@ impl Precomputes {
 
         pool_sims.extend(precomputes);
 
-        let spot_prices_a_to_b_sorted: Vec<(state::PoolId, f64)> =
-            make_sorted_spot_prices(&state, &pair, Direction::AtoB);
-        let spot_prices_b_to_a_sorted: Vec<(state::PoolId, f64)> =
-            make_sorted_spot_prices(&state, &pair, Direction::BtoA);
+        let sorted_spot_prices: Vec<(state::PoolId, f64)> = make_sorted_spot_prices(&state, &pair);
 
-        if spot_prices_a_to_b_sorted.is_empty() || spot_prices_b_to_a_sorted.is_empty() {
+        if sorted_spot_prices.is_empty() {
             trace!(pair= %pair, "No spot prices found");
         } else {
             trace!(
                 // min a->b
-                min.pool_id = %spot_prices_a_to_b_sorted[0].0,
-                min.a_to_b.price = %spot_prices_a_to_b_sorted[0].1,
-                min.b_to_a.price = %spot_prices_b_to_a_sorted[0].1,
+                min.pool_id = %sorted_spot_prices[0].0,
+                min.price = %sorted_spot_prices[0].1,
                 // max a->b
-                max.pool_id = %spot_prices_a_to_b_sorted[spot_prices_a_to_b_sorted.len() - 1].0,
-                max.a_to_b.price = %spot_prices_a_to_b_sorted[spot_prices_a_to_b_sorted.len() - 1].1,
-                max.b_to_a.price = %spot_prices_b_to_a_sorted[spot_prices_b_to_a_sorted.len() - 1].1,
+                max.pool_id = %sorted_spot_prices[sorted_spot_prices.len() - 1].0,
+                max.price = %sorted_spot_prices[sorted_spot_prices.len() - 1].1,
                 "Computed spot prices for slow chain");
         }
 
         Self {
             block_height,
             pool_sims,
-            sorted_spot_prices: (spot_prices_a_to_b_sorted, spot_prices_b_to_a_sorted),
+            sorted_spot_prices,
             pool_metadata: state.metadata.clone(),
             // chain: todo!(),
             // pair: todo!(),

@@ -5,7 +5,7 @@ use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::{
     chain::Chain,
-    signals::{self, Direction, bps_discount},
+    signals::{self, bps_discount},
     state::{
         self, PoolId,
         pair::{Pair, PairState},
@@ -63,27 +63,20 @@ impl CrossChainSingleHop {
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
         // TODO: for the other direction we need slow_b_to_a and fast_a_to_b
-        let fast_sorted_spot_prices = {
-            let a_to_b = make_sorted_spot_prices(&fast_state, &self.fast_pair, Direction::AtoB);
-            let b_to_a = make_sorted_spot_prices(&fast_state, &self.fast_pair, Direction::BtoA);
-            trace!(
+        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.fast_pair);
+        trace!(
                 // min a->b
-                min.pool_id = %a_to_b[0].0,
-                min.a_to_b.price = %a_to_b[0].1,
-                min.b_to_a.price = %b_to_a[0].1,
+                min.pool_id = %fast_sorted_spot_prices[0].0,
+                min.price = %fast_sorted_spot_prices[0].1,
                 // max a->b
-                max.pool_id = %a_to_b[a_to_b.len() - 1].0,
-                max.a_to_b.price = %a_to_b[a_to_b.len() - 1].1,
-                max.b_to_a.price = %b_to_a[b_to_a.len() - 1].1,
+                max.pool_id = %fast_sorted_spot_prices[fast_sorted_spot_prices.len() - 1].0,
+                max.price = %fast_sorted_spot_prices[fast_sorted_spot_prices.len() - 1].1,
                 chain = %self.fast_chain,
                 "Computed spot prices for fast chain");
 
-            (a_to_b, b_to_a)
-        };
-
         // get crossed pools
         let aba_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices.0, &fast_sorted_spot_prices.0)
+            find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices)
                 .map(|(slow_id, slow_price, fast_id, fast_price)| {
                     info!(
                         spread = %(fast_price - slow_price),
@@ -122,7 +115,7 @@ impl CrossChainSingleHop {
         });
 
         let bab_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices.1, &fast_sorted_spot_prices.1)
+            find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices)
                 .map(|(slow_id, slow_price, fast_id, fast_price)| {
                     info!(
                         spread = %(fast_price - slow_price),
@@ -370,7 +363,7 @@ impl CrossChainSingleHop {
 /// slow chain.
 ///
 /// slow_prices contain the A -> B prices on the slow chain, sorted from lowest to highest.
-/// fast_prices contain the B -> A prices on the fast chain, sorted from lowest to highest.
+/// fast_prices contain the A -> B prices on the fast chain, sorted from lowest to highest.
 ///
 /// # Returns
 /// A tuple of pool IDs (slow_id, fast_id, spread) denoting the pool IDs corresponding to the
@@ -398,6 +391,7 @@ fn find_first_crossed_pools(
                 .iter()
                 .find_map(|(fast_id, fast_price)| {
                     let spread = fast_price - slow_price;
+                    trace!( %spread, %slow_price, %fast_price, %slow_id, %fast_id, "checking for crossed prices");
                     if spread > 0.0 {
                         Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
                     } else {
@@ -672,12 +666,8 @@ mod tests {
         // Assert
         // correct spot prices
         assert_eq!(
-            precompute.sorted_spot_prices.0[0],
+            precompute.sorted_spot_prices[0],
             (state::PoolId::from("0x123"), "0.001".parse().unwrap())
-        );
-        assert_eq!(
-            precompute.sorted_spot_prices.1[0],
-            (state::PoolId::from("0x123"), "1000".parse().unwrap())
         );
 
         // assert that only one pool is simulated
@@ -741,15 +731,8 @@ mod tests {
         // Assert
         // correct spot prices
         assert_eq!(
-            precompute.sorted_spot_prices.0[0],
+            precompute.sorted_spot_prices[0],
             (state::PoolId::from("0x123"), "0.001".parse().unwrap())
-        );
-        assert_eq!(
-            precompute.sorted_spot_prices.1[0],
-            (
-                state::PoolId::from("0x123"),
-                "1000.0000000000001".parse().unwrap()
-            )
         );
 
         // assert that only one pool is simulated
