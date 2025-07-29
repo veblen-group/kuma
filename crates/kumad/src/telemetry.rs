@@ -8,6 +8,8 @@ static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 pub fn get_subscriber() -> impl Subscriber + Send + Sync {
     // use the passed log level or default to RUST_LOG value
     let filter = EnvFilter::from_default_env()
+        .add_directive("h2=warn".parse().expect("well-formed"))
+        .add_directive("hyper_util=warn".parse().expect("well-formed"))
         .add_directive("tycho_client=warn".parse().expect("well-formed"))
         .add_directive("tycho_simulation=warn".parse().expect("well-formed"));
 

@@ -86,11 +86,11 @@ impl CrossChainSingleHop {
             find_first_crossed_pools(&precompute.sorted_spot_prices.0, &fast_sorted_spot_prices.0)
                 .map(|(slow_id, slow_price, fast_id, fast_price)| {
                     info!(
-                        slow.pool_id = %slow_id,
-                        slow.spot_price = %slow_price,
-                        fast.pool_id = %fast_id,
-                        fast.spot_price = %fast_price,
                         spread = %(fast_price - slow_price),
+                        slow.spot_price = %slow_price,
+                        fast.spot_price = %fast_price,
+                        slow.pool_id = %slow_id,
+                        fast.pool_id = %fast_id,
                         "found A->B (slow) and A->B (fast) crossed pools"
                     );
 
@@ -125,11 +125,11 @@ impl CrossChainSingleHop {
             find_first_crossed_pools(&precompute.sorted_spot_prices.1, &fast_sorted_spot_prices.1)
                 .map(|(slow_id, slow_price, fast_id, fast_price)| {
                     info!(
-                        slow.pool_id = %slow_id,
-                        slow.spot_price = %slow_price,
-                        fast.pool_id = %fast_id,
-                        fast.spot_price = %fast_price,
                         spread = %(fast_price - slow_price),
+                        slow.spot_price = %slow_price,
+                        fast.spot_price = %fast_price,
+                        slow.pool_id = %slow_id,
+                        fast.pool_id = %fast_id,
                         "found B->A (slow) and A->B (fast) crossed pools"
                     );
 
@@ -362,7 +362,6 @@ impl CrossChainSingleHop {
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
         )
-        .wrap_err("failed to construct signal, searching over smaller values")
     }
 }
 
@@ -378,10 +377,10 @@ impl CrossChainSingleHop {
 /// slow and fast chains respectively, and the spread between the two prices.
 #[instrument]
 fn find_first_crossed_pools(
-    sorted_slow_prices: &[(state::PoolId, f64)],
-    sorted_fast_prices: &[(state::PoolId, f64)],
+    sorted_slow_prices_base_to_quote: &[(state::PoolId, f64)],
+    sorted_fast_prices_quote_to_base: &[(state::PoolId, f64)],
 ) -> Option<(state::PoolId, f64, state::PoolId, f64)> {
-    if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
+    if sorted_slow_prices_base_to_quote.is_empty() || sorted_fast_prices_quote_to_base.is_empty() {
         return None;
     }
     // need to find the max spread
@@ -391,18 +390,20 @@ fn find_first_crossed_pools(
     // spread:  ↱ =2  ↲  <- highest spread
     // fast:   [1, 2, 3]
     // TODO: do this with binary search instead?
-    sorted_slow_prices
+    sorted_slow_prices_base_to_quote
         .iter()
         .rev()
         .find_map(|(slow_id, slow_price)| {
-            sorted_fast_prices.iter().find_map(|(fast_id, fast_price)| {
-                let spread = fast_price - slow_price;
-                if spread > 0.0 {
-                    Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
-                } else {
-                    None
-                }
-            })
+            sorted_fast_prices_quote_to_base
+                .iter()
+                .find_map(|(fast_id, fast_price)| {
+                    let spread = fast_price - slow_price;
+                    if spread > 0.0 {
+                        Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
+                    } else {
+                        None
+                    }
+                })
         })
 }
 

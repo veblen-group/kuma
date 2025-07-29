@@ -57,7 +57,7 @@ chains:
   #   rpc_url: "https://mainnet.unichain.org"
   #   tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
-binary_search_steps: 16
+binary_search_steps: 256
 
 # Risk and trading parameters
 congestion_risk_discount_bps: 0

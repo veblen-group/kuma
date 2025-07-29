@@ -68,7 +68,7 @@ impl Block {
     /// # Panics
     /// - if `removed_pairs` contains an ID not present in the original maps
     /// - if `new_pairs` refers to a state missing from `updated_states`
-    #[instrument]
+    #[instrument(skip_all)]
     pub fn apply_update(self, block_update: Update) -> Self {
         let Self {
             modified_pools,
