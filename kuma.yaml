@@ -12,7 +12,7 @@ server:
 # Arbitrage paths to create strategies for
 strategies:
   - token_a: USDC
-    token_b: WETH
+    token_b: WBTC
     slow_chain: ethereum
     fast_chain: base
 # TODO: multiple strats, additional chains, additional tokens
@@ -40,6 +40,18 @@ tokens:
     tax: 1000
     gas:
       - 1000
+    quality: 100
+    inventory: 1
+
+  WBTC:
+    addresses:
+      ethereum: "0x476908d9f75687684ce3dbf6990e722129cdbcc6"
+      base: "0x0000000000000000000000000000000000000000" # TODO: fix
+      unichain: "0x927b51f251480a681271180da4de28d44ec4afb8"
+    decimals: 8
+    tax: 0
+    gas:
+      - 29669
     quality: 100
     inventory: 1
 

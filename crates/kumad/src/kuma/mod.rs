@@ -48,6 +48,7 @@ impl Kuma {
                     tokens: addrs,
                     add_tvl_threshold: cfg.add_tvl_threshold,
                     remove_tvl_threshold: cfg.remove_tvl_threshold,
+                    shutdown_token: shutdown_token.clone(),
                 }
                 .build()
                 .wrap_err("failed to start tycho collector for chain : {chain}")?;
@@ -106,25 +107,39 @@ impl Kuma {
     }
 
     pub(super) async fn run(mut self) -> eyre::Result<()> {
-        let timer = tokio::time::sleep(Duration::from_secs(3));
-        tokio::pin!(timer);
+        let collector_futs = self
+            .collector_handles
+            .iter_mut()
+            .map(|(chain, handle)| {
+                let chain = chain.clone();
+                Box::pin(async move {
+                    match handle.await {
+                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Err(e) => Err(e),
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
 
-        let reason: eyre::Result<&str> = {
+        let reason: eyre::Result<String> = {
             loop {
                 select! {
                     biased;
 
-                    () = self.shutdown_token.cancelled() => break Ok("received shutdown signal"),
+                    () = self.shutdown_token.cancelled() => break Ok("received shutdown signal".to_owned()),
 
-                    _ = &mut timer => {
-                        // info!("timer tick");
-                        // self.shutdown_token.cancel();
+                    // Handle collector task completion
+                    (result, _i, _collectors) = futures::future::select_all(collector_futs) => {
+                        match result {
+                            Ok(message) => break Ok(message),
+                            Err(e) => break Err(e),
+                        }
                     }
 
-                    // Handle strategy worker completion
+                    // Handle strategy worker task completion
                     result = &mut self.strategy_handle => {
                         match result {
-                            Ok(()) => break Ok("strategy worker completed"),
+                            Ok(()) => break Ok("strategy worker completed".to_owned()),
                             Err(e) => break Err(e),
                         }
                     }
@@ -136,7 +151,7 @@ impl Kuma {
     }
 
     #[instrument(skip_all)]
-    async fn shutdown(mut self, reason: eyre::Result<&'static str>) {
+    async fn shutdown(mut self, reason: eyre::Result<String>) {
         const WAIT_BEFORE_ABORT: Duration = Duration::from_secs(25);
 
         // trigger the shutdown token in case it wasn't triggered yet
@@ -154,6 +169,12 @@ impl Kuma {
         // Shutdown strategy worker
         if let Err(e) = self.strategy_handle.shutdown().await {
             error!("Failed to shutdown strategy worker: {}", e);
+        }
+
+        for (chain, mut handle) in self.collector_handles {
+            if let Err(e) = handle.shutdown().await {
+                error!("Failed to shutdown collector for {}: {}", chain.name, e)
+            }
         }
     }
 }

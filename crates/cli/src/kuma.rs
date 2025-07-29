@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use tycho_common::models::token::Token;
 
@@ -24,10 +25,12 @@ pub(crate) struct Kuma {
     slow_collector_handle: collector::Handle,
     fast_collector_handle: collector::Handle,
     strategy: CrossChainSingleHop,
+
+    shutdown_token: CancellationToken,
 }
 
 impl Kuma {
-    pub fn spawn(cfg: Config, cli: Cli) -> eyre::Result<Self> {
+    pub fn spawn(cfg: Config, cli: Cli, shutdown_token: CancellationToken) -> eyre::Result<Self> {
         let (tokens_by_chain, inventory) = cfg
             .build_addrs_and_inventory()
             .expect("Failed to parse chain assets");
@@ -69,6 +72,7 @@ impl Kuma {
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
+            shutdown_token.clone(),
         )
         .wrap_err("failed to start chain a collector")?;
 
@@ -78,6 +82,7 @@ impl Kuma {
             &tycho_api_key,
             add_tvl_threshold,
             remove_tvl_threshold,
+            shutdown_token.clone(),
         )
         .wrap_err("failed to start chain a collector")?;
 
@@ -113,6 +118,7 @@ impl Kuma {
             slow_collector_handle,
             fast_collector_handle,
             strategy,
+            shutdown_token,
         })
     }
 
@@ -213,6 +219,7 @@ pub(crate) fn make_collector(
     tycho_api_key: &str,
     add_tvl_threshold: f64,
     remove_tvl_threshold: f64,
+    shutdown_token: CancellationToken,
 ) -> eyre::Result<collector::Handle> {
     let handle = collector::Builder {
         tycho_url: chain.tycho_url.clone(),
@@ -221,6 +228,7 @@ pub(crate) fn make_collector(
         remove_tvl_threshold,
         tokens,
         chain,
+        shutdown_token,
     }
     .build();
 
