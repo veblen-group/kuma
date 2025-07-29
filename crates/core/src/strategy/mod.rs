@@ -1,6 +1,6 @@
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, info, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::{
@@ -83,16 +83,18 @@ impl CrossChainSingleHop {
 
         // get crossed pools
         let aba_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices.0, &fast_sorted_spot_prices.1)
-                .map(|(slow_id, fast_id, spread)| {
-                    debug!(
+            find_first_crossed_pools(&precompute.sorted_spot_prices.0, &fast_sorted_spot_prices.0)
+                .map(|(slow_id, slow_price, fast_id, fast_price)| {
+                    info!(
                         slow.pool_id = %slow_id,
+                        slow.spot_price = %slow_price,
                         fast.pool_id = %fast_id,
-                        spread = %spread,
-                        "found A->B and B->A crossed pools"
+                        fast.spot_price = %fast_price,
+                        spread = %(fast_price - slow_price),
+                        "found A->B (slow) and A->B (fast) crossed pools"
                     );
 
-                    (slow_id, fast_id, spread)
+                    (slow_id, fast_id)
                 })
                 .or_else(|| {
                     trace!("no crossing pools found for A->B (slow) and B->A (fast)");
@@ -100,7 +102,7 @@ impl CrossChainSingleHop {
                 });
 
         // 2. binary search over swap amounts
-        let aba_signal = aba_crossed_pools.and_then(|(slow_id, fast_id, _spread)| {
+        let aba_signal = aba_crossed_pools.and_then(|(slow_id, fast_id)| {
             self
                 .find_optimal_signal(
                     &precompute.pool_sims[&slow_id].a_to_b,
@@ -120,23 +122,25 @@ impl CrossChainSingleHop {
         });
 
         let bab_crossed_pools =
-            find_first_crossed_pools(&precompute.sorted_spot_prices.1, &fast_sorted_spot_prices.0)
-                .map(|(slow_id, fast_id, spread)| {
-                    debug!(
+            find_first_crossed_pools(&precompute.sorted_spot_prices.1, &fast_sorted_spot_prices.1)
+                .map(|(slow_id, slow_price, fast_id, fast_price)| {
+                    info!(
                         slow.pool_id = %slow_id,
+                        slow.spot_price = %slow_price,
                         fast.pool_id = %fast_id,
-                        spread = %spread,
-                        "found A->B (slow) and B->A (fast) crossed pools"
+                        fast.spot_price = %fast_price,
+                        spread = %(fast_price - slow_price),
+                        "found B->A (slow) and A->B (fast) crossed pools"
                     );
 
-                    (slow_id, fast_id, spread)
+                    (slow_id, fast_id)
                 })
                 .or_else(|| {
                     trace!("no crossing pools found for B->A (slow) and A->B (fast)");
                     None
                 });
 
-        let bab_signal = bab_crossed_pools.and_then(|(slow_id, fast_id, _spread)| {
+        let bab_signal = bab_crossed_pools.and_then(|(slow_id, fast_id)| {
             self.find_optimal_signal(
                 &precompute.pool_sims[&slow_id].b_to_a,
                 &slow_id,
@@ -376,7 +380,7 @@ impl CrossChainSingleHop {
 fn find_first_crossed_pools(
     sorted_slow_prices: &[(state::PoolId, f64)],
     sorted_fast_prices: &[(state::PoolId, f64)],
-) -> Option<(state::PoolId, state::PoolId, f64)> {
+) -> Option<(state::PoolId, f64, state::PoolId, f64)> {
     if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
         return None;
     }
@@ -394,7 +398,7 @@ fn find_first_crossed_pools(
             sorted_fast_prices.iter().find_map(|(fast_id, fast_price)| {
                 let spread = fast_price - slow_price;
                 if spread > 0.0 {
-                    Some((slow_id.clone(), fast_id.clone(), spread))
+                    Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
                 } else {
                     None
                 }

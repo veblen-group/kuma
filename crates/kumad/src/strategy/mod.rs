@@ -161,11 +161,7 @@ impl Worker {
                     if let Some(precompute) = precompute.as_ref() {
                         // Step 3: Read latest fast chain state and generate signal
                         // TODO: fix this to use the curr fast state object
-                        info!(
-                            slow_height = precompute.block_height,
-                            fast_height = fast_state.block_height,
-                            "🚀 Generating signal from latest states"
-                        );
+                        let (slow_height, fast_height) = (precompute.block_height, fast_state.block_height);
 
                         match self.strategy.generate_signal(precompute, fast_state) {
                             Ok(signal) => {
@@ -174,11 +170,14 @@ impl Worker {
                                     "📡 Generated cross-chain signal"
                                 );
                                 curr_signal = Some(signal);
+                                panic!("Signal generated");
                             }
                             Err(e) => {
-                                warn!(
+                                info!(
+                                    %slow_height,
+                                    %fast_height,
                                     error = %e,
-                                    "Failed to generate signal"
+                                    "No signal found for given blocks"
                                 );
                             }
                         }

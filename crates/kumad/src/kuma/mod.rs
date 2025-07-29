@@ -5,8 +5,12 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 
-use crate::{config::Config, strategy};
-use kuma_core::{chain::Chain, collector, config::StrategyConfig};
+use crate::strategy;
+use kuma_core::{
+    chain::Chain,
+    collector,
+    config::{Config, StrategyConfig},
+};
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
@@ -16,10 +20,8 @@ pub(super) struct Kuma {
 }
 
 impl Kuma {
-    #[instrument]
+    #[instrument(skip_all)]
     pub(super) fn new(cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
-        let cfg = cfg.core;
-
         // 1. extract from config, for each chain:
         //  1. token addrs
         //  2. inventory

@@ -53,15 +53,15 @@ chains:
     rpc_url: "https://mainnet.base.org"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
 
-  - name: unichain
-    rpc_url: "https://mainnet.unichain.org"
-    tycho_url: "tycho-unichain-beta.propellerheads.xyz"
+  # - name: unichain
+  #   rpc_url: "https://mainnet.unichain.org"
+  #   tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
 binary_search_steps: 16
 
 # Risk and trading parameters
-congestion_risk_discount_bps: 5
-max_slippage_bps: 25
+congestion_risk_discount_bps: 0
+max_slippage_bps: 0
 
 # Tycho simulation stream filter
 add_tvl_threshold: 10.0

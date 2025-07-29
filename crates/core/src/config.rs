@@ -1,7 +1,7 @@
 use color_eyre::eyre::{self, Context as _, OptionExt as _, eyre};
 use figment::{
     Figment,
-    providers::{Env, Format, Yaml},
+    providers::{Env, Format as _, Yaml},
 };
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
