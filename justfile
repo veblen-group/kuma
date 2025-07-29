@@ -20,6 +20,12 @@ generate-signals:
     --chain-a ethereum --chain-b unichain \
     generate-signals
 
+get-tokens:
+    cargo run -p kuma-cli -- \
+    --token-a usdc --token-b weth \
+    --chain-a base --chain-b unichain \
+    tokens
+
 # Backend API server commands
 ##############################
 
