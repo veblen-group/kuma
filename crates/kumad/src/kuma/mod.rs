@@ -16,6 +16,7 @@ pub(super) struct Kuma {
 }
 
 impl Kuma {
+    #[instrument]
     pub(super) fn new(cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
         let cfg = cfg.core;
 
@@ -79,10 +80,11 @@ impl Kuma {
             let fast_stream =
                 collector_handles[&strategy.fast_chain].get_pair_state_stream(&strategy.fast_pair);
 
-            let slow_block_time = strategy.slow_chain.metadata.average_blocktime_hint().unwrap_or_else(|| {
-                warn!(chain = %strategy.slow_chain, "average block time metadata is missing for chain. defaulting to 12s");
-                Duration::from_secs(12)
-            });
+            let slow_block_time = strategy
+                .slow_chain
+                .metadata
+                .average_blocktime_hint()
+                .expect("chain metadata for average block time not found");
 
             strategy::Builder {
                 strategy,

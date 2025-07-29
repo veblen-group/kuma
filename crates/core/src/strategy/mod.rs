@@ -10,13 +10,14 @@ use crate::{
         self, PoolId,
         pair::{Pair, PairState},
     },
-    strategy::{precompute::Precomputes, simulation::make_sorted_spot_prices},
+    strategy::simulation::make_sorted_spot_prices,
 };
 
 mod builder;
 mod precompute;
 mod simulation;
 pub use builder::Builder;
+pub use precompute::Precomputes;
 pub use simulation::Swap;
 
 // Implementation of the arbitrage strategy
@@ -57,7 +58,7 @@ impl CrossChainSingleHop {
     ))]
     pub fn generate_signal(
         &self,
-        precompute: Precomputes,
+        precompute: &Precomputes,
         fast_state: PairState,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
@@ -203,7 +204,7 @@ impl CrossChainSingleHop {
     fn find_optimal_signal(
         &self,
         // TODO: have an abstraction around slow = (height, pool_id, sims) and fast = (height, pool_id, protocol_sim, inventory)
-        slow_sims: &Vec<Swap>,
+        slow_sims: &[Swap],
         slow_pool_id: &PoolId,
         slow_height: u64,
         fast_state: &dyn ProtocolSim,
@@ -801,7 +802,7 @@ mod tests {
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
-            .generate_signal(precompute.clone(), fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
         assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
@@ -866,7 +867,7 @@ mod tests {
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
-            .generate_signal(precompute.clone(), fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
         assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
@@ -930,7 +931,7 @@ mod tests {
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
-            .generate_signal(precompute.clone(), fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
         assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
@@ -995,7 +996,7 @@ mod tests {
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
-            .generate_signal(precompute.clone(), fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
         assert_eq!(signal.slow_id, state::PoolId::from("0x123"));

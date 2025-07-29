@@ -4,7 +4,7 @@
 //! The strategy reads from two different blockchain networks (slow and fast) and
 //! generates trading signals based on cross-chain arbitrage opportunities.
 
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{pin::Pin, time::Duration};
 
 use color_eyre::eyre::{self, WrapErr as _};
 use futures::Future;
@@ -14,9 +14,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 
 use kuma_core::{
-    signals::CrossChainSingleHop,
-    state::pair::{PairState, PairStateStream},
-    strategy::CrossChainSingleHop as StrategyConfig,
+    signals,
+    state::pair::PairStateStream,
+    strategy::{self, Precomputes},
 };
 
 pub use builder::Builder;
@@ -25,7 +25,7 @@ mod builder;
 pub struct Handle {
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    signal_rx: broadcast::Receiver<CrossChainSingleHop>,
+    signal_rx: broadcast::Receiver<signals::CrossChainSingleHop>,
 }
 
 impl Handle {
@@ -43,7 +43,7 @@ impl Handle {
         Ok(())
     }
 
-    pub fn get_signal_rx(&self) -> broadcast::Receiver<CrossChainSingleHop> {
+    pub fn get_signal_rx(&self) -> broadcast::Receiver<signals::CrossChainSingleHop> {
         self.signal_rx.resubscribe()
     }
 }
@@ -75,10 +75,10 @@ impl Future for Handle {
 
 struct Worker {
     // TODO: set up strategy object from core
-    strategy: StrategyConfig,
+    strategy: strategy::CrossChainSingleHop,
     slow_stream: PairStateStream,
     fast_stream: PairStateStream,
-    signal_tx: broadcast::Sender<CrossChainSingleHop>,
+    signal_tx: broadcast::Sender<signals::CrossChainSingleHop>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,
 }
@@ -88,10 +88,22 @@ impl Worker {
     pub async fn run(mut self) -> eyre::Result<()> {
         info!("Starting strategy worker");
 
-        // TODO: use fusedfutures for signal emission and db write
-        // let mut precompute: Option<Precompute> = None;
-        // let mut precompute_result = None;
-        // let mut timer_deadline: Option<Instant> = None;
+        let submission_delay = self.slow_block_time.mul_f64(0.75);
+        let mut submission_deadline = None;
+        let mut precompute: Option<Precomputes> = None;
+        let mut curr_signal = None;
+
+        // biased loop
+        // 1. shutdown signal
+        // 2. timer ended and there's a signal to emit - populate the signal emission
+        // 2. slow chain updates
+        //  1. set up signal generation timer
+        //  2. precompute
+        // 3. fast chain updates
+        //  1. try to generate signal from precompute
+        //  2. overwrite current signal
+        // 4. db write
+        // 5. emit signal
 
         loop {
             select! {
@@ -101,109 +113,80 @@ impl Worker {
                     info!("Strategy worker received shutdown signal");
                     break Ok(());
                 }
+
+                // emit signal when timer ends if one exists
+                _ = async {
+                    if let Some(deadline) = submission_deadline {
+                        tokio::time::sleep_until(deadline).await
+                    } else {
+                        futures::future::pending().await
+                    }
+                }, if curr_signal.is_some() => {
+                    let signal = curr_signal.take().expect("Signal checked to be Some");
+                    info!(%signal, "📡 Emitting signal");
+
+                    let signal_tx = self.signal_tx.clone();
+                    signal_tx.send(signal).wrap_err("Signal sent")?;
+                }
+
+                // Handle slow chain updates
+                Some(slow_state) = self.slow_stream.next() => {
+                    let new_precompute = self.strategy.precompute(slow_state);
+
+                    trace!(
+                        block.height = new_precompute.block_height,
+                        "✅ Precomputed trade sizes for slow chain"
+                    );
+                    precompute = Some(new_precompute);
+
+                    // TODO: db write the spot prices & block update
+
+                    // Start timer for 75% of block time
+                    submission_deadline = Some(Instant::now() + submission_delay);
+
+                    // TODO: clean up log
+                    trace!(
+                        ?submission_deadline,
+                        "⏰ Started timer for next signal generation"
+                    );
+                }
+
+                // TODO: handle for processing fast blocks
+                // 1. update the fast current block
+                // 2. write to db
+                // 3. log a trace
+
+                // Handle timer expiration for signal generation
+                Some(fast_state) = self.fast_stream.next() => {
+                    if let Some(precompute) = precompute.as_ref() {
+                        // Step 3: Read latest fast chain state and generate signal
+                        // TODO: fix this to use the curr fast state object
+                        info!(
+                            slow_height = precompute.block_height,
+                            fast_height = fast_state.block_height,
+                            "🚀 Generating signal from latest states"
+                        );
+
+                        match self.strategy.generate_signal(precompute, fast_state) {
+                            Ok(signal) => {
+                                info!(
+                                    %signal,
+                                    "📡 Generated cross-chain signal"
+                                );
+                                curr_signal = Some(signal);
+                            }
+                            Err(e) => {
+                                warn!(
+                                    error = %e,
+                                    "Failed to generate signal"
+                                );
+                            }
+                        }
+                    } else {
+                        debug!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
+                    }
+                }
             }
         }
-
-        // biased loop
-        // 1. shutdown signal
-        // 2. slow chain updates
-        // 3. fast chain updates
-        // 4. db write
-        // 5. emit signal
-        // loop {
-        //     select! {
-        //         biased;
-
-        //         () = self.shutdown_token.cancelled() => {
-        //             info!("Strategy worker received shutdown signal");
-        //             break Ok(());
-        //         }
-
-        //         // Handle slow chain updates
-        //         Some(new_slow_state) = self.slow_stream.next() => {
-        //             // TODO: remove because its already logged in tycho collector
-        //             debug!(
-        //                 block_height = new_slow_state.block_height,
-        //                 "📊 Received slow chain state update"
-        //             );
-
-        //             // Step 1: Read slow chain state and precompute
-        //             // TODO: take ref
-        //             let precompute = self.strategy.precompute(new_slow_state);
-
-        //             trace!(
-        //                 block.height = precompute.block_height,
-        //                 "✅ Precomputed trade sizes for slow chain"
-        //             );
-        //             precompute_result = Some(Arc::new(precompute));
-        //             slow_state = Some(new_slow_state);
-
-        //             // TODO: db write the spot prices & block update
-
-        //             // Step 2: Start timer for 75% of block time
-        //             let delay_ms = (self.slow_block_time_ms as f64 * 0.75) as u64;
-        //             timer_deadline = Some(Instant::now() + Duration::from_millis(delay_ms));
-
-        //             trace!(
-        //                 delay_ms = delay_ms,
-        //                 "⏰ Started timer for next signal generation"
-        //             );
-        //         }
-
-        //         // TODO: handle for processing fast blocks
-        //         // 1. update the fast current block
-        //         // 2. write to db
-        //         // 3. log a trace
-
-        //         // Handle timer expiration for signal generation
-        //         _ = async {
-        //             // TODO: this seems fucked
-        //             match timer_deadline {
-        //                 Some(deadline) => tokio::time::sleep_until(deadline).await,
-        //                 None => futures::future::pending().await,
-        //             }
-        //         } => {
-        //             if let (Some(ref slow_state), Some(ref precompute)) = (&slow_state, &precompute_result) {
-        //                 // Step 3: Read latest fast chain state and generate signal
-        //                 // TODO: fix this to use the curr fast state object
-        //                 if let Some(fast_state) = self.get_latest_fast_state().await {
-        //                     info!(
-        //                         slow_height = slow_state.block_height,
-        //                         fast_height = fast_state.block_height,
-        //                         "🚀 Generating signal from latest states"
-        //                     );
-
-        //                     match self.strategy.generate_signal(precompute, &fast_state) {
-        //                         Ok(signal) => {
-        //                             info!(
-        //                                 slow_height = slow_state.block_height,
-        //                                 fast_height = fast_state.block_height,
-        //                                 "📡 Generated cross-chain signal"
-        //                             );
-
-        //                             // Step 4: Emit signal to broadcast channel
-        //                             if let Err(e) = self.signal_tx.send(signal) {
-        //                                 warn!(error = %e, "No receivers for generated signal");
-        //                             }
-        //                         }
-        //                         Err(e) => {
-        //                             warn!(
-        //                                 error = %e,
-        //                                 slow_height = slow_state.block_height,
-        //                                 fast_height = fast_state.block_height,
-        //                                 "Failed to generate signal"
-        //                             );
-        //                         }
-        //                     }
-        //                 } else {
-        //                     warn!("No fast chain state available for signal generation");
-        //                 }
-        //             }
-
-        //             // Reset timer
-        //             timer_deadline = None;
-        //         }
-        //     }
-        // }
     }
 }

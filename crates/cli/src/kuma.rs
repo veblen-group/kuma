@@ -190,7 +190,7 @@ impl Kuma {
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
 
         // compute arb signal
-        let signal = strategy.generate_signal(precompute, fast_state)?;
+        let signal = strategy.generate_signal(&precompute, fast_state)?;
 
         info!(signal = ?signal, "📊 generated signal");
 
