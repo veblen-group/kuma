@@ -11,10 +11,10 @@ server:
   port: 3000
 # Arbitrage paths to create strategies for
 strategies:
-  - token_a: WETH
-    token_b: wstETH
+  - token_a: USDC
+    token_b: WETH
     slow_chain: ethereum
-    fast_chain: unichain
+    fast_chain: base
 # TODO: multiple strats, additional chains, additional tokens
 
 # Token configurations with addresses on multiple chains

@@ -62,17 +62,18 @@ impl CrossChainSingleHop {
         fast_state: PairState,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
-        // TODO: for the other direction we need slow_b_to_a and fast_a_to_b
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.fast_pair);
-        trace!(
-                // min a->b
+        if fast_sorted_spot_prices.is_empty() {
+            return Err(eyre::eyre!("No spot prices found for fast chain"));
+        } else {
+            trace!(
                 min.pool_id = %fast_sorted_spot_prices[0].0,
                 min.price = %fast_sorted_spot_prices[0].1,
-                // max a->b
                 max.pool_id = %fast_sorted_spot_prices[fast_sorted_spot_prices.len() - 1].0,
                 max.price = %fast_sorted_spot_prices[fast_sorted_spot_prices.len() - 1].1,
                 chain = %self.fast_chain,
                 "Computed spot prices for fast chain");
+        }
 
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
