@@ -1,31 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table";
-
-export const data: SpotPrice[] = [
-  {
-    chain: "Ethereum",
-    block_height: 12345678,
-    block_hash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    a_to_b: 1.23456789,
-    b_to_a: 0.987654321,
-  },
-  {
-    chain: "Base",
-    block_height: 98765432,
-    block_hash: "0x9876543210abcdef9876543210abcdef9876543210abcdef9876543210abcdef",
-    a_to_b: 2.34567890,
-    b_to_a: 0.87654321,
-  },
-];
-
-export interface SpotPrice {
-  chain: string;
-  block_height: number;
-  block_hash: string;
-  a_to_b: number;
-  b_to_a: number;
-};
+import { SpotPrice } from "@/lib/types";
 
 export const columns: ColumnDef<SpotPrice>[] = [
   {
@@ -37,15 +13,19 @@ export const columns: ColumnDef<SpotPrice>[] = [
     accessorKey: "block_height",
   },
   {
-    header: "Block Hash",
-    accessorKey: "block_hash",
+    header: "Token A",
+    accessorFn: (row) => row.pair.token_a.symbol,
   },
   {
-    header: "A to B",
-    accessorKey: "a_to_b",
+    header: "Token B", 
+    accessorFn: (row) => row.pair.token_b.symbol,
   },
   {
-    header: "B to A",
-    accessorKey: "b_to_a",
+    header: "Price",
+    accessorKey: "price",
+  },
+  {
+    header: "Pool ID",
+    accessorKey: "pool_id",
   },
 ];
