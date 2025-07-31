@@ -1,6 +1,4 @@
-import { columns as signalsColumns, data as signalsData } from "@/components/signals/columns";
 import { SignalTable } from "@/components/signals/table";
-import { columns as spotPricesColumns, data as spotPricesData } from "@/components/spot_prices/columns";
 import { SpotPriceTable } from "@/components/spot_prices/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +45,7 @@ export default function Home() {
               <CardTitle>Spot Prices</CardTitle>
             </CardHeader>
             <CardContent>
-              <SpotPriceTable columns={spotPricesColumns} data={spotPricesData} />
+              <SpotPriceTable />
             </CardContent>
           </Card>
         </div>
@@ -58,7 +56,7 @@ export default function Home() {
           <CardTitle>Signals</CardTitle>
         </CardHeader>
         <CardContent>
-          <SignalTable columns={signalsColumns} data={signalsData} />
+          <SignalTable />
         </CardContent>
       </Card>
     </main>

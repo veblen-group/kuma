@@ -7,6 +7,7 @@ mod state;
 use axum::Router;
 use color_eyre::eyre::Result;
 use std::net::SocketAddr;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 use crate::{
@@ -25,10 +26,12 @@ async fn main() -> Result<()> {
     let db_handle = DatabaseBuilder::new(config.database).build().await?;
 
     let state = AppState { db: db_handle };
+    let cors = CorsLayer::permissive();
 
     let app = Router::new()
         .nest("/spot_prices", spot_prices::routes())
         .nest("/signals", signals::routes())
+        .layer(cors)
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], config.server.port));

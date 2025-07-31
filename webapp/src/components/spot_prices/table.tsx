@@ -18,17 +18,14 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { SpotPrice } from "./columns"
+import { columns } from "./columns"
+import { SpotPrice } from "@/lib/types"
+import { apiClient } from "@/lib/api-client"
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
-}
-
-export function SpotPriceTable<TData extends SpotPrice, TValue>({
-  columns,
-  data
-}: DataTableProps<TData, TValue>) {
+export function SpotPriceTable() {
+  const [data, setData] = React.useState<SpotPrice[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -44,6 +41,32 @@ export function SpotPriceTable<TData extends SpotPrice, TValue>({
       pagination,
     },
   })
+
+  React.useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const spotPrices = await apiClient.getSpotPrices()
+        setData(spotPrices)
+        setError(null)
+      } catch (err) {
+        setError('Failed to load spot prices')
+        console.error('Error loading spot prices:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-24">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="flex items-center justify-center h-24 text-red-500">Error: {error}</div>
+  }
 
   return (
     <div>

@@ -41,7 +41,11 @@ where
 impl PaginationQuery {
     pub fn sanitize(&self) -> (u32, u32) {
         let page = self.page.unwrap_or(1).max(1);
-        let page_size = self.page_size.unwrap_or(DEFAULT_PAGE_SIZE).min(MAX_PAGE_SIZE).max(1);
+        let page_size = self
+            .page_size
+            .unwrap_or(DEFAULT_PAGE_SIZE)
+            .min(MAX_PAGE_SIZE)
+            .max(1);
         (page, page_size)
     }
 
@@ -53,20 +57,19 @@ impl PaginationQuery {
 }
 
 impl<T> PaginatedResponse<T> {
-    pub fn new(
-        data: Vec<T>,
-        page: u32,
-        page_size: u32,
-        total_items: Option<u64>,
-    ) -> Self {
+    pub fn new(data: Vec<T>, page: u32, page_size: u32, total_items: Option<u64>) -> Self {
         let total_pages = total_items.map(|total| {
-            if total == 0 { 1 } else { ((total - 1) / page_size as u64 + 1) as u32 }
+            if total == 0 {
+                1
+            } else {
+                ((total - 1) / page_size as u64 + 1) as u32
+            }
         });
-        
+
         let has_next = total_items
             .map(|total| (page as u64 * page_size as u64) < total)
             .unwrap_or(!data.is_empty() && data.len() == page_size as usize);
-        
+
         let has_previous = page > 1;
 
         Self {
@@ -115,8 +118,8 @@ pub struct ArbitrageSignal {
     pub fast_pool_id: String,
     pub slow_swap: SwapInfo,
     pub fast_swap: SwapInfo,
-    pub surplus_a: String, // BigUint as string
-    pub surplus_b: String, // BigUint as string
+    pub surplus_a: String,         // BigUint as string
+    pub surplus_b: String,         // BigUint as string
     pub expected_profit_a: String, // BigUint as string
     pub expected_profit_b: String, // BigUint as string
     pub max_slippage_bps: u64,
@@ -126,6 +129,6 @@ pub struct ArbitrageSignal {
 pub struct SwapInfo {
     pub token_in: Token,
     pub token_out: Token,
-    pub amount_in: String, // BigUint as string
+    pub amount_in: String,  // BigUint as string
     pub amount_out: String, // BigUint as string
 }
