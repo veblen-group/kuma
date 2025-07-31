@@ -5,6 +5,7 @@ use tokio::{
     select,
     signal::unix::{SignalKind, signal},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use tracing_subscriber::{self, EnvFilter};
 
@@ -84,9 +85,11 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
+    let shutdown_token = CancellationToken::new();
+
     let cli = Cli::parse();
     let kuma = {
-        match Kuma::spawn(config, cli) {
+        match Kuma::spawn(config, cli, shutdown_token) {
             Ok(kuma) => kuma,
             Err(e) => {
                 error!(error=%e, "failed to spawn kuma");

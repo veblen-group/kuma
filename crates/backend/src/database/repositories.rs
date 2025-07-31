@@ -15,6 +15,7 @@ impl SpotPriceRepository {
     }
 
     #[instrument(skip(self, spot_price))]
+    #[allow(dead_code)]
     pub async fn insert(&self, spot_price: &SpotPrice) -> Result<()> {
         sqlx::query(
             r#"
@@ -41,16 +42,17 @@ impl SpotPriceRepository {
     }
 
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_latest_by_pool(&self, pool_id: &str) -> Result<Option<SpotPrice>> {
         let row = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
                 block_height, price, pool_id, chain
-            FROM spot_prices 
-            WHERE pool_id = $1 
-            ORDER BY block_height DESC 
+            FROM spot_prices
+            WHERE pool_id = $1
+            ORDER BY block_height DESC
             LIMIT 1
             "#,
         )
@@ -77,6 +79,7 @@ impl SpotPriceRepository {
     }
 
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_by_block_range(
         &self,
         pool_id: &str,
@@ -85,11 +88,11 @@ impl SpotPriceRepository {
     ) -> Result<Vec<SpotPrice>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
                 block_height, price, pool_id, chain
-            FROM spot_prices 
+            FROM spot_prices
             WHERE pool_id = $1 AND block_height BETWEEN $2 AND $3
             ORDER BY block_height ASC
             "#,
@@ -139,9 +142,9 @@ impl SpotPriceRepository {
                 sqlx::query_scalar(
                     r#"
                     SELECT COUNT(*) as count
-                    FROM spot_prices 
-                    WHERE block_height = $1 
-                    AND ((token_a_symbol = $2 AND token_b_symbol = $3) 
+                    FROM spot_prices
+                    WHERE block_height = $1
+                    AND ((token_a_symbol = $2 AND token_b_symbol = $3)
                          OR (token_a_symbol = $3 AND token_b_symbol = $2))
                     "#,
                 )
@@ -155,7 +158,7 @@ impl SpotPriceRepository {
                 sqlx::query_scalar(
                     r#"
                     SELECT COUNT(*) as count
-                    FROM spot_prices 
+                    FROM spot_prices
                     WHERE block_height = $1
                     "#,
                 )
@@ -186,13 +189,13 @@ impl SpotPriceRepository {
 
                 sqlx::query(
                     r#"
-                    SELECT 
+                    SELECT
                         token_a_symbol, token_a_address,
                         token_b_symbol, token_b_address,
                         block_height, price, pool_id, chain
-                    FROM spot_prices 
-                    WHERE block_height = $1 
-                    AND ((token_a_symbol = $2 AND token_b_symbol = $3) 
+                    FROM spot_prices
+                    WHERE block_height = $1
+                    AND ((token_a_symbol = $2 AND token_b_symbol = $3)
                          OR (token_a_symbol = $3 AND token_b_symbol = $2))
                     ORDER BY pool_id
                     LIMIT $4 OFFSET $5
@@ -209,11 +212,11 @@ impl SpotPriceRepository {
             None => {
                 sqlx::query(
                     r#"
-                    SELECT 
+                    SELECT
                         token_a_symbol, token_a_address,
                         token_b_symbol, token_b_address,
                         block_height, price, pool_id, chain
-                    FROM spot_prices 
+                    FROM spot_prices
                     WHERE block_height = $1
                     ORDER BY pool_id
                     LIMIT $2 OFFSET $3
@@ -257,11 +260,11 @@ impl SpotPriceRepository {
     ) -> Result<Vec<SpotPrice>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 token_a_symbol, token_a_address,
                 token_b_symbol, token_b_address,
                 block_height, price, pool_id, chain
-            FROM spot_prices 
+            FROM spot_prices
             WHERE chain = $1
             ORDER BY block_height DESC
             LIMIT $2 OFFSET $3
@@ -299,7 +302,7 @@ impl SpotPriceRepository {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
-            FROM spot_prices 
+            FROM spot_prices
             WHERE chain = $1
             "#,
         )
@@ -322,6 +325,7 @@ impl ArbitrageSignalRepository {
     }
 
     #[instrument(skip(self, signal))]
+    #[allow(dead_code)]
     pub async fn insert(&self, signal: &ArbitrageSignal) -> Result<()> {
         sqlx::query(
             r#"
@@ -385,10 +389,11 @@ impl ArbitrageSignalRepository {
     }
 
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_recent(&self, limit: u32) -> Result<Vec<ArbitrageSignal>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
                 slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
                 fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
@@ -400,8 +405,8 @@ impl ArbitrageSignalRepository {
                 fast_swap_token_out_symbol, fast_swap_token_out_address,
                 fast_swap_amount_in, fast_swap_amount_out,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals 
-            ORDER BY block_height DESC 
+            FROM arbitrage_signals
+            ORDER BY block_height DESC
             LIMIT $1
             "#,
         )
@@ -475,7 +480,7 @@ impl ArbitrageSignalRepository {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE block_height = $1
             "#,
         )
@@ -494,7 +499,7 @@ impl ArbitrageSignalRepository {
     ) -> Result<Vec<ArbitrageSignal>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
                 slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
                 fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
@@ -506,7 +511,7 @@ impl ArbitrageSignalRepository {
                 fast_swap_token_out_symbol, fast_swap_token_out_address,
                 fast_swap_amount_in, fast_swap_amount_out,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE block_height = $1
             ORDER BY id
             LIMIT $2 OFFSET $3
@@ -580,6 +585,7 @@ impl ArbitrageSignalRepository {
     }
 
     #[instrument(skip(self))]
+    #[allow(dead_code)]
     pub async fn get_by_block_range(
         &self,
         start_block: u64,
@@ -587,7 +593,7 @@ impl ArbitrageSignalRepository {
     ) -> Result<Vec<ArbitrageSignal>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
                 slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
                 fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
@@ -599,7 +605,7 @@ impl ArbitrageSignalRepository {
                 fast_swap_token_out_symbol, fast_swap_token_out_address,
                 fast_swap_amount_in, fast_swap_amount_out,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE block_height BETWEEN $1 AND $2
             ORDER BY block_height ASC
             "#,
@@ -679,7 +685,7 @@ impl ArbitrageSignalRepository {
     ) -> Result<Vec<ArbitrageSignal>> {
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
                 slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
                 fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
@@ -691,7 +697,7 @@ impl ArbitrageSignalRepository {
                 fast_swap_token_out_symbol, fast_swap_token_out_address,
                 fast_swap_amount_in, fast_swap_amount_out,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE slow_chain = $1 OR fast_chain = $1
             ORDER BY block_height DESC
             LIMIT $2 OFFSET $3
@@ -769,7 +775,7 @@ impl ArbitrageSignalRepository {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE slow_chain = $1 OR fast_chain = $1
             "#,
         )
@@ -796,7 +802,7 @@ impl ArbitrageSignalRepository {
 
         let rows = sqlx::query(
             r#"
-            SELECT 
+            SELECT
                 block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
                 slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
                 fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
@@ -808,7 +814,7 @@ impl ArbitrageSignalRepository {
                 fast_swap_token_out_symbol, fast_swap_token_out_address,
                 fast_swap_amount_in, fast_swap_amount_out,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE (
                 (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
                 (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
@@ -899,7 +905,7 @@ impl ArbitrageSignalRepository {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
-            FROM arbitrage_signals 
+            FROM arbitrage_signals
             WHERE (
                 (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
                 (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
