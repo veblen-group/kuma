@@ -5,10 +5,18 @@ database:
   connection_timeout_secs: 30
   idle_timeout_secs: 600
 
-# Server configuration  
+# Server configuration
 server:
   host: "0.0.0.0"
   port: 8080
+
+# Arbitrage paths to create strategies for
+strategies:
+  - token_a: USDC
+    token_b: WETH
+    slow_chain: ethereum
+    fast_chain: unichain
+# TODO: multiple strats, additional chains, additional tokens
 
 # Token configurations with addresses on multiple chains
 tokens:
@@ -22,7 +30,7 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 100000
+    inventory: 1000
 
   WETH:
     addresses:
@@ -34,7 +42,31 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 50
+    inventory: 1
+
+  WBTC:
+    addresses:
+      ethereum: "0x476908d9f75687684ce3dbf6990e722129cdbcc6"
+      base: "0x0000000000000000000000000000000000000000" # TODO: fix
+      unichain: "0x927b51f251480a681271180da4de28d44ec4afb8"
+    decimals: 8
+    tax: 0
+    gas:
+      - 29669
+    quality: 100
+    inventory: 1
+
+  wstETH:
+    addresses:
+      ethereum: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
+      base: "0x0000000000000000000000000000000000000001" # TODO: fix
+      unichain: "0xc02fE7317D4eb8753a02c35fe019786854A92001"
+    decimals: 18
+    tax: 0
+    gas:
+      - 29669
+    quality: 100
+    inventory: 1
 
 # Chain configurations
 chains:
@@ -42,18 +74,18 @@ chains:
     rpc_url: "https://mainnet.infura.io/v3/your-project-id"
     tycho_url: "tycho-beta.propellerheads.xyz/"
 
-  - name: base
-    rpc_url: "https://mainnet.base.org"
-    tycho_url: "tycho-base-beta.propellerheads.xyz"
+  # - name: base
+  #   rpc_url: "https://mainnet.base.org"
+  #   tycho_url: "tycho-base-beta.propellerheads.xyz"
 
   - name: unichain
     rpc_url: "https://mainnet.unichain.org"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
 
-binary_search_steps: 16
+binary_search_steps: 1024
 
 # Risk and trading parameters
-congestion_risk_discount_bps: 5
+congestion_risk_discount_bps: 0
 max_slippage_bps: 25
 
 # Tycho simulation stream filter

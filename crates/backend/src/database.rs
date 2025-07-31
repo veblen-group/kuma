@@ -53,6 +53,7 @@ impl Clone for DatabaseHandle {
 }
 
 impl DatabaseHandle {
+    #[allow(dead_code)]
     pub fn pool(&self) -> Arc<PgPool> {
         Arc::clone(&self.pool)
     }

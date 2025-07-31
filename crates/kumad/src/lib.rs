@@ -5,12 +5,12 @@ use std::{
 };
 
 use color_eyre::eyre::{self, Context as _};
-use config::Config;
+use kuma_core::config::Config;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-pub mod config;
 mod kuma;
+mod strategy;
 pub mod telemetry;
 
 /// The [`Kuma`] service returned by [`Kuma::spawn`].

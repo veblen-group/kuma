@@ -1,5 +1,6 @@
 use num_traits::CheckedSub;
 use std::fmt::Display;
+use tracing::{instrument, trace};
 
 use color_eyre::eyre::{self, ContextCompat};
 use num_bigint::BigUint;
@@ -56,11 +57,6 @@ pub struct CrossChainSingleHop {
 }
 
 impl CrossChainSingleHop {
-    // TODO: should this be fallible?
-    // -> failing to construct a signal should be part of the search process
-    //
-    // constructing a `SimulationRresult` is faillible becasuse it propagates the tycho error
-    // this is faillble because it propagates biguint errors - suplus, slippage and expected profit must be greater than zero
     pub fn try_from_simulations(
         slow_chain: &Chain,
         slow_pair: &Pair,
@@ -174,11 +170,21 @@ pub fn calculate_surplus(slow_sim: &Swap, fast_sim: &Swap) -> eyre::Result<(BigU
     let surplus_a = fast_sim
         .amount_out
         .checked_sub(&slow_sim.amount_in)
-        .wrap_err("surplus of token a cannot be negative")?;
+        .wrap_err_with(|| {
+            format!(
+                "surplus of token a cannot be negative: fast.amount_out - slow.amount_in = {} - {} ",
+                fast_sim.amount_out, slow_sim.amount_in
+            )
+        })?;
     let surplus_b = slow_sim
         .amount_out
         .checked_sub(&fast_sim.amount_in)
-        .wrap_err("surplus of token b cannot be negative")?;
+        .wrap_err_with(|| {
+            format!(
+                "surplus of token b cannot be negative: slow.amount_out={} - fast.amount_in={} ",
+                slow_sim.amount_out, fast_sim.amount_in
+            )
+        })?;
     Ok((surplus_a, surplus_b))
 }
 

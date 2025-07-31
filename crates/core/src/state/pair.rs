@@ -9,6 +9,7 @@ use std::{
 use futures::{Stream, StreamExt};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
+use tracing::trace;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
@@ -22,7 +23,12 @@ pub struct Pair(Token, Token);
 
 impl Pair {
     pub fn new(token_a: Token, token_b: Token) -> Self {
-        Self(token_a, token_b)
+        let zero2one = token_a.address < token_b.address;
+        if zero2one {
+            Self(token_a, token_b)
+        } else {
+            Self(token_b, token_a)
+        }
     }
 
     pub fn in_token_vec(&self, tokens: &[Token]) -> bool {
