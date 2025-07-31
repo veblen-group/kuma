@@ -25,6 +25,7 @@ pub struct Builder {
     pub tokens: HashMap<Bytes, Token>,
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
+    pub shutdown_token: CancellationToken,
 }
 
 impl Builder {
@@ -36,6 +37,7 @@ impl Builder {
             chain,
             api_key,
             tokens,
+            shutdown_token,
             ..
         } = self;
 
@@ -59,12 +61,9 @@ impl Builder {
             protocol_stream_builder: Box::pin(protocol_stream_builder),
             chain: chain.clone(),
             block_tx,
+            shutdown_token: shutdown_token.clone(),
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
-
-        let shutdown_token = CancellationToken::new();
-
-        // TODO: make the state update streams
 
         Ok(super::Handle {
             chain,

@@ -1,9 +1,9 @@
 use std::process::ExitCode;
 
 use color_eyre::eyre::{self, eyre};
+use kuma_core::config::Config;
 use kumad::{
     Kuma,
-    config::{self, Config},
     telemetry::{self, init_subscriber},
 };
 use tokio::{
@@ -17,7 +17,7 @@ async fn main() -> ExitCode {
     println!("Hello, world!");
 
     // set up config
-    let cfg: Config = match config::get() {
+    let cfg: Config = match Config::load() {
         Err(err) => {
             eprintln!("failed to read config:\n{err:?}");
             return ExitCode::FAILURE;
@@ -27,7 +27,7 @@ async fn main() -> ExitCode {
     eprintln!("starting with config:\n{cfg:?}");
 
     // set up tracing
-    let tracing_subscriber = telemetry::get_subscriber(cfg.log_level.to_string());
+    let tracing_subscriber = telemetry::get_subscriber();
     init_subscriber(tracing_subscriber);
 
     // spawn service
