@@ -146,7 +146,7 @@ impl Block {
                 trace!(block.number = %height, pair.id = %pair_id, "Updated unmodified pair");
             }
 
-            debug!(block.number = %height, pair.id = %pair_id, "Updated pair state");
+            trace!(block.number = %height, pair.id = %pair_id, "Updated pair state");
         }
 
         Self {

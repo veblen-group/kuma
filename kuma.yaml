@@ -14,7 +14,7 @@ strategies:
   - token_a: USDC
     token_b: WETH
     slow_chain: ethereum
-    fast_chain: base
+    fast_chain: unichain
 # TODO: multiple strats, additional chains, additional tokens
 
 # Token configurations with addresses on multiple chains
@@ -73,9 +73,9 @@ chains:
     rpc_url: "https://mainnet.infura.io/v3/your-project-id"
     tycho_url: "tycho-beta.propellerheads.xyz/"
 
-  - name: base
-    rpc_url: "https://mainnet.base.org"
-    tycho_url: "tycho-base-beta.propellerheads.xyz"
+  # - name: base
+  #   rpc_url: "https://mainnet.base.org"
+  #   tycho_url: "tycho-base-beta.propellerheads.xyz"
 
   - name: unichain
     rpc_url: "https://mainnet.unichain.org"
@@ -85,7 +85,7 @@ binary_search_steps: 1024
 
 # Risk and trading parameters
 congestion_risk_discount_bps: 0
-max_slippage_bps: 0
+max_slippage_bps: 25
 
 # Tycho simulation stream filter
 add_tvl_threshold: 10.0

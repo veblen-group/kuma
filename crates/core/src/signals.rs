@@ -1,5 +1,6 @@
 use num_traits::CheckedSub;
 use std::fmt::Display;
+use tracing::{instrument, trace};
 
 use color_eyre::eyre::{self, ContextCompat};
 use num_bigint::BigUint;
@@ -56,11 +57,6 @@ pub struct CrossChainSingleHop {
 }
 
 impl CrossChainSingleHop {
-    // TODO: should this be fallible?
-    // -> failing to construct a signal should be part of the search process
-    //
-    // constructing a `SimulationRresult` is faillible becasuse it propagates the tycho error
-    // this is faillble because it propagates biguint errors - suplus, slippage and expected profit must be greater than zero
     pub fn try_from_simulations(
         slow_chain: &Chain,
         slow_pair: &Pair,

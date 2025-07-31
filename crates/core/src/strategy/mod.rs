@@ -165,7 +165,6 @@ impl CrossChainSingleHop {
     /// expected profits are compared to find the optimal signal.
     ///
     // TODO: add slow_inventory to logs?
-    #[instrument(skip(self, slow_sims, fast_state))]
     fn find_optimal_signal(
         &self,
         // TODO: have an abstraction around slow = (height, pool_id, sims) and fast = (height, pool_id, protocol_sim, inventory)
@@ -265,6 +264,8 @@ impl CrossChainSingleHop {
         fast_inventory: &BigUint,
         max_slippage_bps: u64,
     ) -> eyre::Result<simulation::Swap> {
+        // TODO: adjust for gas costs
+        // let slow_out_with_gas = precompute.amount_out - precompute.gas_cost;
         let amount_in = bps_discount(&precompute.amount_out, max_slippage_bps);
 
         if fast_inventory < &amount_in {
@@ -314,15 +315,20 @@ impl CrossChainSingleHop {
             &self.slow_pair,
             slow_pool_id,
             slow_height,
-            slow_sim,
+            slow_sim.clone(),
             &self.fast_chain,
             &self.fast_pair,
             fast_pool_id,
             fast_height,
-            fast_sim,
+            fast_sim.clone(),
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
         )
+        .map_err(|err| {
+            trace!(%slow_sim, %fast_sim,
+                    "‼️ failed to make signal");
+            err
+        })
     }
 }
 

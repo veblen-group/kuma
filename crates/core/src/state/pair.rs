@@ -100,7 +100,6 @@ impl Stream for PairStateStream {
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
                     let state = block.get_pair_state(&self.pair);
-                    trace!(pools.count = %state.states.keys().len(), "new pair state");
                     Poll::Ready(Some(state))
                 }
                 // Only start yielding values after the initial block is received

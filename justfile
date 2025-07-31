@@ -26,6 +26,11 @@ get-tokens:
     --chain-a base --chain-b unichain \
     tokens
 
+# Bot commands
+
+kumad:
+    cargo run -p kumad
+
 # Backend API server commands
 ##############################
 
