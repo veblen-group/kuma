@@ -12,7 +12,7 @@ pub use spot_prices::*;
 mod spot_prices;
 
 pub struct DatabaseBuilder {
-    pub(crate) config: DatabaseConfig,
+    pub config: DatabaseConfig,
 }
 
 impl DatabaseBuilder {

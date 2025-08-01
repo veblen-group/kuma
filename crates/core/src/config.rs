@@ -11,9 +11,14 @@ use tycho_common::{Bytes, models::token::Token};
 
 use crate::{chain::Chain, state::pair::Pair};
 
-// TODO: add log level from env
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Database configuration
+    pub database: DatabaseConfig,
+
+    /// Server configuration
+    pub server: ServerConfig,
+
     /// Arbitrage paths to create strategies for
     pub strategies: Vec<StrategyConfig>,
 
@@ -213,4 +218,10 @@ impl DatabaseConfig {
     pub fn idle_timeout(&self) -> Duration {
         Duration::from_secs(self.idle_timeout_secs)
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
 }

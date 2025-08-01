@@ -12,16 +12,6 @@ use crate::{
     state::{PoolId, pair::Pair},
 };
 
-struct SpotPriceRow {
-    chain: String,
-    block_height: u64,
-    pool_id: String,
-    min_price: String,
-    max_price: String,
-    token_a_symbol: String,
-    token_b_symbol: String,
-}
-
 #[derive(Clone)]
 pub struct SpotPriceRepository {
     pool: Arc<PgPool>,
@@ -44,23 +34,23 @@ impl SpotPriceRepository {
                 token_a_symbol,
                 token_b_symbol,
                 block_height, min_price, max_price, pool_id, chain
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
-            spot_price.token_a_symbol,
-            spot_price.token_b_symbol,
-            spot_price.block_height,
-            spot_price.min_price,
-            spot_price.max_price,
-            spot_price.pool_id,
-            spot_price.chain
+            spot_price.pair.token_a().symbol,
+            spot_price.pair.token_b().symbol,
+            spot_price.block_height as i64,
+            spot_price.min_price.to_string(),
+            spot_price.max_price.to_string(),
+            spot_price.pool_id.to_string(),
+            spot_price.chain.name.to_string(),
         )
-        .execute(self.pool)
+        .execute(self.pool.as_ref())
         .await?;
 
         Ok(())
     }
 
-    pub async fn count_by_pair(&self, pair: Pair) -> eyre::Result<u64> {
+    pub async fn count_by_pair(&self, pair: &Pair) -> eyre::Result<u64> {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
@@ -78,7 +68,7 @@ impl SpotPriceRepository {
 
     pub async fn get_spot_prices(
         &self,
-        pair: Pair,
+        pair: &Pair,
         limit: u32,
         offset: u32,
     ) -> eyre::Result<Vec<SpotPrices>> {
@@ -91,15 +81,15 @@ impl SpotPriceRepository {
                 block_height, min_price, max_price, pool_id, chain
             FROM spot_prices
             WHERE (token_a_symbol = $1 AND token_b_symbol = $2)
-            ORDER BY block_height
+            ORDER BY block_height DESC
             LIMIT $3 OFFSET $4
             "#,
+            &pair.token_a().symbol,
+            &pair.token_b().symbol,
+            limit as i64,
+            offset as i64,
         )
-        .bind(&pair.token_a())
-        .bind(&pair.token_b())
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&*self.pool)
+        .fetch_all(self.pool.as_ref())
         .await?;
 
         rows.into_iter()
@@ -109,7 +99,7 @@ impl SpotPriceRepository {
 
     pub async fn get_spot_prices_by_chain(
         &self,
-        chain: &str,
+        chain: &Chain,
         limit: u32,
         offset: u32,
     ) -> eyre::Result<Vec<SpotPrices>> {
@@ -119,23 +109,29 @@ impl SpotPriceRepository {
             SELECT
                 token_a_symbol,
                 token_b_symbol,
-                block_height, price, pool_id, chain
+                block_height,
+                min_price,
+                max_price,
+                pool_id,
+                chain
             FROM spot_prices
             WHERE chain = $1
             ORDER BY block_height DESC
             LIMIT $2 OFFSET $3
             "#,
+            chain.name.to_string(),
+            limit as i64,
+            offset as i64,
         )
-        .fetch_all(self.pool)
+        .fetch_all(self.pool.as_ref())
         .await?;
 
-        Ok(rows
-            .into_iter()
+        rows.into_iter()
             .map(|r| try_spot_price_from_row(r, &self.token_configs))
-            .collect())
+            .collect()
     }
 
-    pub async fn count_by_chain(&self, chain: &str) -> eyre::Result<u64> {
+    pub async fn count_by_chain(&self, chain: &Chain) -> eyre::Result<u64> {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
@@ -143,15 +139,25 @@ impl SpotPriceRepository {
             WHERE chain = $1
             "#,
         )
-        .bind(chain)
-        .fetch_one(&*self.pool)
+        .bind(chain.name.to_string())
+        .fetch_one(self.pool.as_ref())
         .await?;
 
         Ok(count as u64)
     }
 }
 
-pub(crate) fn try_spot_price_from_row(
+struct SpotPriceRow {
+    chain: String,
+    block_height: i64,
+    pool_id: String,
+    min_price: String,
+    max_price: String,
+    token_a_symbol: String,
+    token_b_symbol: String,
+}
+
+pub fn try_spot_price_from_row(
     row: SpotPriceRow,
     token_configs: &TokenAddressesForChain,
 ) -> eyre::Result<SpotPrices> {
@@ -162,7 +168,7 @@ pub(crate) fn try_spot_price_from_row(
     let max_price = BigUint::from_str(&row.max_price)
         .map_err(|err| eyre!("failed to decode max price: {err}"))?;
 
-    let block_height = row.block_height;
+    let block_height = row.block_height as u64;
 
     let chain_name = tycho_common::models::Chain::from_str(&row.chain)
         .map_err(|err| eyre!("failed to parse chain name: {err}"))?;

@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                token_a_symbol,\n                token_b_symbol,\n                block_height,\n                min_price,\n                max_price,\n                pool_id,\n                chain\n            FROM spot_prices\n            WHERE chain = $1\n            ORDER BY block_height DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_a_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "token_b_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "block_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "min_price",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "max_price",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "chain",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5d1a5659c9f29c779ba7d376e9ce3299d1ed2c8bcc06f54e7f0b5a9b050f3e69"
+}

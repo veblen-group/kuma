@@ -1,14 +1,14 @@
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Query, State},
     routing::get,
     Json, Router,
 };
-use kuma_core::state::pair::Pair;
+use kuma_core::spot_prices::SpotPrices;
 use serde::Deserialize;
 use tracing::info;
 
 use crate::{
-    models::{PaginatedResponse, PaginationQuery, SpotPrice},
+    models::{PaginatedResponse, PaginationQuery},
     state::AppState,
 };
 
@@ -22,19 +22,18 @@ pub struct SpotPriceQuery {
 pub async fn get_spot_prices(
     State(state): State<AppState>,
     Query(params): Query<SpotPriceQuery>,
-) -> Json<PaginatedResponse<SpotPrice>> {
+) -> Json<PaginatedResponse<SpotPrices>> {
     let (page, page_size) = params.pagination.sanitize();
     let (offset, limit) = params.pagination.to_offset_limit();
 
     info!(
-        block_height = %params.block_height,
         pair = ?params.pair,
         page = %page,
         page_size = %page_size,
         "Fetching spot prices"
     );
 
-    let repo = state.db.spot_price_repository();
+    let repo = state.db.spot_price_repository(state.token_configs.clone());
 
     // TODO: make pair from query.pair
     let pair = {
@@ -50,8 +49,8 @@ pub async fn get_spot_prices(
 
     // Get total count and data in parallel
     let (count_result, data_result) = tokio::join!(
-        repo.count_by_pair(params.pair.as_deref()),
-        repo.get_spot_prices(params.pair.as_deref(), limit, offset)
+        repo.count_by_pair(&pair),
+        repo.get_spot_prices(&pair, limit, offset)
     );
 
     match (count_result, data_result) {
@@ -82,21 +81,9 @@ mod tests {
         let query = "pair=WETH-USDC&page=2&page_size=50";
         let parsed: SpotPriceQuery = serde_urlencoded::from_str(query).unwrap();
 
-        assert_eq!(parsed.block_height, 19500000);
         assert_eq!(parsed.pair, "WETH-USDC".to_string());
         assert_eq!(parsed.pagination.page, Some(2));
         assert_eq!(parsed.pagination.page_size, Some(50));
-    }
-
-    #[test]
-    fn test_spot_price_query_without_pair() {
-        let query = "block_height=19500000";
-        let parsed: SpotPriceQuery = serde_urlencoded::from_str(query).unwrap();
-
-        assert_eq!(parsed.block_height, 19500000);
-        assert_eq!(parsed.pair, None);
-        assert_eq!(parsed.pagination.page, None);
-        assert_eq!(parsed.pagination.page_size, None);
     }
 
     #[test]
@@ -129,23 +116,5 @@ mod tests {
         let (page, page_size) = pagination.sanitize();
         assert_eq!(page, 1);
         assert_eq!(page_size, 1);
-    }
-
-    #[test]
-    fn test_chain_query_deserialization() {
-        let query = "page=2&page_size=50";
-        let parsed: ChainQuery = serde_urlencoded::from_str(query).unwrap();
-
-        assert_eq!(parsed.pagination.page, Some(2));
-        assert_eq!(parsed.pagination.page_size, Some(50));
-    }
-
-    #[test]
-    fn test_chain_query_defaults() {
-        let query = "";
-        let parsed: ChainQuery = serde_urlencoded::from_str(query).unwrap();
-
-        assert_eq!(parsed.pagination.page, None);
-        assert_eq!(parsed.pagination.page_size, None);
     }
 }
