@@ -10,7 +10,8 @@ use crate::{
 pub struct SpotPrices {
     pub pair: Pair,
     pub block_height: u64,
-    pub price: BigUint,
+    pub min_price: BigUint,
+    pub max_price: BigUint,
     pub pool_id: PoolId,
     pub chain: Chain,
 }

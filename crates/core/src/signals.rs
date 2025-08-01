@@ -1,6 +1,5 @@
 use num_traits::CheckedSub;
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgRow;
 use std::fmt::Display;
 
 use color_eyre::eyre::{self, ContextCompat};

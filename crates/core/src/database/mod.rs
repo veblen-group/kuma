@@ -5,10 +5,10 @@ use tracing::info;
 
 use crate::config::{DatabaseConfig, TokenAddressesForChain};
 
-pub use signals::*;
+// pub use signals::*;
 pub use spot_prices::*;
 
-mod signals;
+// mod signals;
 mod spot_prices;
 
 pub struct DatabaseBuilder {
@@ -63,12 +63,12 @@ impl DatabaseHandle {
         SpotPriceRepository::new(Arc::clone(&self.pool), token_configs)
     }
 
-    pub fn arbitrage_signal_repository(
-        &self,
-        token_configs: Arc<TokenAddressesForChain>,
-    ) -> ArbitrageSignalRepository {
-        ArbitrageSignalRepository::new(Arc::clone(&self.pool), token_configs)
-    }
+    // pub fn arbitrage_signal_repository(
+    //     &self,
+    //     token_configs: Arc<TokenAddressesForChain>,
+    // ) -> ArbitrageSignalRepository {
+    //     ArbitrageSignalRepository::new(Arc::clone(&self.pool), token_configs)
+    // }
 }
 
 #[cfg(test)]
