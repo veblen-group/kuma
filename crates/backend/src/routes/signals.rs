@@ -1,12 +1,13 @@
 use crate::{
-    models::{ArbitrageSignal, PaginatedResponse, PaginationQuery},
-    state::AppState,
+    models::{PaginatedResponse, PaginationQuery},
+    AppState,
 };
 use axum::{
     extract::{Path, Query, State},
     routing::get,
     Json, Router,
 };
+use kuma_core::signals::CrossChainSingleHop;
 use serde::Deserialize;
 use tracing::info;
 
@@ -26,7 +27,7 @@ pub struct ChainQuery {
 pub async fn get_signals(
     State(state): State<AppState>,
     Query(params): Query<SignalQuery>,
-) -> Json<PaginatedResponse<ArbitrageSignal>> {
+) -> Json<PaginatedResponse<CrossChainSingleHop>> {
     let (page, page_size) = params.pagination.sanitize();
     let (offset, limit) = params.pagination.to_offset_limit();
 

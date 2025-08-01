@@ -9,7 +9,8 @@ use tracing::info;
 
 use crate::{
     models::{PaginatedResponse, PaginationQuery},
-    state::AppState,
+    pair::parse_pair,
+    AppState,
 };
 
 #[derive(Deserialize)]
@@ -36,21 +37,19 @@ pub async fn get_spot_prices(
     let repo = state.db.spot_price_repository(state.token_configs.clone());
 
     // TODO: make pair from query.pair
-    let pair = {
-        match state.get_pair_from_str(&params.pair) {
-            Ok(pair) => pair,
-            Err(e) => {
-                // TODO: bad request 400 invalid pair
-                tracing::error!("Failed to parse pair: {}", e);
-                return Json(PaginatedResponse::new(vec![], page, page_size, Some(0)));
-            }
+    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair) {
+        Ok(pair) => pair,
+        Err(e) => {
+            // TODO: bad request 400
+            tracing::error!("Failed to parse pair: {}", e);
+            return Json(PaginatedResponse::new(vec![], page, page_size, Some(0)));
         }
     };
 
     // Get total count and data in parallel
     let (count_result, data_result) = tokio::join!(
-        repo.count_by_pair(&pair),
-        repo.get_spot_prices(&pair, limit, offset)
+        repo.count_by_pair(&token_a_symbol, &token_b_symbol),
+        repo.get_spot_prices(&token_a_symbol, &token_b_symbol, limit, offset)
     );
 
     match (count_result, data_result) {

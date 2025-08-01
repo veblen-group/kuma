@@ -50,7 +50,11 @@ impl SpotPriceRepository {
         Ok(())
     }
 
-    pub async fn count_by_pair(&self, pair: &Pair) -> eyre::Result<u64> {
+    pub async fn count_by_pair(
+        &self,
+        token_a_symbol: &str,
+        token_b_symbol: &str,
+    ) -> eyre::Result<u64> {
         let count: i64 = sqlx::query_scalar(
             r#"
             SELECT COUNT(*) as count
@@ -58,8 +62,8 @@ impl SpotPriceRepository {
             WHERE token_a_symbol = $1 AND token_b_symbol = $2
             "#,
         )
-        .bind(&pair.token_a().symbol)
-        .bind(&pair.token_b().symbol)
+        .bind(token_a_symbol)
+        .bind(token_b_symbol)
         .fetch_one(&*self.pool)
         .await?;
 
@@ -68,7 +72,8 @@ impl SpotPriceRepository {
 
     pub async fn get_spot_prices(
         &self,
-        pair: &Pair,
+        token_a_symbol: &str,
+        token_b_symbol: &str,
         limit: u32,
         offset: u32,
     ) -> eyre::Result<Vec<SpotPrices>> {
@@ -84,8 +89,8 @@ impl SpotPriceRepository {
             ORDER BY block_height DESC
             LIMIT $3 OFFSET $4
             "#,
-            &pair.token_a().symbol,
-            &pair.token_b().symbol,
+            token_a_symbol,
+            token_b_symbol,
             limit as i64,
             offset as i64,
         )
@@ -157,7 +162,7 @@ struct SpotPriceRow {
     token_b_symbol: String,
 }
 
-pub fn try_spot_price_from_row(
+fn try_spot_price_from_row(
     row: SpotPriceRow,
     token_configs: &TokenAddressesForChain,
 ) -> eyre::Result<SpotPrices> {
