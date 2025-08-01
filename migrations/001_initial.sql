@@ -18,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_spot_prices_block_height ON spot_prices(block_hei
 CREATE INDEX IF NOT EXISTS idx_spot_prices_chain ON spot_prices(chain);
 CREATE INDEX IF NOT EXISTS idx_spot_prices_chain_block ON spot_prices(chain, block_height DESC);
 
-CREATE TABLE IF NOT EXISTS arbitrage_signals (
+CREATE TABLE IF NOT EXISTS signals (
     id BIGSERIAL PRIMARY KEY,
     block_height BIGINT NOT NULL,
     slow_chain VARCHAR(50) NOT NULL,
@@ -53,5 +53,5 @@ CREATE TABLE IF NOT EXISTS arbitrage_signals (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_arbitrage_signals_block_height ON arbitrage_signals(block_height DESC);
-CREATE INDEX IF NOT EXISTS idx_arbitrage_signals_created_at ON arbitrage_signals(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_arbitrage_signals_block_height ON signals(block_height DESC);
+CREATE INDEX IF NOT EXISTS idx_arbitrage_signals_created_at ON signals(created_at DESC);
