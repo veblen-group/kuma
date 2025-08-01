@@ -3,6 +3,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use kuma_core::state::pair::Pair;
 use serde::Deserialize;
 use tracing::info;
 
@@ -13,14 +14,7 @@ use crate::{
 
 #[derive(Deserialize)]
 pub struct SpotPriceQuery {
-    pub block_height: u64,
-    pub pair: Option<String>, // Format: "TokenA-TokenB"
-    #[serde(flatten)]
-    pub pagination: PaginationQuery,
-}
-
-#[derive(Deserialize)]
-pub struct ChainQuery {
+    pub pair: String,
     #[serde(flatten)]
     pub pagination: PaginationQuery,
 }
@@ -42,10 +36,22 @@ pub async fn get_spot_prices(
 
     let repo = state.db.spot_price_repository();
 
+    // TODO: make pair from query.pair
+    let pair = {
+        match state.get_pair_from_str(&params.pair) {
+            Ok(pair) => pair,
+            Err(e) => {
+                // TODO: bad request 400 invalid pair
+                tracing::error!("Failed to parse pair: {}", e);
+                return Json(PaginatedResponse::new(vec![], page, page_size, Some(0)));
+            }
+        }
+    };
+
     // Get total count and data in parallel
     let (count_result, data_result) = tokio::join!(
-        repo.count_by_block_height(params.block_height, params.pair.as_deref()),
-        repo.get_by_block_height(params.block_height, params.pair.as_deref(), limit, offset)
+        repo.count_by_pair(params.pair.as_deref()),
+        repo.get_spot_prices(params.pair.as_deref(), limit, offset)
     );
 
     match (count_result, data_result) {
@@ -56,53 +62,15 @@ pub async fn get_spot_prices(
             Some(total_count),
         )),
         (Err(e), _) | (_, Err(e)) => {
+            // TODO: internal server error 500
             tracing::error!("Failed to fetch spot prices: {}", e);
             Json(PaginatedResponse::new(vec![], page, page_size, Some(0)))
         }
     }
 }
 
-pub async fn get_spot_prices_by_chain(
-    State(state): State<AppState>,
-    Path(chain): Path<String>,
-    Query(params): Query<ChainQuery>,
-) -> Json<PaginatedResponse<SpotPrice>> {
-    let (page, page_size) = params.pagination.sanitize();
-    let (offset, limit) = params.pagination.to_offset_limit();
-
-    info!(
-        chain = %chain,
-        page = %page,
-        page_size = %page_size,
-        "Fetching spot prices by chain"
-    );
-
-    let repo = state.db.spot_price_repository();
-
-    // Get total count and data in parallel
-    let (count_result, data_result) = tokio::join!(
-        repo.count_by_chain(&chain),
-        repo.get_by_chain(&chain, limit, offset)
-    );
-
-    match (count_result, data_result) {
-        (Ok(total_count), Ok(prices)) => Json(PaginatedResponse::new(
-            prices,
-            page,
-            page_size,
-            Some(total_count),
-        )),
-        (Err(e), _) | (_, Err(e)) => {
-            tracing::error!("Failed to fetch spot prices by chain: {}", e);
-            Json(PaginatedResponse::new(vec![], page, page_size, Some(0)))
-        }
-    }
-}
-
 pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/", get(get_spot_prices))
-        .route("/by_chain/:chain", get(get_spot_prices_by_chain))
+    Router::new().route("/", get(get_spot_prices))
 }
 
 #[cfg(test)]
@@ -111,11 +79,11 @@ mod tests {
 
     #[test]
     fn test_spot_price_query_deserialization() {
-        let query = "block_height=19500000&pair=WETH-USDC&page=2&page_size=50";
+        let query = "pair=WETH-USDC&page=2&page_size=50";
         let parsed: SpotPriceQuery = serde_urlencoded::from_str(query).unwrap();
 
         assert_eq!(parsed.block_height, 19500000);
-        assert_eq!(parsed.pair, Some("WETH-USDC".to_string()));
+        assert_eq!(parsed.pair, "WETH-USDC".to_string());
         assert_eq!(parsed.pagination.page, Some(2));
         assert_eq!(parsed.pagination.page_size, Some(50));
     }

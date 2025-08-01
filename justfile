@@ -57,12 +57,15 @@ db-stop:
 db-reset:
     #!/usr/bin/env bash
     docker exec kuma-db-1 psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/migrations"
 
 # Run database migrations
 db-migrate:
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/migrations"
 
+# Compile-time checks for postgres queries
+db-prepare:
+    cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/migrations"
 
 default_lang := 'all'
 # Format
@@ -115,7 +118,7 @@ db-reset:
     docker exec kuma-db-1 psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
 
-# Run database migrations  
+# Run database migrations
 db-migrate:
     #!/usr/bin/env bash
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"

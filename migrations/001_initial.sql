@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS spot_prices (
     token_b_symbol VARCHAR(50) NOT NULL,
     token_b_address VARCHAR(100) NOT NULL,
     block_height BIGINT NOT NULL,
-    price TEXT NOT NULL,
+    min_price TEXT NOT NULL,
+    max_price TEXT NOT NULL,
     pool_id VARCHAR(100) NOT NULL,
     chain VARCHAR(50) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

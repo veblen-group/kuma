@@ -5,7 +5,7 @@ use figment::{
 };
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 use tracing::{info, warn};
 use tycho_common::{Bytes, models::token::Token};
 
@@ -39,47 +39,6 @@ pub struct Config {
     pub max_slippage_bps: u64,
 
     pub binary_search_steps: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StrategyConfig {
-    pub token_a: String,
-    pub token_b: String,
-    pub slow_chain: String,
-    pub fast_chain: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenConfig {
-    /// Token addresses on different chains
-    pub addresses: HashMap<tycho_common::models::Chain, Bytes>,
-
-    /// Token decimals
-    pub decimals: u32,
-
-    /// Taxs
-    pub tax: u64,
-
-    /// Amount of gas to use for transfers
-    pub gas: Vec<Option<u64>>,
-
-    /// Quality of the token
-    pub quality: u32,
-
-    /// Existing inventory for this token
-    pub inventory: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChainConfig {
-    /// Chain name
-    pub name: String,
-
-    /// RPC endpoint URL
-    pub rpc_url: String,
-
-    /// RPC endpoint URL for Tycho Indexer
-    pub tycho_url: String,
 }
 
 pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;
@@ -195,5 +154,63 @@ impl Config {
         }
 
         pairs
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenConfig {
+    /// Token addresses on different chains
+    pub addresses: HashMap<tycho_common::models::Chain, Bytes>,
+
+    /// Token decimals
+    pub decimals: u32,
+
+    /// Taxs
+    pub tax: u64,
+
+    /// Amount of gas to use for transfers
+    pub gas: Vec<Option<u64>>,
+
+    /// Quality of the token
+    pub quality: u32,
+
+    /// Existing inventory for this token
+    pub inventory: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainConfig {
+    /// Chain name
+    pub name: String,
+
+    /// RPC endpoint URL
+    pub rpc_url: String,
+
+    /// RPC endpoint URL for Tycho Indexer
+    pub tycho_url: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrategyConfig {
+    pub token_a: String,
+    pub token_b: String,
+    pub slow_chain: String,
+    pub fast_chain: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct DatabaseConfig {
+    pub url: String,
+    pub max_connections: u32,
+    pub connection_timeout_secs: u64,
+    pub idle_timeout_secs: u64,
+}
+
+impl DatabaseConfig {
+    pub fn connection_timeout(&self) -> Duration {
+        Duration::from_secs(self.connection_timeout_secs)
+    }
+
+    pub fn idle_timeout(&self) -> Duration {
+        Duration::from_secs(self.idle_timeout_secs)
     }
 }

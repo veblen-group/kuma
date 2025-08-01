@@ -12,6 +12,7 @@ futures = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio"] }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
@@ -19,3 +20,6 @@ tracing = { workspace = true }
 tycho-simulation = { workspace = true }
 tycho-common = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.5.0"

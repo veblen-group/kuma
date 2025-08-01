@@ -1,6 +1,7 @@
 use num_traits::CheckedSub;
+use serde::{Deserialize, Serialize};
+use sqlx::postgres::PgRow;
 use std::fmt::Display;
-use tracing::{instrument, trace};
 
 use color_eyre::eyre::{self, ContextCompat};
 use num_bigint::BigUint;
@@ -27,16 +28,8 @@ impl Display for Direction {
     }
 }
 
-// TODO: display impl
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
-    // TODO: for each of slow and fast chains
-    // - chain_metadata: (chain, pair)
-    // - block: (height, inventory)
-    // - optimal_swap state::Id, simulation_result
-    // - slippage config, risk parameters, expect profit
-    // TODO: this should all be per chain
-    // static metadata
     slow_chain: Chain,
     slow_pair: Pair,
     slow_height: u64,
@@ -44,16 +37,13 @@ pub struct CrossChainSingleHop {
     fast_pair: Pair,
     fast_height: u64,
     max_slippage_bps: u64,
-    // TODO: use this in display impl
-    #[allow(dead_code)]
     congestion_risk_discount_bps: u64,
     pub surplus: (BigUint, BigUint),
     pub expected_profit: (BigUint, BigUint),
-    // tx parameters
-    pub slow_id: state::PoolId,
-    pub slow_sim: Swap,
-    pub fast_id: state::PoolId,
-    pub fast_sim: Swap,
+    pub slow_pool_id: state::PoolId,
+    pub slow_swap_sim: Swap,
+    pub fast_pool_id: state::PoolId,
+    pub fast_swap_sim: Swap,
 }
 
 impl CrossChainSingleHop {
@@ -92,13 +82,13 @@ impl CrossChainSingleHop {
             slow_chain: slow_chain.clone(),
             slow_pair: slow_pair.clone(),
             slow_height,
-            slow_id: slow_id.clone(),
-            slow_sim,
+            slow_pool_id: slow_id.clone(),
+            slow_swap_sim: slow_sim,
             fast_chain: fast_chain.clone(),
             fast_pair: fast_pair.clone(),
             fast_height,
-            fast_id: fast_id.clone(),
-            fast_sim,
+            fast_pool_id: fast_id.clone(),
+            fast_swap_sim: fast_sim,
             surplus: (surplus_a, surplus_b),
             expected_profit: expected_profits,
             max_slippage_bps,
@@ -109,10 +99,10 @@ impl CrossChainSingleHop {
 
 impl Display for CrossChainSingleHop {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let max_slippage_slow = &self.slow_sim.amount_out
-            - bps_discount(&self.slow_sim.amount_out, self.max_slippage_bps);
-        let max_slippage_fast = &self.fast_sim.amount_out
-            - bps_discount(&self.fast_sim.amount_out, self.max_slippage_bps);
+        let max_slippage_slow = &self.slow_swap_sim.amount_out
+            - bps_discount(&self.slow_swap_sim.amount_out, self.max_slippage_bps);
+        let max_slippage_fast = &self.fast_swap_sim.amount_out
+            - bps_discount(&self.fast_swap_sim.amount_out, self.max_slippage_bps);
 
         write!(
             f,
@@ -138,16 +128,16 @@ impl Display for CrossChainSingleHop {
             self.slow_chain,
             self.slow_pair,
             self.slow_height,
-            self.slow_id,
-            self.slow_sim.amount_in,
-            self.slow_sim.amount_out,
+            self.slow_pool_id,
+            self.slow_swap_sim.amount_in,
+            self.slow_swap_sim.amount_out,
             max_slippage_slow,
             self.fast_chain,
             self.fast_pair,
             self.fast_height,
-            self.fast_id,
-            self.fast_sim.amount_in,
-            self.fast_sim.amount_out,
+            self.fast_pool_id,
+            self.fast_swap_sim.amount_in,
+            self.fast_swap_sim.amount_out,
             max_slippage_fast,
             self.expected_profit.0,
             self.slow_pair.token_a().symbol,

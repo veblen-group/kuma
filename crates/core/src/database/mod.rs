@@ -5,13 +5,14 @@ use tracing::info;
 
 use crate::config::{DatabaseConfig, TokenAddressesForChain};
 
-pub use repositories::*;
+pub use signals::*;
+pub use spot_prices::*;
 
-mod repositories;
+mod signals;
+mod spot_prices;
 
 pub struct DatabaseBuilder {
     pub(crate) config: DatabaseConfig,
-    pub(crate) tokens_config: Arc<TokenAddressesForChain>,
 }
 
 impl DatabaseBuilder {
@@ -31,7 +32,6 @@ impl DatabaseBuilder {
 
         let handle = DatabaseHandle {
             pool: Arc::new(pool),
-            tokens_config: self.tokens_config,
         };
 
         Ok(handle)
@@ -40,14 +40,12 @@ impl DatabaseBuilder {
 
 pub struct DatabaseHandle {
     pool: Arc<PgPool>,
-    tokens_config: Arc<TokenAddressesForChain>,
 }
 
 impl Clone for DatabaseHandle {
     fn clone(&self) -> Self {
         Self {
             pool: Arc::clone(&self.pool),
-            tokens_config: self.tokens_config.clone(),
         }
     }
 }
@@ -58,18 +56,24 @@ impl DatabaseHandle {
         Arc::clone(&self.pool)
     }
 
-    pub fn spot_price_repository(&self) -> SpotPriceRepository {
-        SpotPriceRepository::new(Arc::clone(&self.pool), self.tokens_config.clone())
+    pub fn spot_price_repository(
+        &self,
+        token_configs: Arc<TokenAddressesForChain>,
+    ) -> SpotPriceRepository {
+        SpotPriceRepository::new(Arc::clone(&self.pool), token_configs)
     }
 
-    pub fn arbitrage_signal_repository(&self) -> ArbitrageSignalRepository {
-        ArbitrageSignalRepository::new(Arc::clone(&self.pool), self.tokens_config.clone())
+    pub fn arbitrage_signal_repository(
+        &self,
+        token_configs: Arc<TokenAddressesForChain>,
+    ) -> ArbitrageSignalRepository {
+        ArbitrageSignalRepository::new(Arc::clone(&self.pool), token_configs)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, time::Duration};
+    use std::time::Duration;
 
     use super::*;
     use proptest::prelude::*;
@@ -83,12 +87,7 @@ mod tests {
             connection_timeout_secs: 30,
             idle_timeout_secs: 600,
         };
-        // TODO: populate this
-        let tokens_config = Arc::new(HashMap::new());
-        let builder = DatabaseBuilder {
-            config,
-            tokens_config,
-        };
+        let builder = DatabaseBuilder { config };
         assert_eq!(builder.config.max_connections, 10);
         assert_eq!(builder.config.connection_timeout(), Duration::from_secs(30));
     }
@@ -102,11 +101,7 @@ mod tests {
             connection_timeout_secs: 60,
             idle_timeout_secs: 1200,
         };
-        let tokens_config = Arc::new(HashMap::new());
-        let builder = DatabaseBuilder {
-            config,
-            tokens_config,
-        };
+        let builder = DatabaseBuilder { config };
 
         assert_eq!(builder.config.url, "postgres://test@localhost/test");
         assert_eq!(builder.config.max_connections, 5);
@@ -124,10 +119,8 @@ mod tests {
                 connection_timeout_secs: 30,
                 idle_timeout_secs: 600,
             };
-            let tokens_config = Arc::new(HashMap::new());
             let builder = DatabaseBuilder {
                 config,
-                tokens_config,
             };
 
             prop_assert_eq!(builder.config.max_connections, max_connections);

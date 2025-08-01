@@ -7,18 +7,17 @@ use std::{
 };
 
 use futures::{Stream, StreamExt};
+use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
-use tracing::trace;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use super::block::Block;
 use crate::state;
 
-// TODO: maybe move to assets.rs?
-/// Represents a pair of tokens, without directionality (i.e. (a, b) and (b, a) will be treated as the same pair).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pair(Token, Token);
 
 impl Pair {
