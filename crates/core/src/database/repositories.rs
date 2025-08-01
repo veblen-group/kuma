@@ -1,23 +1,28 @@
-use crate::models::{ArbitrageSignal, SpotPrice};
+use crate::{config::TokenAddressesForChain, signals::CrossChainSingleHop, spot_price::SpotPrice};
 use color_eyre::eyre::Result;
-use sqlx::{PgPool, Row};
+use sqlx::{PgPool, Row, types::Json};
 use std::sync::Arc;
 use tracing::{info, instrument};
 
 #[derive(Clone)]
 pub struct SpotPriceRepository {
     pool: Arc<PgPool>,
+    token_configs: Arc<TokenAddressesForChain>,
 }
 
 impl SpotPriceRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<PgPool>, token_configs: Arc<TokenAddressesForChain>) -> Self {
+        Self {
+            pool,
+            token_configs,
+        }
     }
 
     #[instrument(skip(self, spot_price))]
     #[allow(dead_code)]
     pub async fn insert(&self, spot_price: &SpotPrice) -> Result<()> {
-        sqlx::query(
+        sqlx::query_as!(
+            SpotPrice,
             r#"
             INSERT INTO spot_prices (
                 token_a_symbol, token_a_address,
@@ -25,16 +30,9 @@ impl SpotPriceRepository {
                 block_height, price, pool_id, chain
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
+            // TODO: enter spot price fields
         )
-        .bind(&spot_price.pair.token_a.symbol)
-        .bind(&spot_price.pair.token_a.address)
-        .bind(&spot_price.pair.token_b.symbol)
-        .bind(&spot_price.pair.token_b.address)
-        .bind(spot_price.block_height as i64)
-        .bind(&spot_price.price)
-        .bind(&spot_price.pool_id)
-        .bind(&spot_price.chain)
-        .execute(&*self.pool)
+        .fetch_one(self.pool)
         .await?;
 
         info!("Inserted spot price for block {}", spot_price.block_height);
@@ -60,22 +58,7 @@ impl SpotPriceRepository {
         .fetch_optional(&*self.pool)
         .await?;
 
-        Ok(row.map(|r| SpotPrice {
-            pair: crate::models::Pair {
-                token_a: crate::models::Token {
-                    symbol: r.get("token_a_symbol"),
-                    address: r.get("token_a_address"),
-                },
-                token_b: crate::models::Token {
-                    symbol: r.get("token_b_symbol"),
-                    address: r.get("token_b_address"),
-                },
-            },
-            block_height: r.get::<i64, _>("block_height") as u64,
-            price: r.get("price"),
-            pool_id: r.get("pool_id"),
-            chain: r.get("chain"),
-        }))
+        row.map(|r| SpotPrice::try_from_row(r, &self.token_configs))
     }
 
     #[instrument(skip(self))]
@@ -105,22 +88,7 @@ impl SpotPriceRepository {
 
         Ok(rows
             .into_iter()
-            .map(|r| SpotPrice {
-                pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: r.get("token_a_symbol"),
-                        address: r.get("token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: r.get("token_b_symbol"),
-                        address: r.get("token_b_address"),
-                    },
-                },
-                block_height: r.get::<i64, _>("block_height") as u64,
-                price: r.get("price"),
-                pool_id: r.get("pool_id"),
-                chain: r.get("chain"),
-            })
+            .map(|r| SpotPrice::try_from_row(row, self.token_configs))
             .collect())
     }
 
@@ -258,7 +226,8 @@ impl SpotPriceRepository {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<SpotPrice>> {
-        let rows = sqlx::query(
+        let rows = sqlx::query_as!(
+            Row,
             r#"
             SELECT
                 token_a_symbol, token_a_address,
@@ -270,30 +239,12 @@ impl SpotPriceRepository {
             LIMIT $2 OFFSET $3
             "#,
         )
-        .bind(chain)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&*self.pool)
+        .fetch_all(self.pool)
         .await?;
 
         Ok(rows
             .into_iter()
-            .map(|r| SpotPrice {
-                pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: r.get("token_a_symbol"),
-                        address: r.get("token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: r.get("token_b_symbol"),
-                        address: r.get("token_b_address"),
-                    },
-                },
-                block_height: r.get::<i64, _>("block_height") as u64,
-                price: r.get("price"),
-                pool_id: r.get("pool_id"),
-                chain: r.get("chain"),
-            })
+            .map(|r| serde_json::from_value(r))
             .collect())
     }
 
@@ -317,11 +268,15 @@ impl SpotPriceRepository {
 #[derive(Clone)]
 pub struct ArbitrageSignalRepository {
     pool: Arc<PgPool>,
+    tokens_config: Arc<TokenAddressesForChain>,
 }
 
 impl ArbitrageSignalRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<PgPool>, tokens_config: Arc<TokenAddressesForChain>) -> Self {
+        Self {
+            pool,
+            tokens_config,
+        }
     }
 
     #[instrument(skip(self, signal))]
@@ -414,65 +369,9 @@ impl ArbitrageSignalRepository {
         .fetch_all(&*self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ArbitrageSignal {
-                block_height: row.get::<i64, _>("block_height") as u64,
-                slow_chain: row.get("slow_chain"),
-                slow_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("slow_pair_token_a_symbol"),
-                        address: row.get("slow_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("slow_pair_token_b_symbol"),
-                        address: row.get("slow_pair_token_b_address"),
-                    },
-                },
-                slow_pool_id: row.get("slow_pool_id"),
-                fast_chain: row.get("fast_chain"),
-                fast_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("fast_pair_token_a_symbol"),
-                        address: row.get("fast_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("fast_pair_token_b_symbol"),
-                        address: row.get("fast_pair_token_b_address"),
-                    },
-                },
-                fast_pool_id: row.get("fast_pool_id"),
-                slow_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("slow_swap_token_in_symbol"),
-                        address: row.get("slow_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("slow_swap_token_out_symbol"),
-                        address: row.get("slow_swap_token_out_address"),
-                    },
-                    amount_in: row.get("slow_swap_amount_in"),
-                    amount_out: row.get("slow_swap_amount_out"),
-                },
-                fast_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("fast_swap_token_in_symbol"),
-                        address: row.get("fast_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("fast_swap_token_out_symbol"),
-                        address: row.get("fast_swap_token_out_address"),
-                    },
-                    amount_in: row.get("fast_swap_amount_in"),
-                    amount_out: row.get("fast_swap_amount_out"),
-                },
-                surplus_a: row.get("surplus_a"),
-                surplus_b: row.get("surplus_b"),
-                expected_profit_a: row.get("expected_profit_a"),
-                expected_profit_b: row.get("expected_profit_b"),
-                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
-            })
-            .collect())
+        rows.into_iter()
+            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .collect()
     }
 
     #[instrument(skip(self))]
@@ -523,65 +422,9 @@ impl ArbitrageSignalRepository {
         .fetch_all(&*self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ArbitrageSignal {
-                block_height: row.get::<i64, _>("block_height") as u64,
-                slow_chain: row.get("slow_chain"),
-                slow_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("slow_pair_token_a_symbol"),
-                        address: row.get("slow_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("slow_pair_token_b_symbol"),
-                        address: row.get("slow_pair_token_b_address"),
-                    },
-                },
-                slow_pool_id: row.get("slow_pool_id"),
-                fast_chain: row.get("fast_chain"),
-                fast_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("fast_pair_token_a_symbol"),
-                        address: row.get("fast_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("fast_pair_token_b_symbol"),
-                        address: row.get("fast_pair_token_b_address"),
-                    },
-                },
-                fast_pool_id: row.get("fast_pool_id"),
-                slow_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("slow_swap_token_in_symbol"),
-                        address: row.get("slow_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("slow_swap_token_out_symbol"),
-                        address: row.get("slow_swap_token_out_address"),
-                    },
-                    amount_in: row.get("slow_swap_amount_in"),
-                    amount_out: row.get("slow_swap_amount_out"),
-                },
-                fast_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("fast_swap_token_in_symbol"),
-                        address: row.get("fast_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("fast_swap_token_out_symbol"),
-                        address: row.get("fast_swap_token_out_address"),
-                    },
-                    amount_in: row.get("fast_swap_amount_in"),
-                    amount_out: row.get("fast_swap_amount_out"),
-                },
-                surplus_a: row.get("surplus_a"),
-                surplus_b: row.get("surplus_b"),
-                expected_profit_a: row.get("expected_profit_a"),
-                expected_profit_b: row.get("expected_profit_b"),
-                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
-            })
-            .collect())
+        rows.into_iter()
+            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .collect()
     }
 
     #[instrument(skip(self))]
@@ -615,65 +458,9 @@ impl ArbitrageSignalRepository {
         .fetch_all(&*self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ArbitrageSignal {
-                block_height: row.get::<i64, _>("block_height") as u64,
-                slow_chain: row.get("slow_chain"),
-                slow_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("slow_pair_token_a_symbol"),
-                        address: row.get("slow_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("slow_pair_token_b_symbol"),
-                        address: row.get("slow_pair_token_b_address"),
-                    },
-                },
-                slow_pool_id: row.get("slow_pool_id"),
-                fast_chain: row.get("fast_chain"),
-                fast_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("fast_pair_token_a_symbol"),
-                        address: row.get("fast_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("fast_pair_token_b_symbol"),
-                        address: row.get("fast_pair_token_b_address"),
-                    },
-                },
-                fast_pool_id: row.get("fast_pool_id"),
-                slow_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("slow_swap_token_in_symbol"),
-                        address: row.get("slow_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("slow_swap_token_out_symbol"),
-                        address: row.get("slow_swap_token_out_address"),
-                    },
-                    amount_in: row.get("slow_swap_amount_in"),
-                    amount_out: row.get("slow_swap_amount_out"),
-                },
-                fast_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("fast_swap_token_in_symbol"),
-                        address: row.get("fast_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("fast_swap_token_out_symbol"),
-                        address: row.get("fast_swap_token_out_address"),
-                    },
-                    amount_in: row.get("fast_swap_amount_in"),
-                    amount_out: row.get("fast_swap_amount_out"),
-                },
-                surplus_a: row.get("surplus_a"),
-                surplus_b: row.get("surplus_b"),
-                expected_profit_a: row.get("expected_profit_a"),
-                expected_profit_b: row.get("expected_profit_b"),
-                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
-            })
-            .collect())
+        rows.into_iter()
+            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .collect()
     }
 
     #[instrument(skip(self))]
@@ -709,65 +496,9 @@ impl ArbitrageSignalRepository {
         .fetch_all(&*self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ArbitrageSignal {
-                block_height: row.get::<i64, _>("block_height") as u64,
-                slow_chain: row.get("slow_chain"),
-                slow_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("slow_pair_token_a_symbol"),
-                        address: row.get("slow_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("slow_pair_token_b_symbol"),
-                        address: row.get("slow_pair_token_b_address"),
-                    },
-                },
-                slow_pool_id: row.get("slow_pool_id"),
-                fast_chain: row.get("fast_chain"),
-                fast_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("fast_pair_token_a_symbol"),
-                        address: row.get("fast_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("fast_pair_token_b_symbol"),
-                        address: row.get("fast_pair_token_b_address"),
-                    },
-                },
-                fast_pool_id: row.get("fast_pool_id"),
-                slow_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("slow_swap_token_in_symbol"),
-                        address: row.get("slow_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("slow_swap_token_out_symbol"),
-                        address: row.get("slow_swap_token_out_address"),
-                    },
-                    amount_in: row.get("slow_swap_amount_in"),
-                    amount_out: row.get("slow_swap_amount_out"),
-                },
-                fast_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("fast_swap_token_in_symbol"),
-                        address: row.get("fast_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("fast_swap_token_out_symbol"),
-                        address: row.get("fast_swap_token_out_address"),
-                    },
-                    amount_in: row.get("fast_swap_amount_in"),
-                    amount_out: row.get("fast_swap_amount_out"),
-                },
-                surplus_a: row.get("surplus_a"),
-                surplus_b: row.get("surplus_b"),
-                expected_profit_a: row.get("expected_profit_a"),
-                expected_profit_b: row.get("expected_profit_b"),
-                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
-            })
-            .collect())
+        rows.into_iter()
+            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .collect()
     }
 
     #[instrument(skip(self))]
@@ -832,65 +563,9 @@ impl ArbitrageSignalRepository {
         .fetch_all(&*self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ArbitrageSignal {
-                block_height: row.get::<i64, _>("block_height") as u64,
-                slow_chain: row.get("slow_chain"),
-                slow_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("slow_pair_token_a_symbol"),
-                        address: row.get("slow_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("slow_pair_token_b_symbol"),
-                        address: row.get("slow_pair_token_b_address"),
-                    },
-                },
-                slow_pool_id: row.get("slow_pool_id"),
-                fast_chain: row.get("fast_chain"),
-                fast_pair: crate::models::Pair {
-                    token_a: crate::models::Token {
-                        symbol: row.get("fast_pair_token_a_symbol"),
-                        address: row.get("fast_pair_token_a_address"),
-                    },
-                    token_b: crate::models::Token {
-                        symbol: row.get("fast_pair_token_b_symbol"),
-                        address: row.get("fast_pair_token_b_address"),
-                    },
-                },
-                fast_pool_id: row.get("fast_pool_id"),
-                slow_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("slow_swap_token_in_symbol"),
-                        address: row.get("slow_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("slow_swap_token_out_symbol"),
-                        address: row.get("slow_swap_token_out_address"),
-                    },
-                    amount_in: row.get("slow_swap_amount_in"),
-                    amount_out: row.get("slow_swap_amount_out"),
-                },
-                fast_swap: crate::models::SwapInfo {
-                    token_in: crate::models::Token {
-                        symbol: row.get("fast_swap_token_in_symbol"),
-                        address: row.get("fast_swap_token_in_address"),
-                    },
-                    token_out: crate::models::Token {
-                        symbol: row.get("fast_swap_token_out_symbol"),
-                        address: row.get("fast_swap_token_out_address"),
-                    },
-                    amount_in: row.get("fast_swap_amount_in"),
-                    amount_out: row.get("fast_swap_amount_out"),
-                },
-                surplus_a: row.get("surplus_a"),
-                surplus_b: row.get("surplus_b"),
-                expected_profit_a: row.get("expected_profit_a"),
-                expected_profit_b: row.get("expected_profit_b"),
-                max_slippage_bps: row.get::<i64, _>("max_slippage_bps") as u64,
-            })
-            .collect())
+        rows.into_iter()
+            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .collect()
     }
 
     #[instrument(skip(self))]
