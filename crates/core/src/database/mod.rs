@@ -1,14 +1,18 @@
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::{self, OptionExt as _, Result, eyre};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::sync::Arc;
 use tracing::info;
+use tycho_common::models::token::Token;
 
-use crate::config::{DatabaseConfig, TokenAddressesForChain};
+use crate::{
+    chain::Chain,
+    config::{DatabaseConfig, TokenAddressesForChain},
+};
 
-// pub use signals::*;
+pub use signals::*;
 pub use spot_prices::*;
 
-// mod signals;
+mod signals;
 mod spot_prices;
 
 pub struct DatabaseBuilder {
@@ -126,4 +130,18 @@ mod tests {
             prop_assert_eq!(builder.config.max_connections, max_connections);
         }
     }
+}
+
+fn try_token_from_chain_symbol(
+    symbol: &str,
+    chain: &Chain,
+    token_configs: &TokenAddressesForChain,
+) -> eyre::Result<Token> {
+    let token = token_configs[chain]
+        .values()
+        .find(|token| token.symbol == symbol)
+        .ok_or_eyre("token config not found for addr in db")?
+        .clone();
+
+    Ok(token)
 }

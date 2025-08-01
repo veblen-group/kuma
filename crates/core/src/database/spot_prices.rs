@@ -12,6 +12,8 @@ use crate::{
     state::{PoolId, pair::Pair},
 };
 
+use super::try_token_from_chain_symbol;
+
 #[derive(Clone)]
 pub struct SpotPriceRepository {
     pool: Arc<PgPool>,
@@ -196,18 +198,4 @@ fn try_spot_price_from_row(
         pool_id,
         chain,
     })
-}
-
-fn try_token_from_chain_symbol(
-    symbol: &str,
-    chain: &Chain,
-    token_configs: &TokenAddressesForChain,
-) -> eyre::Result<Token> {
-    let token = token_configs[chain]
-        .values()
-        .find(|token| token.symbol == symbol)
-        .ok_or_eyre("token config not found for addr in db")?
-        .clone();
-
-    Ok(token)
 }

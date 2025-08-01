@@ -14,15 +14,15 @@ use crate::{
 };
 
 #[derive(Deserialize)]
-pub struct SpotPriceQuery {
+pub struct SpotPriceByPairQuery {
     pub pair: String,
     #[serde(flatten)]
     pub pagination: PaginationQuery,
 }
 
-pub async fn get_spot_prices(
+pub async fn get_spot_prices_by_pair(
     State(state): State<AppState>,
-    Query(params): Query<SpotPriceQuery>,
+    Query(params): Query<SpotPriceByPairQuery>,
 ) -> Json<PaginatedResponse<SpotPrices>> {
     let (page, page_size) = params.pagination.sanitize();
     let (offset, limit) = params.pagination.to_offset_limit();
@@ -68,7 +68,7 @@ pub async fn get_spot_prices(
 }
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/", get(get_spot_prices))
+    Router::new().route("/", get(get_spot_prices_by_pair))
 }
 
 #[cfg(test)]
@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn test_spot_price_query_deserialization() {
         let query = "pair=WETH-USDC&page=2&page_size=50";
-        let parsed: SpotPriceQuery = serde_urlencoded::from_str(query).unwrap();
+        let parsed: SpotPriceByPairQuery = serde_urlencoded::from_str(query).unwrap();
 
         assert_eq!(parsed.pair, "WETH-USDC".to_string());
         assert_eq!(parsed.pagination.page, Some(2));
