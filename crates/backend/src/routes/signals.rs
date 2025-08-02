@@ -1,8 +1,3 @@
-use crate::{
-    models::{PaginatedResponse, PaginationQuery},
-    pair::parse_pair,
-    state::AppState,
-};
 use axum::{
     extract::{Query, State},
     routing::get,
@@ -11,6 +6,12 @@ use axum::{
 use kuma_core::signals::CrossChainSingleHop;
 use serde::Deserialize;
 use tracing::info;
+
+use crate::{
+    models::{PaginatedResponse, PaginationQuery},
+    pair::parse_pair,
+    AppState,
+};
 
 #[derive(Deserialize)]
 pub struct SignalQuery {

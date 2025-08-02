@@ -10,7 +10,7 @@ use tracing::info;
 use crate::{
     models::{PaginatedResponse, PaginationQuery},
     pair::parse_pair,
-    state::AppState,
+    AppState,
 };
 
 #[derive(Deserialize)]
