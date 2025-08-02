@@ -67,12 +67,12 @@ impl DatabaseHandle {
         SpotPriceRepository::new(Arc::clone(&self.pool), token_configs)
     }
 
-    // pub fn arbitrage_signal_repository(
-    //     &self,
-    //     token_configs: Arc<TokenAddressesForChain>,
-    // ) -> ArbitrageSignalRepository {
-    //     ArbitrageSignalRepository::new(Arc::clone(&self.pool), token_configs)
-    // }
+    pub fn signal_repository(
+        &self,
+        token_configs: Arc<TokenAddressesForChain>,
+    ) -> SignalRepository {
+        SignalRepository::new(Arc::clone(&self.pool), token_configs)
+    }
 }
 
 #[cfg(test)]

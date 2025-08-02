@@ -3,10 +3,8 @@ use std::{str::FromStr as _, sync::Arc};
 use color_eyre::eyre::{self, OptionExt, eyre};
 use num_bigint::BigUint;
 use sqlx::PgPool;
-use tycho_common::models::token::Token;
 
 use crate::{
-    chain::Chain,
     config::TokenAddressesForChain,
     spot_prices::SpotPrices,
     state::{PoolId, pair::Pair},
@@ -21,7 +19,7 @@ pub struct SpotPriceRepository {
 }
 
 impl SpotPriceRepository {
-    pub fn new(pool: Arc<PgPool>, token_configs: Arc<TokenAddressesForChain>) -> Self {
+    pub(super) fn new(pool: Arc<PgPool>, token_configs: Arc<TokenAddressesForChain>) -> Self {
         Self {
             pool,
             token_configs,
@@ -52,7 +50,7 @@ impl SpotPriceRepository {
         Ok(())
     }
 
-    pub async fn count_by_pair(
+    pub async fn count_by_symbols(
         &self,
         token_a_symbol: &str,
         token_b_symbol: &str,
@@ -61,18 +59,19 @@ impl SpotPriceRepository {
             r#"
             SELECT COUNT(*) as count
             FROM spot_prices
-            WHERE token_a_symbol = $1 AND token_b_symbol = $2
+            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)
+                OR (token_a_symbol = $2 AND token_b_symbol = $1))
             "#,
         )
         .bind(token_a_symbol)
         .bind(token_b_symbol)
-        .fetch_one(&*self.pool)
+        .fetch_one(self.pool.as_ref())
         .await?;
 
         Ok(count as u64)
     }
 
-    pub async fn get_spot_prices(
+    pub async fn get_by_symbols(
         &self,
         token_a_symbol: &str,
         token_b_symbol: &str,
@@ -87,7 +86,8 @@ impl SpotPriceRepository {
                 token_b_symbol,
                 block_height, min_price, max_price, pool_id, chain
             FROM spot_prices
-            WHERE (token_a_symbol = $1 AND token_b_symbol = $2)
+            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)
+                OR (token_a_symbol = $2 AND token_b_symbol = $1))
             ORDER BY block_height DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -102,55 +102,6 @@ impl SpotPriceRepository {
         rows.into_iter()
             .map(|r| try_spot_price_from_row(r, &self.token_configs))
             .collect()
-    }
-
-    pub async fn get_spot_prices_by_chain(
-        &self,
-        chain: &Chain,
-        limit: u32,
-        offset: u32,
-    ) -> eyre::Result<Vec<SpotPrices>> {
-        let rows = sqlx::query_as!(
-            SpotPriceRow,
-            r#"
-            SELECT
-                token_a_symbol,
-                token_b_symbol,
-                block_height,
-                min_price,
-                max_price,
-                pool_id,
-                chain
-            FROM spot_prices
-            WHERE chain = $1
-            ORDER BY block_height DESC
-            LIMIT $2 OFFSET $3
-            "#,
-            chain.name.to_string(),
-            limit as i64,
-            offset as i64,
-        )
-        .fetch_all(self.pool.as_ref())
-        .await?;
-
-        rows.into_iter()
-            .map(|r| try_spot_price_from_row(r, &self.token_configs))
-            .collect()
-    }
-
-    pub async fn count_by_chain(&self, chain: &Chain) -> eyre::Result<u64> {
-        let count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*) as count
-            FROM spot_prices
-            WHERE chain = $1
-            "#,
-        )
-        .bind(chain.name.to_string())
-        .fetch_one(self.pool.as_ref())
-        .await?;
-
-        Ok(count as u64)
     }
 }
 

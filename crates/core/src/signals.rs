@@ -29,14 +29,14 @@ impl Display for Direction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
-    slow_chain: Chain,
-    slow_pair: Pair,
-    slow_height: u64,
-    fast_chain: Chain,
-    fast_pair: Pair,
-    fast_height: u64,
-    max_slippage_bps: u64,
-    congestion_risk_discount_bps: u64,
+    pub slow_chain: Chain,
+    pub slow_pair: Pair,
+    pub slow_height: u64,
+    pub fast_chain: Chain,
+    pub fast_pair: Pair,
+    pub fast_height: u64,
+    pub max_slippage_bps: u64,
+    pub congestion_risk_discount_bps: u64,
     pub surplus: (BigUint, BigUint),
     pub expected_profit: (BigUint, BigUint),
     pub slow_pool_id: state::PoolId,
@@ -64,7 +64,6 @@ impl CrossChainSingleHop {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
-        // TODO: handle overflow calculations
         let (surplus_a, surplus_b) = calculate_surplus(&slow_sim, &fast_sim)?;
 
         // TODO: compound two separate congestion risks, one for each side

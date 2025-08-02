@@ -4,337 +4,160 @@ use color_eyre::eyre;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{config::TokenAddressesForChain, signals::CrossChainSingleHop};
+use crate::{config::TokenAddressesForChain, signals};
 
 #[derive(Clone)]
-pub struct ArbitrageSignalRepository {
+pub struct SignalRepository {
     pool: Arc<PgPool>,
     tokens_config: Arc<TokenAddressesForChain>,
 }
 
-impl ArbitrageSignalRepository {
-    pub fn new(pool: Arc<PgPool>, tokens_config: Arc<TokenAddressesForChain>) -> Self {
+impl SignalRepository {
+    pub(super) fn new(pool: Arc<PgPool>, tokens_config: Arc<TokenAddressesForChain>) -> Self {
         Self {
             pool,
             tokens_config,
         }
     }
 
-    // #[instrument(skip(self, signal))]
-    // #[allow(dead_code)]
-    // pub async fn insert(&self, signal: &CrossChainSingleHop) -> eyre::Result<()> {
-    //     sqlx::query(
-    //         r#"
-    //         INSERT INTO arbitrage_signals (
-    //             block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-    //             slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-    //             fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-    //             fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-    //             slow_swap_token_in_symbol, slow_swap_token_in_address,
-    //             slow_swap_token_out_symbol, slow_swap_token_out_address,
-    //             slow_swap_amount_in, slow_swap_amount_out,
-    //             fast_swap_token_in_symbol, fast_swap_token_in_address,
-    //             fast_swap_token_out_symbol, fast_swap_token_out_address,
-    //             fast_swap_amount_in, fast_swap_amount_out,
-    //             surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-    //         ) VALUES (
-    //             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-    //             $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
-    //             $26, $27, $28, $29, $30
-    //         )
-    //         "#,
-    //     )
-    //     .bind(signal.block_height as i64)
-    //     .bind(&signal.slow_chain)
-    //     .bind(&signal.slow_pair.token_a.symbol)
-    //     .bind(&signal.slow_pair.token_a.address)
-    //     .bind(&signal.slow_pair.token_b.symbol)
-    //     .bind(&signal.slow_pair.token_b.address)
-    //     .bind(&signal.slow_pool_id)
-    //     .bind(&signal.fast_chain)
-    //     .bind(&signal.fast_pair.token_a.symbol)
-    //     .bind(&signal.fast_pair.token_a.address)
-    //     .bind(&signal.fast_pair.token_b.symbol)
-    //     .bind(&signal.fast_pair.token_b.address)
-    //     .bind(&signal.fast_pool_id)
-    //     .bind(&signal.slow_swap.token_in.symbol)
-    //     .bind(&signal.slow_swap.token_in.address)
-    //     .bind(&signal.slow_swap.token_out.symbol)
-    //     .bind(&signal.slow_swap.token_out.address)
-    //     .bind(&signal.slow_swap.amount_in)
-    //     .bind(&signal.slow_swap.amount_out)
-    //     .bind(&signal.fast_swap.token_in.symbol)
-    //     .bind(&signal.fast_swap.token_in.address)
-    //     .bind(&signal.fast_swap.token_out.symbol)
-    //     .bind(&signal.fast_swap.token_out.address)
-    //     .bind(&signal.fast_swap.amount_in)
-    //     .bind(&signal.fast_swap.amount_out)
-    //     .bind(&signal.surplus_a)
-    //     .bind(&signal.surplus_b)
-    //     .bind(&signal.expected_profit_a)
-    //     .bind(&signal.expected_profit_b)
-    //     .bind(signal.max_slippage_bps as i64)
-    //     .execute(&*self.pool)
-    //     .await?;
-
-    //     info!(
-    //         "Inserted arbitrage signal for block {}",
-    //         signal.block_height
-    //     );
-    //     Ok(())
-    // }
-
-    #[instrument(skip(self))]
+    #[instrument(skip(self, signal))]
     #[allow(dead_code)]
-    pub async fn get_recent(&self, limit: u32) -> eyre::Result<Vec<CrossChainSingleHop>> {
-        let rows = sqlx::query(
+    pub async fn insert(&self, signal: &signals::CrossChainSingleHop) -> eyre::Result<()> {
+        sqlx::query!(
             r#"
-            SELECT
-                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-                slow_swap_token_in_symbol, slow_swap_token_in_address,
-                slow_swap_token_out_symbol, slow_swap_token_out_address,
+            INSERT INTO signals (
+                slow_chain, slow_height, slow_pool_id,
+                fast_chain, fast_height, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_out_symbol,
                 slow_swap_amount_in, slow_swap_amount_out,
-                fast_swap_token_in_symbol, fast_swap_token_in_address,
-                fast_swap_token_out_symbol, fast_swap_token_out_address,
+                fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals
-            ORDER BY block_height DESC
-            LIMIT $1
-            "#,
-        )
-        .bind(limit as i64)
-        .fetch_all(&*self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(|row| CrossChainSingleHop::try_from_row(row))
-            .collect()
-    }
-
-    #[instrument(skip(self))]
-    pub async fn count_by_block_height(&self, block_height: u64) -> eyre::Result<u64> {
-        let count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*) as count
-            FROM arbitrage_signals
-            WHERE block_height = $1
-            "#,
-        )
-        .bind(block_height as i64)
-        .fetch_one(&*self.pool)
-        .await?;
-
-        Ok(count as u64)
-    }
-
-    pub async fn get_by_block_height(
-        &self,
-        block_height: u64,
-        limit: u32,
-        offset: u32,
-    ) -> eyre::Result<Vec<CrossChainSingleHop>> {
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-                slow_swap_token_in_symbol, slow_swap_token_in_address,
-                slow_swap_token_out_symbol, slow_swap_token_out_address,
-                slow_swap_amount_in, slow_swap_amount_out,
-                fast_swap_token_in_symbol, fast_swap_token_in_address,
-                fast_swap_token_out_symbol, fast_swap_token_out_address,
-                fast_swap_amount_in, fast_swap_amount_out,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals
-            WHERE block_height = $1
-            ORDER BY id
-            LIMIT $2 OFFSET $3
-            "#,
-        )
-        .bind(block_height as i64)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&*self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(|row| CrossChainSingleHop::try_from_row(row))
-            .collect()
-    }
-
-    #[instrument(skip(self))]
-    #[allow(dead_code)]
-    pub async fn get_by_block_range(
-        &self,
-        start_block: u64,
-        end_block: u64,
-    ) -> eyre::Result<Vec<CrossChainSingleHop>> {
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-                slow_swap_token_in_symbol, slow_swap_token_in_address,
-                slow_swap_token_out_symbol, slow_swap_token_out_address,
-                slow_swap_amount_in, slow_swap_amount_out,
-                fast_swap_token_in_symbol, fast_swap_token_in_address,
-                fast_swap_token_out_symbol, fast_swap_token_out_address,
-                fast_swap_amount_in, fast_swap_amount_out,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals
-            WHERE block_height BETWEEN $1 AND $2
-            ORDER BY block_height ASC
-            "#,
-        )
-        .bind(start_block as i64)
-        .bind(end_block as i64)
-        .fetch_all(&*self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(|row| CrossChainSingleHop::try_from_row(row))
-            .collect()
-    }
-
-    #[instrument(skip(self))]
-    pub async fn get_by_chain(
-        &self,
-        chain: &str,
-        limit: u32,
-        offset: u32,
-    ) -> eyre::Result<Vec<CrossChainSingleHop>> {
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-                slow_swap_token_in_symbol, slow_swap_token_in_address,
-                slow_swap_token_out_symbol, slow_swap_token_out_address,
-                slow_swap_amount_in, slow_swap_amount_out,
-                fast_swap_token_in_symbol, fast_swap_token_in_address,
-                fast_swap_token_out_symbol, fast_swap_token_out_address,
-                fast_swap_amount_in, fast_swap_amount_out,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals
-            WHERE slow_chain = $1 OR fast_chain = $1
-            ORDER BY block_height DESC
-            LIMIT $2 OFFSET $3
-            "#,
-        )
-        .bind(chain)
-        .bind(limit as i64)
-        .bind(offset as i64)
-        .fetch_all(&*self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(|row| CrossChainSingleHop::try_from_row(row))
-            .collect()
-    }
-
-    #[instrument(skip(self))]
-    pub async fn count_by_chain(&self, chain: &str) -> eyre::Result<u64> {
-        let count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*) as count
-            FROM arbitrage_signals
-            WHERE slow_chain = $1 OR fast_chain = $1
-            "#,
-        )
-        .bind(chain)
-        .fetch_one(&*self.pool)
-        .await?;
-
-        Ok(count as u64)
-    }
-
-    #[instrument(skip(self))]
-    pub async fn get_by_pair(
-        &self,
-        pair: &str,
-        limit: u32,
-        offset: u32,
-    ) -> eyre::Result<Vec<CrossChainSingleHop>> {
-        let parts: Vec<&str> = pair.split('-').collect();
-        if parts.len() != 2 {
-            return Ok(vec![]);
-        }
-        let token_a = parts[0];
-        let token_b = parts[1];
-
-        let rows = sqlx::query(
-            r#"
-            SELECT
-                block_height, slow_chain, slow_pair_token_a_symbol, slow_pair_token_a_address,
-                slow_pair_token_b_symbol, slow_pair_token_b_address, slow_pool_id,
-                fast_chain, fast_pair_token_a_symbol, fast_pair_token_a_address,
-                fast_pair_token_b_symbol, fast_pair_token_b_address, fast_pool_id,
-                slow_swap_token_in_symbol, slow_swap_token_in_address,
-                slow_swap_token_out_symbol, slow_swap_token_out_address,
-                slow_swap_amount_in, slow_swap_amount_out,
-                fast_swap_token_in_symbol, fast_swap_token_in_address,
-                fast_swap_token_out_symbol, fast_swap_token_out_address,
-                fast_swap_amount_in, fast_swap_amount_out,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b, max_slippage_bps
-            FROM arbitrage_signals
-            WHERE (
-                (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
-                (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
-                (fast_pair_token_a_symbol = $1 AND fast_pair_token_b_symbol = $2) OR
-                (fast_pair_token_a_symbol = $2 AND fast_pair_token_b_symbol = $1)
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                max_slippage_bps, congestion_risk_discount_bps
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                $14, $15, $16, $17, $18, $19, $20
             )
-            ORDER BY block_height DESC
+            "#,
+            &signal.slow_chain.name.to_string(),
+            signal.slow_height as i64,
+            &signal.slow_pool_id.to_string(),
+            &signal.fast_chain.name.to_string(),
+            signal.fast_height as i64,
+            &signal.fast_pool_id.to_string(),
+            &signal.slow_swap_sim.token_in.symbol,
+            &signal.slow_swap_sim.token_out.symbol,
+            &signal.slow_swap_sim.amount_in.to_string(),
+            &signal.slow_swap_sim.amount_out.to_string(),
+            &signal.fast_swap_sim.token_in.symbol,
+            &signal.fast_swap_sim.token_out.symbol,
+            &signal.fast_swap_sim.amount_in.to_string(),
+            &signal.fast_swap_sim.amount_out.to_string(),
+            &signal.surplus.0.to_string(),
+            &signal.surplus.1.to_string(),
+            &signal.expected_profit.0.to_string(),
+            &signal.expected_profit.1.to_string(),
+            signal.max_slippage_bps as i64,
+            signal.congestion_risk_discount_bps as i64,
+        )
+        .execute(self.pool.as_ref())
+        .await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn count_by_symbols(
+        &self,
+        token_a_symbol: &str,
+        token_b_symbol: &str,
+    ) -> eyre::Result<u64> {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) as count
+            FROM signals
+            WHERE block_height = $1
+            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
+                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
+                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
+                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))
+            "#,
+        )
+        .bind(token_a_symbol)
+        .bind(token_b_symbol)
+        .fetch_one(self.pool.as_ref())
+        .await?;
+
+        Ok(count as u64)
+    }
+
+    pub async fn get_by_symbols(
+        &self,
+        token_a_symbol: &str,
+        token_b_symbol: &str,
+        limit: u32,
+        offset: u32,
+    ) -> eyre::Result<Vec<signals::CrossChainSingleHop>> {
+        let rows = sqlx::query_as!(
+            SignalRow,
+            r#"
+            SELECT
+                slow_chain, slow_height, slow_pool_id,
+                fast_chain, fast_height, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_out_symbol,
+                slow_swap_amount_in, slow_swap_amount_out,
+                fast_swap_token_in_symbol, fast_swap_token_out_symbol,
+                fast_swap_amount_in, fast_swap_amount_out,
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                max_slippage_bps, congestion_risk_discount_bps
+            FROM signals
+            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
+                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
+                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
+                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))
+            ORDER BY fast_height DESC
             LIMIT $3 OFFSET $4
             "#,
+            token_a_symbol,
+            token_b_symbol,
+            limit as i64,
+            offset as i64
         )
-        .bind(token_a)
-        .bind(token_b)
-        .bind(limit as i64)
-        .bind(offset as i64)
         .fetch_all(&*self.pool)
         .await?;
 
         rows.into_iter()
-            .map(|row| CrossChainSingleHop::try_from_row(row))
+            .map(|r| try_signal_from_row(r, &self.tokens_config))
             .collect()
     }
+}
 
-    #[instrument(skip(self))]
-    pub async fn count_by_pair(&self, pair: &str) -> eyre::Result<u64> {
-        let parts: Vec<&str> = pair.split('-').collect();
-        if parts.len() != 2 {
-            return Ok(0);
-        }
-        let token_a = parts[0];
-        let token_b = parts[1];
+struct SignalRow {
+    slow_chain: String,
+    slow_height: i64,
+    slow_pool_id: String,
+    fast_chain: String,
+    fast_height: i64,
+    fast_pool_id: String,
+    slow_swap_token_in_symbol: String,
+    slow_swap_token_out_symbol: String,
+    slow_swap_amount_in: String,
+    slow_swap_amount_out: String,
+    fast_swap_token_in_symbol: String,
+    fast_swap_token_out_symbol: String,
+    fast_swap_amount_in: String,
+    fast_swap_amount_out: String,
+    surplus_a: String,
+    surplus_b: String,
+    expected_profit_a: String,
+    expected_profit_b: String,
+    max_slippage_bps: i64,
+    congestion_risk_discount_bps: i64,
+}
 
-        let count: i64 = sqlx::query_scalar(
-            r#"
-            SELECT COUNT(*) as count
-            FROM arbitrage_signals
-            WHERE (
-                (slow_pair_token_a_symbol = $1 AND slow_pair_token_b_symbol = $2) OR
-                (slow_pair_token_a_symbol = $2 AND slow_pair_token_b_symbol = $1) OR
-                (fast_pair_token_a_symbol = $1 AND fast_pair_token_b_symbol = $2) OR
-                (fast_pair_token_a_symbol = $2 AND fast_pair_token_b_symbol = $1)
-            )
-            "#,
-        )
-        .bind(token_a)
-        .bind(token_b)
-        .fetch_one(&*self.pool)
-        .await?;
-
-        Ok(count as u64)
-    }
+fn try_signal_from_row(
+    row: SignalRow,
+    token_configs: &TokenAddressesForChain,
+) -> eyre::Result<signals::CrossChainSingleHop> {
+    unimplemented!()
 }

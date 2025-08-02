@@ -1,4 +1,4 @@
--- Insert mock data for spot prices based on current hardcoded values
+-- Insert mock data for spot prices for testing purposes
 
 INSERT INTO spot_prices (
     token_a_symbol, token_b_symbol,

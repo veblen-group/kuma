@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                token_a_symbol,\n                token_b_symbol,\n                block_height,\n                min_price,\n                max_price,\n                pool_id,\n                chain\n            FROM spot_prices\n            WHERE chain = $1\n            ORDER BY block_height DESC\n            LIMIT $2 OFFSET $3\n            ",
+  "query": "\n            SELECT\n                token_a_symbol,\n                token_b_symbol,\n                block_height, min_price, max_price, pool_id, chain\n            FROM spot_prices\n            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)\n                OR (token_a_symbol = $2 AND token_b_symbol = $1))\n            ORDER BY block_height DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -42,6 +42,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Text",
         "Int8",
         "Int8"
       ]
@@ -56,5 +57,5 @@
       false
     ]
   },
-  "hash": "5d1a5659c9f29c779ba7d376e9ce3299d1ed2c8bcc06f54e7f0b5a9b050f3e69"
+  "hash": "71e1ff0f82875e8891b77529797d59f0a16b0bcf3369bb59a3150520612a4265"
 }

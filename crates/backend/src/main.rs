@@ -1,6 +1,5 @@
 mod models;
 mod routes;
-mod state;
 
 use axum::Router;
 use color_eyre::eyre::{eyre, Result};
@@ -9,7 +8,7 @@ use std::{net::SocketAddr, sync::Arc};
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use crate::{routes::spot_prices, state::AppState};
+use crate::routes::spot_prices;
 
 #[tokio::main]
 async fn main() -> Result<()> {

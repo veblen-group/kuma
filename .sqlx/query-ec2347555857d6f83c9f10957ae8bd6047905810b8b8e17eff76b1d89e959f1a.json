@@ -1,0 +1,139 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out,\n                surplus_a, surplus_b, expected_profit_a, expected_profit_b,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))\n                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))\n            ORDER BY fast_height DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slow_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "slow_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "fast_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "fast_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "fast_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "slow_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "slow_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "slow_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "slow_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "fast_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "fast_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "fast_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "fast_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "surplus_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "surplus_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "expected_profit_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "expected_profit_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "max_slippage_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 19,
+        "name": "congestion_risk_discount_bps",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ec2347555857d6f83c9f10957ae8bd6047905810b8b8e17eff76b1d89e959f1a"
+}
