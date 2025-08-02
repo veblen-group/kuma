@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out,\n                surplus_a, surplus_b, expected_profit_a, expected_profit_b,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))\n                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))\n            ORDER BY fast_height DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b, expected_profit_a, expected_profit_b,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))\n                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))\n            ORDER BY fast_height DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -55,51 +55,61 @@
       },
       {
         "ordinal": 10,
+        "name": "slow_swap_gas_cost",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
         "name": "fast_swap_token_in_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "fast_swap_token_out_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "fast_swap_amount_in",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "fast_swap_amount_out",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
-        "name": "surplus_a",
-        "type_info": "Text"
-      },
-      {
         "ordinal": 15,
-        "name": "surplus_b",
+        "name": "fast_swap_gas_cost",
         "type_info": "Text"
       },
       {
         "ordinal": 16,
-        "name": "expected_profit_a",
+        "name": "surplus_a",
         "type_info": "Text"
       },
       {
         "ordinal": 17,
-        "name": "expected_profit_b",
+        "name": "surplus_b",
         "type_info": "Text"
       },
       {
         "ordinal": 18,
+        "name": "expected_profit_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "expected_profit_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
         "name": "max_slippage_bps",
         "type_info": "Int4"
       },
       {
-        "ordinal": 19,
+        "ordinal": 21,
         "name": "congestion_risk_discount_bps",
         "type_info": "Int4"
       }
@@ -132,8 +142,10 @@
       false,
       false,
       false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "ec2347555857d6f83c9f10957ae8bd6047905810b8b8e17eff76b1d89e959f1a"
+  "hash": "f27b563dd6f6d37a0109ae8bb29a4c7ef7bfbf493845b149351cb524fb76fc86"
 }

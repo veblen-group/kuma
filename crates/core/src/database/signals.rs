@@ -1,10 +1,13 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
-use color_eyre::eyre;
+use color_eyre::eyre::{self, eyre};
+use num_bigint::BigUint;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{config::TokenAddressesForChain, signals};
+use crate::{chain::Chain, config::TokenAddressesForChain, signals, strategy::Swap};
+
+use super::try_token_from_chain_symbol;
 
 #[derive(Clone)]
 pub struct SignalRepository {
@@ -29,14 +32,14 @@ impl SignalRepository {
                 slow_chain, slow_height, slow_pool_id,
                 fast_chain, fast_height, fast_pool_id,
                 slow_swap_token_in_symbol, slow_swap_token_out_symbol,
-                slow_swap_amount_in, slow_swap_amount_out,
+                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
-                fast_swap_amount_in, fast_swap_amount_out,
+                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
                 max_slippage_bps, congestion_risk_discount_bps
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20
+                $14, $15, $16, $17, $18, $19, $20, $21, $22
             )
             "#,
             &signal.slow_chain.name.to_string(),
@@ -49,10 +52,12 @@ impl SignalRepository {
             &signal.slow_swap_sim.token_out.symbol,
             &signal.slow_swap_sim.amount_in.to_string(),
             &signal.slow_swap_sim.amount_out.to_string(),
+            &signal.slow_swap_sim.gas_cost.to_string(),
             &signal.fast_swap_sim.token_in.symbol,
             &signal.fast_swap_sim.token_out.symbol,
             &signal.fast_swap_sim.amount_in.to_string(),
             &signal.fast_swap_sim.amount_out.to_string(),
+            &signal.fast_swap_sim.gas_cost.to_string(),
             &signal.surplus.0.to_string(),
             &signal.surplus.1.to_string(),
             &signal.expected_profit.0.to_string(),
@@ -105,9 +110,9 @@ impl SignalRepository {
                 slow_chain, slow_height, slow_pool_id,
                 fast_chain, fast_height, fast_pool_id,
                 slow_swap_token_in_symbol, slow_swap_token_out_symbol,
-                slow_swap_amount_in, slow_swap_amount_out,
+                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
-                fast_swap_amount_in, fast_swap_amount_out,
+                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
                 max_slippage_bps, congestion_risk_discount_bps
             FROM signals
@@ -143,10 +148,12 @@ struct SignalRow {
     slow_swap_token_out_symbol: String,
     slow_swap_amount_in: String,
     slow_swap_amount_out: String,
+    slow_swap_gas_cost: String,
     fast_swap_token_in_symbol: String,
     fast_swap_token_out_symbol: String,
     fast_swap_amount_in: String,
     fast_swap_amount_out: String,
+    fast_swap_gas_cost: String,
     surplus_a: String,
     surplus_b: String,
     expected_profit_a: String,
@@ -160,4 +167,35 @@ fn try_signal_from_row(
     token_configs: &TokenAddressesForChain,
 ) -> eyre::Result<signals::CrossChainSingleHop> {
     unimplemented!()
+}
+
+fn try_swap_from_symbols_and_amounts(
+    token_in_symbol: &str,
+    token_in_amount: &str,
+    token_out_symbol: &str,
+    token_out_amount: &str,
+    gas_cost: &str,
+    chain: &Chain,
+    token_configs: &TokenAddressesForChain,
+) -> eyre::Result<Swap> {
+    let token_in = try_token_from_chain_symbol(token_in_symbol, chain, token_configs)
+        .map_err(|e| eyre!("failed to parse token_in: {e:}"))?;
+    let amount_in =
+        BigUint::from_str(token_in_amount).map_err(|e| eyre!("failed to parse amount_in: {e:}"))?;
+
+    let token_out = try_token_from_chain_symbol(token_out_symbol, chain, token_configs)
+        .map_err(|e| eyre!("failed to parse token_out: {e:}"))?;
+    let amount_out = BigUint::from_str(token_out_amount)
+        .map_err(|e| eyre!("failed to parse amount_out: {e:}"))?;
+
+    let gas_cost =
+        BigUint::from_str(gas_cost).map_err(|e| eyre!("failed to parse gas_cost: {e:}"))?;
+
+    Ok(Swap {
+        token_in,
+        token_out,
+        amount_in,
+        amount_out,
+        gas_cost,
+    })
 }
