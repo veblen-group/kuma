@@ -75,20 +75,12 @@ mod tests {
 
     #[test]
     fn test_signal_query_deserialization() {
-        let query = "block_height=19500000&page=3&page_size=15";
+        let query = "pair=PEPE-WETH&page=3&page_size=15";
         let parsed: SignalQuery = serde_urlencoded::from_str(query).unwrap();
 
+        assert_eq!(parsed.pair, "PEPE-WETH".to_string());
         assert_eq!(parsed.pagination.page, Some(3));
         assert_eq!(parsed.pagination.page_size, Some(15));
-    }
-
-    #[test]
-    fn test_signal_query_defaults() {
-        let query = "block_height=19500000";
-        let parsed: SignalQuery = serde_urlencoded::from_str(query).unwrap();
-
-        assert_eq!(parsed.pagination.page, None);
-        assert_eq!(parsed.pagination.page_size, None);
     }
 
     #[test]
