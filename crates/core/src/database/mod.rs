@@ -1,6 +1,6 @@
 use color_eyre::eyre::{self, OptionExt as _, Result, eyre};
 use sqlx::{PgPool, postgres::PgPoolOptions};
-use std::sync::Arc;
+use std::{str::FromStr as _, sync::Arc};
 use tracing::info;
 use tycho_common::models::token::Token;
 
@@ -144,4 +144,16 @@ fn try_token_from_chain_symbol(
         .clone();
 
     Ok(token)
+}
+
+fn try_chain_from_str(name: &str, token_configs: &TokenAddressesForChain) -> eyre::Result<Chain> {
+    let chain_name = tycho_common::models::Chain::from_str(name)
+        .map_err(|err| eyre!("failed to parse chain name: {err}"))?;
+    let chain = token_configs
+        .keys()
+        .find(|c| c.name == chain_name)
+        .ok_or_eyre("chain not configured")?
+        .clone();
+
+    Ok(chain)
 }

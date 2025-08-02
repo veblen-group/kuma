@@ -1,13 +1,19 @@
 use std::{str::FromStr, sync::Arc};
 
-use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{chain::Chain, config::TokenAddressesForChain, signals, strategy::Swap};
+use crate::{
+    chain::Chain,
+    config::TokenAddressesForChain,
+    signals,
+    state::{PoolId, pair::Pair},
+    strategy::Swap,
+};
 
-use super::try_token_from_chain_symbol;
+use super::{try_chain_from_str, try_token_from_chain_symbol};
 
 #[derive(Clone)]
 pub struct SignalRepository {
@@ -166,7 +172,79 @@ fn try_signal_from_row(
     row: SignalRow,
     token_configs: &TokenAddressesForChain,
 ) -> eyre::Result<signals::CrossChainSingleHop> {
-    unimplemented!()
+    let slow_chain = try_chain_from_str(&row.slow_chain, token_configs)
+        .wrap_err("failed to parse slow chain from db")?;
+    let fast_chain = try_chain_from_str(&row.fast_chain, token_configs)
+        .wrap_err("failed to parse fast chain from db")?;
+
+    let slow_height = row.slow_height as u64;
+    let fast_height = row.fast_height as u64;
+
+    let slow_swap_sim = try_swap_from_symbols_and_amounts(
+        &row.slow_swap_token_in_symbol,
+        &row.slow_swap_amount_in,
+        &row.slow_swap_token_out_symbol,
+        &row.slow_swap_amount_out,
+        &row.slow_swap_gas_cost,
+        &slow_chain,
+        token_configs,
+    )?;
+    let slow_pair = Pair::new(
+        slow_swap_sim.token_in.clone(),
+        slow_swap_sim.token_out.clone(),
+    );
+    let slow_pool_id = PoolId::from(row.slow_pool_id.as_str());
+
+    let fast_swap_sim = try_swap_from_symbols_and_amounts(
+        &row.fast_swap_token_in_symbol,
+        &row.fast_swap_amount_in,
+        &row.fast_swap_token_out_symbol,
+        &row.fast_swap_amount_out,
+        &row.fast_swap_gas_cost,
+        &fast_chain,
+        token_configs,
+    )?;
+    let fast_pair = Pair::new(
+        fast_swap_sim.token_in.clone(),
+        fast_swap_sim.token_out.clone(),
+    );
+    let fast_pool_id = PoolId::from(row.fast_pool_id.as_str());
+
+    let max_slippage_bps = row.max_slippage_bps as u64;
+    let congestion_risk_discount_bps = row.congestion_risk_discount_bps as u64;
+
+    let surplus = {
+        let a = BigUint::from_str(&row.surplus_a)
+            .map_err(|e| eyre!("failed to parse surplus a from db: {e:}"))?;
+        let b = BigUint::from_str(&row.surplus_b)
+            .map_err(|e| eyre!("failed to parse surplus b from db: {e:}"))?;
+        (a, b)
+    };
+
+    let expected_profit = {
+        let a = BigUint::from_str(&row.expected_profit_a)
+            .map_err(|e| eyre!("failed to parse expected profit a from db: {e:}"))?;
+        let b = BigUint::from_str(&row.expected_profit_b)
+            .map_err(|e| eyre!("failed to parse expected profit b from db: {e:}"))?;
+        (a, b)
+    };
+
+    Ok(signals::CrossChainSingleHop {
+        slow_chain,
+        slow_pair,
+        slow_height,
+        fast_chain,
+        fast_pair,
+        fast_height,
+        max_slippage_bps,
+        congestion_risk_discount_bps,
+        surplus,
+        expected_profit,
+        slow_pool_id,
+        slow_swap_sim,
+        fast_pool_id,
+        fast_swap_sim,
+    })
 }
 
 fn try_swap_from_symbols_and_amounts(

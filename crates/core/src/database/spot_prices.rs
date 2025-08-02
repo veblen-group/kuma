@@ -1,6 +1,6 @@
 use std::{str::FromStr as _, sync::Arc};
 
-use color_eyre::eyre::{self, OptionExt, eyre};
+use color_eyre::eyre::{self, eyre};
 use num_bigint::BigUint;
 use sqlx::PgPool;
 
@@ -10,7 +10,7 @@ use crate::{
     state::{PoolId, pair::Pair},
 };
 
-use super::try_token_from_chain_symbol;
+use super::{try_chain_from_str, try_token_from_chain_symbol};
 
 #[derive(Clone)]
 pub struct SpotPriceRepository {
@@ -122,24 +122,18 @@ fn try_spot_price_from_row(
     let pool_id = PoolId::from(row.pool_id.as_str());
 
     let min_price = BigUint::from_str(&row.min_price)
-        .map_err(|err| eyre!("failed to decode spot price: {err}"))?;
+        .map_err(|e| eyre!("failed to parse min price from db: {e}"))?;
     let max_price = BigUint::from_str(&row.max_price)
-        .map_err(|err| eyre!("failed to decode max price: {err}"))?;
+        .map_err(|e| eyre!("failed to parse max price from db: {e}"))?;
 
     let block_height = row.block_height as u64;
 
-    let chain_name = tycho_common::models::Chain::from_str(&row.chain)
-        .map_err(|err| eyre!("failed to parse chain name: {err}"))?;
-    let chain = token_configs
-        .keys()
-        .find(|c| c.name == chain_name)
-        .ok_or_eyre("chain not configured")?
-        .clone();
+    let chain = try_chain_from_str(&row.chain, token_configs)?;
 
     let token_a = try_token_from_chain_symbol(&row.token_a_symbol, &chain, token_configs)
-        .map_err(|err| eyre!("failed to get token a from db: {err:}"))?;
+        .map_err(|e| eyre!("failed to parse token a from db: {e:}"))?;
     let token_b = try_token_from_chain_symbol(&row.token_b_symbol, &chain, token_configs)
-        .map_err(|err| eyre!("failed to get token b from db: {err:}"))?;
+        .map_err(|e| eyre!("failed to parse token b from db: {e:}"))?;
 
     Ok(SpotPrices {
         pair: Pair::new(token_a, token_b),
