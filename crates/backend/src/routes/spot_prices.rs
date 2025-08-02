@@ -1,5 +1,7 @@
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
@@ -23,7 +25,7 @@ pub struct SpotPriceByPairQuery {
 pub async fn get_spot_prices_by_pair(
     State(state): State<AppState>,
     Query(params): Query<SpotPriceByPairQuery>,
-) -> Json<PaginatedResponse<SpotPrices>> {
+) -> Result<Json<PaginatedResponse<SpotPrices>>, Response> {
     let (page, page_size) = params.pagination.sanitize();
     let (offset, limit) = params.pagination.to_offset_limit();
 
@@ -39,9 +41,15 @@ pub async fn get_spot_prices_by_pair(
     let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair) {
         Ok(pair) => pair,
         Err(e) => {
-            // TODO: bad request 400
             tracing::error!("Failed to parse pair: {}", e);
-            return Json(PaginatedResponse::new(vec![], page, page_size, Some(0)));
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({
+                    "error": "Invalid pair format",
+                    "message": format!("Failed to parse pair '{}': {}", params.pair, e)
+                })),
+            )
+                .into_response());
         }
     };
 
@@ -52,16 +60,22 @@ pub async fn get_spot_prices_by_pair(
     );
 
     match (count_result, data_result) {
-        (Ok(total_count), Ok(prices)) => Json(PaginatedResponse::new(
+        (Ok(total_count), Ok(prices)) => Ok(Json(PaginatedResponse::new(
             prices,
             page,
             page_size,
             Some(total_count),
-        )),
+        ))),
         (Err(e), _) | (_, Err(e)) => {
-            // TODO: internal server error 500
             tracing::error!("Failed to fetch spot prices: {}", e);
-            Json(PaginatedResponse::new(vec![], page, page_size, Some(0)))
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Database error",
+                    "message": "Failed to fetch spot prices"
+                })),
+            )
+                .into_response())
         }
     }
 }
