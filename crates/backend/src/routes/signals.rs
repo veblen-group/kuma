@@ -38,7 +38,7 @@ pub async fn get_signals_by_pair(
 
     let repo = state.db.signal_repository(state.token_configs.clone());
 
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair) {
+    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_lowercase()) {
         Ok(pair) => pair,
         Err(e) => {
             tracing::error!("Failed to parse pair: {}", e);

@@ -8,7 +8,7 @@ use routes::spot_prices;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use kuma_core::{
     config::{Config, TokenAddressesForChain},
@@ -43,10 +43,9 @@ pub async fn spawn(config: Config) -> eyre::Result<()> {
         .layer(cors)
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], config.server.port));
-    info!("🚀 Kuma API server running at http://{addr}");
-
     let bind_addr = format!("{}:{}", config.server.host, config.server.port);
+    info!("🚀 Kuma API server running at http://{bind_addr}");
+
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
 
     axum::serve(listener, app)

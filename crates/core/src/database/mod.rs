@@ -21,11 +21,19 @@ pub struct DatabaseBuilder {
 
 impl DatabaseBuilder {
     pub async fn build(self) -> Result<DatabaseHandle> {
+        let url = format!(
+            "postgres://{}:{}@{}:{}/{}",
+            self.config.user,
+            self.config.password,
+            self.config.host,
+            self.config.port,
+            self.config.dbname
+        );
         let pool = PgPoolOptions::new()
             .max_connections(self.config.max_connections)
             .acquire_timeout(self.config.connection_timeout())
             .idle_timeout(self.config.idle_timeout())
-            .connect(&self.config.url)
+            .connect(&url)
             .await
             .map_err(|e| eyre!("Failed to connect to database: {}", e))?;
 
@@ -86,7 +94,11 @@ mod tests {
     async fn test_database_builder_default() {
         use crate::config::DatabaseConfig;
         let config = DatabaseConfig {
-            url: "postgres://test@localhost/test".to_string(),
+            user: "test".to_string(),
+            password: "test".to_string(),
+            host: "localhost".to_string(),
+            port: 5432,
+            dbname: "test_db".to_string(),
             max_connections: 10,
             connection_timeout_secs: 30,
             idle_timeout_secs: 600,
@@ -100,14 +112,27 @@ mod tests {
     async fn test_database_builder_with_custom_values() {
         use crate::config::DatabaseConfig;
         let config = DatabaseConfig {
-            url: "postgres://test@localhost/test".to_string(),
+            user: "test".to_string(),
+            password: "test_password".to_string(),
+            host: "localhost".to_string(),
+            port: 5432,
+            dbname: "test_db".to_string(),
             max_connections: 5,
-            connection_timeout_secs: 60,
-            idle_timeout_secs: 1200,
+            connection_timeout_secs: 30,
+            idle_timeout_secs: 600,
         };
         let builder = DatabaseBuilder { config };
 
-        assert_eq!(builder.config.url, "postgres://test@localhost/test");
+        let url = format!(
+            "postgres://{}:{}@{}:{}/{}",
+            builder.config.user,
+            builder.config.password,
+            builder.config.host,
+            builder.config.port,
+            builder.config.dbname
+        );
+
+        assert_eq!(url, "postgres://test:test_password@localhost:5432/test_db");
         assert_eq!(builder.config.max_connections, 5);
     }
 
@@ -117,12 +142,16 @@ mod tests {
             max_connections in 1u32..=100,
         ) {
             use crate::config::DatabaseConfig;
-            let config = DatabaseConfig {
-                url: "postgres://test@localhost/test".to_string(),
-                max_connections,
-                connection_timeout_secs: 30,
-                idle_timeout_secs: 600,
-            };
+        let config = DatabaseConfig {
+            user: "test".to_string(),
+            password: "test".to_string(),
+            host: "localhost".to_string(),
+            port: 5432,
+            dbname: "test_db".to_string(),
+            max_connections: max_connections,
+            connection_timeout_secs: 30,
+            idle_timeout_secs: 600,
+        };
             let builder = DatabaseBuilder {
                 config,
             };

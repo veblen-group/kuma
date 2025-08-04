@@ -204,7 +204,11 @@ pub struct StrategyConfig {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DatabaseConfig {
-    pub url: String,
+    pub user: String,
+    pub password: String,
+    pub host: String,
+    pub port: u16,
+    pub dbname: String,
     pub max_connections: u32,
     pub connection_timeout_secs: u64,
     pub idle_timeout_secs: u64,

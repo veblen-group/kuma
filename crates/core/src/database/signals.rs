@@ -90,7 +90,7 @@ impl SignalRepository {
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
                 AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
                 OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
-                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))
+                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1)))
             "#,
         )
         .bind(token_a_symbol)

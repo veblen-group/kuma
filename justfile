@@ -39,8 +39,8 @@ backend:
   exec cargo run --bin kuma-backend
 
 # Test the API backend endpoints
-backend-test block_height="19500000" page="1" page_size="10":
-    curl "http://localhost:3000/spot_prices?block_height={{block_height}}&page={{page}}&page_size={{page_size}}"
+backend-test pair="WETH-USDC" page="1" page_size="10":
+    curl "http://localhost:3000/spot_prices?pair={{pair}}&page={{page}}&page_size={{page_size}}"
 
 # Database commands
 ###################
