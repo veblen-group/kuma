@@ -6,7 +6,7 @@ This crate provides a production-ready database integration layer for the Kuma A
 
 ### Configuration
 
-The backend loads configuration from `Config.yaml` in the project root:
+The backend loads configuration from `kuma.yaml` in the workspace root. Specifically:
 
 ```yaml
 database:
@@ -32,7 +32,7 @@ Run the migrations to set up the required tables:
 
 The schema includes tables for:
 - `spot_prices`: Token pair spot price data indexed by pool and block height
-- `arbitrage_signals`: Cross-chain arbitrage opportunities with full swap details
+- `signals`: Cross-chain arbitrage opportunities with full swap details
 
 ## Local Development
 
@@ -41,13 +41,14 @@ The schema includes tables for:
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Rust](https://rustup.rs/) (latest stable)
 - [SQLx CLI](https://github.com/launchbadge/sqlx/tree/main/sqlx-cli)
+- [Cargo SQLx Build Tool](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md#with-rust-toolchain)
 
 ### Quick Start
 
 ```bash
 # Using Just commands (recommended)
 just db-start      # Start PostgreSQL with Docker Compose
-just db-migrate    # Run migrations (if available)  
+just db-migrate    # Run migrations (if available)
 just backend       # Start the API server
 just backend-test  # Test the API
 
@@ -72,3 +73,17 @@ curl "http://localhost:3000/spot_prices?block_height=19500000&page=1&page_size=1
 docker exec -i kuma-postgres psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 sqlx migrate run --database-url $DATABASE_URL
 ```
+
+### Compile-Time Query Validation
+When compiling the backend, SQLx will validate all queries at compile time. This ensures that any SQL errors are caught early and prevents runtime errors.
+
+Queries that have been modified need to be recompiled with SQLx CLI so they can be checked without requiring a DB connection in build time (["offline mode"](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md#enable-building-in-offline-mode-with-query)):
+
+```bash
+cargo sqlx prepare --database-url $DATABASE_URL
+
+# Or more simply, with the just command from the workspace root:
+just db-prepare
+```
+
+If the database schema is modified, you may need to reset the database and run migrations again before recompiling with the SQLx CLI.

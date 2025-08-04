@@ -142,6 +142,8 @@ impl Worker {
                     precompute = Some(new_precompute);
 
                     // TODO: db write the spot prices & block update
+                    // db.write(precompute.spot_prices[0])
+                    // db.write(precompute.spot_prices[len-1])
 
                     // Start timer for 75% of block time
                     submission_deadline = Some(Instant::now() + submission_delay);

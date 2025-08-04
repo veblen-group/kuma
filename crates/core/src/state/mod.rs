@@ -1,9 +1,12 @@
 use std::fmt::Display;
 
+use serde::{Deserialize, Serialize};
+
 pub mod block;
 pub mod pair;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// TODO: maybe some address sanitization?
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PoolId(String);
 
 impl Display for PoolId {

@@ -1,6 +1,10 @@
 # Database configuration
 database:
-  url: "postgres://api_user:password@localhost:5432/api_db"
+  user: "api_user"
+  password: "password"
+  host: "localhost"
+  port: 5432
+  dbname: "api_db"
   max_connections: 10
   connection_timeout_secs: 30
   idle_timeout_secs: 600
