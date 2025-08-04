@@ -15,18 +15,10 @@ pub use spot_prices::*;
 mod signals;
 mod spot_prices;
 
+#[derive(Debug, Clone)]
 pub struct Handle {
     pool: Arc<PgPool>,
     token_configs: Arc<TokenAddressesForChain>,
-}
-
-impl Clone for Handle {
-    fn clone(&self) -> Self {
-        Self {
-            pool: Arc::clone(&self.pool),
-            token_configs: Arc::clone(&self.token_configs),
-        }
-    }
 }
 
 impl Handle {
