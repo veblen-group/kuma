@@ -1863,6 +1863,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
+name = "bigdecimal"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6773ddc0eafc0e509fb60e48dff7f450f8e674a0686ae8605e8d9901bd5eefa"
+dependencies = [
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "bimap"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4837,8 +4848,8 @@ dependencies = [
  "axum-test",
  "color-eyre",
  "figment",
+ "kuma-core",
  "num-bigint",
- "proptest",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -4889,7 +4900,9 @@ dependencies = [
  "futures 0.3.31",
  "num-bigint",
  "num-traits",
+ "proptest",
  "serde",
+ "sqlx",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -7741,6 +7754,7 @@ checksum = "24ba59a9342a3d9bab6c56c118be528b27c9b60e490080e9711a04dccac83ef6"
 dependencies = [
  "ahash",
  "atoi",
+ "bigdecimal",
  "byteorder",
  "bytes",
  "chrono",
@@ -7821,6 +7835,7 @@ checksum = "1ed31390216d20e538e447a7a9b959e06ed9fc51c37b514b46eb758016ecd418"
 dependencies = [
  "atoi",
  "base64 0.21.7",
+ "bigdecimal",
  "bitflags 2.9.1",
  "byteorder",
  "bytes",
@@ -7864,6 +7879,7 @@ checksum = "7c824eb80b894f926f89a0b9da0c7f435d27cdd35b8c655b114e58223918577e"
 dependencies = [
  "atoi",
  "base64 0.21.7",
+ "bigdecimal",
  "bitflags 2.9.1",
  "byteorder",
  "chrono",
@@ -7882,6 +7898,7 @@ dependencies = [
  "log",
  "md-5",
  "memchr",
+ "num-bigint",
  "once_cell",
  "rand 0.8.5",
  "serde",

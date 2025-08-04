@@ -39,8 +39,8 @@ backend:
   exec cargo run --bin kuma-backend
 
 # Test the API backend endpoints
-backend-test block_height="19500000" page="1" page_size="10":
-    curl "http://localhost:3000/spot_prices?block_height={{block_height}}&page={{page}}&page_size={{page_size}}"
+backend-test pair="WETH-USDC" page="1" page_size="10":
+    curl "http://localhost:3000/spot_prices?pair={{pair}}&page={{page}}&page_size={{page_size}}"
 
 # Database commands
 ###################
@@ -56,13 +56,16 @@ db-stop:
 # Reset database (removes all data)
 db-reset:
     #!/usr/bin/env bash
-    docker exec kuma-db-1 psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
+    docker exec kuma-db psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
 
 # Run database migrations
 db-migrate:
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
 
+# Compile-time checks for postgres queries
+db-prepare:
+    cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}"
 
 default_lang := 'all'
 # Format
@@ -97,36 +100,3 @@ _lint-rust-clippy:
 [no-exit-message]
 _fmt-toml:
   taplo format --check
-
-# Database commands
-###################
-
-# Start PostgreSQL database with Docker Compose
-db-start:
-  docker-compose up -d
-
-# Stop PostgreSQL database
-db-stop:
-  docker-compose down
-
-# Reset database (removes all data)
-db-reset:
-    #!/usr/bin/env bash
-    docker exec kuma-db-1 psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
-
-# Run database migrations  
-db-migrate:
-    #!/usr/bin/env bash
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "crates/backend/migrations"
-
-# Backend API server commands
-##############################
-
-# Run the API backend server
-backend:
-  exec cargo run --bin kuma-backend
-
-# Test the API backend endpoints
-backend-test block_height="19500000" page="1" page_size="10":
-    curl "http://localhost:3000/spot_prices?block_height={{block_height}}&page={{page}}&page_size={{page_size}}"

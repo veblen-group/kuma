@@ -1,6 +1,6 @@
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 
 use crate::{
@@ -74,6 +74,9 @@ impl CrossChainSingleHop {
                 chain = %self.fast_chain,
                 "Computed spot prices for fast chain");
         }
+        // TODO: make a SpotPrices object from this
+        // db.write(precompute.spot_prices[0])
+        // db.write(precompute.spot_prices[precompute.spot_prices.len() - 1])
 
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
@@ -110,8 +113,8 @@ impl CrossChainSingleHop {
                         &self.fast_inventory.1,
                     ) {
                         trace!(
-                            slow_sim = %signal.slow_sim,
-                            fast_sim = %signal.fast_sim,
+                            slow_sim = %signal.slow_swap_sim,
+                            fast_sim = %signal.fast_swap_sim,
                             signal.surplus = ?signal.surplus,
                             signal.expected_profit = ?signal.expected_profit,
                             "found optimal swap for A->B (slow) and B->A (fast)"
@@ -133,7 +136,7 @@ impl CrossChainSingleHop {
                         fast_state.block_height,
                         &self.fast_inventory.0,
                     ) {
-                        trace!(slow_sim = %signal.slow_sim, fast_sim = %signal.fast_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
+                        trace!(slow_sim = %signal.slow_swap_sim, fast_sim = %signal.fast_swap_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
                         Ok(signal)
                     } else {
                         Err(eyre!(
@@ -264,8 +267,6 @@ impl CrossChainSingleHop {
         fast_inventory: &BigUint,
         max_slippage_bps: u64,
     ) -> eyre::Result<simulation::Swap> {
-        // TODO: adjust for gas costs
-        // let slow_out_with_gas = precompute.amount_out - precompute.gas_cost;
         let amount_in = bps_discount(&precompute.amount_out, max_slippage_bps);
 
         if fast_inventory < &amount_in {
@@ -763,14 +764,14 @@ mod tests {
             .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
-        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
 
         // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_sim.token_in, make_mainnet_pepe());
-        assert_eq!(signal.slow_sim.token_out, make_mainnet_weth());
-        assert_eq!(signal.fast_sim.token_in, make_base_weth());
-        assert_eq!(signal.fast_sim.token_out, make_base_pepe());
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_pepe());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
+        assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_pepe());
 
         let expected_slow_sim = precompute
             .pool_sims
@@ -779,13 +780,16 @@ mod tests {
             .a_to_b
             .last()
             .unwrap();
-        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
-        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+        assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(
+            signal.slow_swap_sim.amount_out,
+            expected_slow_sim.amount_out
+        );
 
         // assert fast amount in = slow amount out with slippage adjustment
         let expected_fast_amount_in =
             bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
-        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+        assert_eq!(signal.fast_swap_sim.amount_in, expected_fast_amount_in);
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
@@ -795,7 +799,10 @@ mod tests {
             &make_base_pepe(),
             fast_state,
         );
-        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+        assert_eq!(
+            signal.fast_swap_sim.amount_out,
+            expected_fast_sim.amount_out
+        );
 
         assert_eq!(
             signal.surplus,
@@ -828,14 +835,14 @@ mod tests {
             .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
-        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
 
         // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
-        assert_eq!(signal.slow_sim.token_out, make_mainnet_pepe());
-        assert_eq!(signal.fast_sim.token_in, make_base_pepe());
-        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_pepe());
+        assert_eq!(signal.fast_swap_sim.token_in, make_base_pepe());
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_weth());
 
         let expected_slow_sim = precompute
             .pool_sims
@@ -844,13 +851,16 @@ mod tests {
             .b_to_a
             .last()
             .unwrap();
-        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
-        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+        assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(
+            signal.slow_swap_sim.amount_out,
+            expected_slow_sim.amount_out
+        );
 
         // assert fast amount in = slow amount out with slippage adjustment
         let expected_fast_amount_in =
             bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
-        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+        assert_eq!(signal.fast_swap_sim.amount_in, expected_fast_amount_in);
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
@@ -860,7 +870,10 @@ mod tests {
             &make_base_weth(),
             fast_state,
         );
-        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+        assert_eq!(
+            signal.fast_swap_sim.amount_out,
+            expected_fast_sim.amount_out
+        );
 
         assert_eq!(
             signal.surplus,
@@ -892,14 +905,14 @@ mod tests {
             .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
-        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
 
         // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_sim.token_in, make_mainnet_usdc());
-        assert_eq!(signal.slow_sim.token_out, make_mainnet_weth());
-        assert_eq!(signal.fast_sim.token_in, make_base_weth());
-        assert_eq!(signal.fast_sim.token_out, make_base_usdc());
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_usdc());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
+        assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_usdc());
 
         let expected_slow_sim = precompute
             .pool_sims
@@ -908,13 +921,16 @@ mod tests {
             .a_to_b
             .last()
             .unwrap();
-        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
-        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+        assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(
+            signal.slow_swap_sim.amount_out,
+            expected_slow_sim.amount_out
+        );
 
         // assert fast amount in = slow amount out with slippage adjustment
         let expected_fast_amount_in =
             bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
-        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+        assert_eq!(signal.fast_swap_sim.amount_in, expected_fast_amount_in);
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
@@ -924,7 +940,10 @@ mod tests {
             &make_base_usdc(),
             fast_state,
         );
-        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+        assert_eq!(
+            signal.fast_swap_sim.amount_out,
+            expected_fast_sim.amount_out
+        );
 
         assert_eq!(
             signal.surplus,
@@ -957,14 +976,14 @@ mod tests {
             .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
-        assert_eq!(signal.slow_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
 
         // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_sim.token_in, make_mainnet_weth());
-        assert_eq!(signal.slow_sim.token_out, make_mainnet_usdc());
-        assert_eq!(signal.fast_sim.token_in, make_base_usdc());
-        assert_eq!(signal.fast_sim.token_out, make_base_weth());
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_usdc());
+        assert_eq!(signal.fast_swap_sim.token_in, make_base_usdc());
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_weth());
 
         let expected_slow_sim = precompute
             .pool_sims
@@ -973,13 +992,16 @@ mod tests {
             .b_to_a
             .last()
             .unwrap();
-        assert_eq!(signal.slow_sim.amount_in, expected_slow_sim.amount_in);
-        assert_eq!(signal.slow_sim.amount_out, expected_slow_sim.amount_out);
+        assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(
+            signal.slow_swap_sim.amount_out,
+            expected_slow_sim.amount_out
+        );
 
         // assert fast amount in = slow amount out with slippage adjustment
         let expected_fast_amount_in =
             bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
-        assert_eq!(signal.fast_sim.amount_in, expected_fast_amount_in);
+        assert_eq!(signal.fast_swap_sim.amount_in, expected_fast_amount_in);
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
@@ -989,7 +1011,10 @@ mod tests {
             &make_base_weth(),
             fast_state,
         );
-        assert_eq!(signal.fast_sim.amount_out, expected_fast_sim.amount_out);
+        assert_eq!(
+            signal.fast_swap_sim.amount_out,
+            expected_fast_sim.amount_out
+        );
 
         assert_eq!(
             signal.surplus,

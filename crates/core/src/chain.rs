@@ -8,12 +8,14 @@ use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
 use tycho_common::models as tycho_models;
 
-// TODO: impl Eq with just the name for simplicity?
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Chain {
     pub name: tycho_models::Chain,
+    #[serde(skip)]
     pub metadata: alloy_chains::Chain,
+    #[serde(skip)]
     pub rpc_url: String,
+    #[serde(skip)]
     pub tycho_url: String,
 }
 

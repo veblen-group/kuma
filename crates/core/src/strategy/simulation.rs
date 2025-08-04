@@ -2,7 +2,8 @@ use std::fmt::Display;
 
 use color_eyre::eyre::{self, Context as _, eyre};
 use num_bigint::BigUint;
-use tracing::{debug, instrument, trace};
+use serde::{Deserialize, Serialize};
+use tracing::debug;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 
 use crate::{
@@ -13,9 +14,7 @@ use crate::{
     },
 };
 
-// TODO: display impl
-// TODO: maybe simulation::Output?
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Swap {
     pub token_in: Token,
     pub amount_in: BigUint,
@@ -23,8 +22,6 @@ pub struct Swap {
     pub amount_out: BigUint,
     #[allow(dead_code)]
     pub gas_cost: BigUint,
-    #[allow(dead_code)]
-    pub new_state: Box<dyn ProtocolSim>,
 }
 
 impl Swap {
@@ -34,6 +31,8 @@ impl Swap {
         token_out: &Token,
         protocol_sim: &dyn ProtocolSim,
     ) -> eyre::Result<Self> {
+        // TODO: what to do with sim_result.new_state? we dont keep it in Swap because
+        // we derive Deserialize (would need to add a Raw with a Swap::try_from_raw())
         let sim_result = protocol_sim
             .get_amount_out(amount_in.clone(), token_in, token_out)
             .wrap_err("simulation failed")?;
@@ -43,7 +42,6 @@ impl Swap {
             token_out: token_out.clone(),
             amount_out: sim_result.amount,
             gas_cost: sim_result.gas,
-            new_state: sim_result.new_state,
         })
     }
 }
@@ -71,7 +69,6 @@ pub struct PoolSteps {
 }
 
 impl PoolSteps {
-    #[instrument(skip(protocol_sim, steps))]
     pub fn from_protocol_sim(
         pair: &Pair,
         steps: usize,
