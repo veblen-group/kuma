@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b, expected_profit_a, expected_profit_b,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))\n                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))\n            ORDER BY fast_height DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b, expected_profit_a, expected_profit_b,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))\n                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)\n                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1)))\n            ORDER BY fast_height DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -147,5 +147,5 @@
       false
     ]
   },
-  "hash": "f27b563dd6f6d37a0109ae8bb29a4c7ef7bfbf493845b149351cb524fb76fc86"
+  "hash": "aa6c599962383c20a77355685ce7bf76396e2190c167db68fecbd8fc289fd9fe"
 }

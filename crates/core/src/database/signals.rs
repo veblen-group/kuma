@@ -87,7 +87,6 @@ impl SignalRepository {
             r#"
             SELECT COUNT(*) as count
             FROM signals
-            WHERE block_height = $1
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
                 AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
                 OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
@@ -125,7 +124,7 @@ impl SignalRepository {
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
                 AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
                 OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
-                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $1)))
+                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1)))
             ORDER BY fast_height DESC
             LIMIT $3 OFFSET $4
             "#,
