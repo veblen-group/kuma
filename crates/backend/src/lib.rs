@@ -11,26 +11,23 @@ use tracing::info;
 use std::sync::Arc;
 
 use kuma_core::{
-    config::{Config, TokenAddressesForChain},
+    config::Config,
     database::{self, Handle},
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub db: Handle,
-    pub token_configs: Arc<TokenAddressesForChain>,
 }
 
 pub async fn spawn(config: Config) -> eyre::Result<()> {
-    let db_handle = database::Handle::from_config(config.database.clone())?;
-
     let (token_configs, _) = config
         .build_addrs_and_inventory()
         .map_err(|e| eyre!("failed to parse chain assets: {}", e))?;
-    let state = AppState {
-        db: db_handle,
-        token_configs: Arc::new(token_configs),
-    };
+
+    let db_handle =
+        database::Handle::from_config(config.database.clone(), Arc::new(token_configs.clone()))?;
+    let state = AppState { db: db_handle };
     let cors = CorsLayer::permissive();
 
     let app = Router::new()

@@ -17,18 +17,23 @@ mod spot_prices;
 
 pub struct Handle {
     pool: Arc<PgPool>,
+    token_configs: Arc<TokenAddressesForChain>,
 }
 
 impl Clone for Handle {
     fn clone(&self) -> Self {
         Self {
             pool: Arc::clone(&self.pool),
+            token_configs: Arc::clone(&self.token_configs),
         }
     }
 }
 
 impl Handle {
-    pub fn from_config(config: DatabaseConfig) -> Result<Self> {
+    pub fn from_config(
+        config: DatabaseConfig,
+        token_configs: Arc<TokenAddressesForChain>,
+    ) -> Result<Self> {
         let url = format!(
             "postgres://{}:{}@{}:{}/{}",
             config.user, config.password, config.host, config.port, config.dbname
@@ -47,6 +52,7 @@ impl Handle {
 
         let handle = Handle {
             pool: Arc::new(pool),
+            token_configs,
         };
 
         Ok(handle)
@@ -56,18 +62,12 @@ impl Handle {
         Arc::clone(&self.pool)
     }
 
-    pub fn spot_price_repository(
-        &self,
-        token_configs: Arc<TokenAddressesForChain>,
-    ) -> SpotPriceRepository {
-        SpotPriceRepository::new(Arc::clone(&self.pool), token_configs)
+    pub fn spot_price_repository(&self) -> SpotPriceRepository {
+        SpotPriceRepository::new(Arc::clone(&self.pool), Arc::clone(&self.token_configs))
     }
 
-    pub fn signal_repository(
-        &self,
-        token_configs: Arc<TokenAddressesForChain>,
-    ) -> SignalRepository {
-        SignalRepository::new(Arc::clone(&self.pool), token_configs)
+    pub fn signal_repository(&self) -> SignalRepository {
+        SignalRepository::new(Arc::clone(&self.pool), Arc::clone(&self.token_configs))
     }
 }
 

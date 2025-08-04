@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{self, Context, eyre};
 use tokio::select;
@@ -38,7 +38,7 @@ impl Kuma {
                         "🔗 Initialized chain info from config")
         }
 
-        let db = database::Handle::from_config(cfg.database)?;
+        let db = database::Handle::from_config(cfg.database, Arc::new(addrs_for_chain.clone()))?;
 
         // 2. set up collectors for each chain
         let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
