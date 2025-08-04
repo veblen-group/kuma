@@ -88,7 +88,7 @@ impl SpotPriceRepository {
             FROM spot_prices
             WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)
                 OR (token_a_symbol = $2 AND token_b_symbol = $1))
-            ORDER BY block_height DESC
+            ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
             token_a_symbol,
