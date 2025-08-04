@@ -12,21 +12,17 @@ use std::sync::Arc;
 
 use kuma_core::{
     config::{Config, TokenAddressesForChain},
-    database::{DatabaseBuilder, DatabaseHandle},
+    database::{self, Handle},
 };
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: DatabaseHandle,
+    pub db: Handle,
     pub token_configs: Arc<TokenAddressesForChain>,
 }
 
 pub async fn spawn(config: Config) -> eyre::Result<()> {
-    let db_handle = DatabaseBuilder {
-        config: config.database.clone(),
-    }
-    .build()
-    .await?;
+    let db_handle = database::Handle::from_config(config.database.clone())?;
 
     let (token_configs, _) = config
         .build_addrs_and_inventory()

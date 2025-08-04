@@ -15,46 +15,11 @@ pub use spot_prices::*;
 mod signals;
 mod spot_prices;
 
-pub struct DatabaseBuilder {
-    pub config: DatabaseConfig,
-}
-
-impl DatabaseBuilder {
-    pub async fn build(self) -> Result<DatabaseHandle> {
-        let url = format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.config.user,
-            self.config.password,
-            self.config.host,
-            self.config.port,
-            self.config.dbname
-        );
-        let pool = PgPoolOptions::new()
-            .max_connections(self.config.max_connections)
-            .acquire_timeout(self.config.connection_timeout())
-            .idle_timeout(self.config.idle_timeout())
-            .connect(&url)
-            .await
-            .map_err(|e| eyre!("Failed to connect to database: {}", e))?;
-
-        info!(
-            "Connected to database with {} max connections",
-            self.config.max_connections
-        );
-
-        let handle = DatabaseHandle {
-            pool: Arc::new(pool),
-        };
-
-        Ok(handle)
-    }
-}
-
-pub struct DatabaseHandle {
+pub struct Handle {
     pool: Arc<PgPool>,
 }
 
-impl Clone for DatabaseHandle {
+impl Clone for Handle {
     fn clone(&self) -> Self {
         Self {
             pool: Arc::clone(&self.pool),
@@ -62,7 +27,30 @@ impl Clone for DatabaseHandle {
     }
 }
 
-impl DatabaseHandle {
+impl Handle {
+    pub fn from_config(config: DatabaseConfig) -> Result<Self> {
+        let url = format!(
+            "postgres://{}:{}@{}:{}/{}",
+            config.user, config.password, config.host, config.port, config.dbname
+        );
+        let pool = PgPoolOptions::new()
+            .max_connections(config.max_connections)
+            .acquire_timeout(config.connection_timeout())
+            .idle_timeout(config.idle_timeout())
+            .connect_lazy(&url)
+            .map_err(|e| eyre!("Failed to connect to database: {}", e))?;
+
+        info!(
+            "Connected to database with {} max connections",
+            config.max_connections
+        );
+
+        let handle = Handle {
+            pool: Arc::new(pool),
+        };
+
+        Ok(handle)
+    }
     #[allow(dead_code)]
     pub fn pool(&self) -> Arc<PgPool> {
         Arc::clone(&self.pool)
@@ -80,84 +68,6 @@ impl DatabaseHandle {
         token_configs: Arc<TokenAddressesForChain>,
     ) -> SignalRepository {
         SignalRepository::new(Arc::clone(&self.pool), token_configs)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::time::Duration;
-
-    use super::*;
-    use proptest::prelude::*;
-
-    #[tokio::test]
-    async fn test_database_builder_default() {
-        use crate::config::DatabaseConfig;
-        let config = DatabaseConfig {
-            user: "test".to_string(),
-            password: "test".to_string(),
-            host: "localhost".to_string(),
-            port: 5432,
-            dbname: "test_db".to_string(),
-            max_connections: 10,
-            connection_timeout_secs: 30,
-            idle_timeout_secs: 600,
-        };
-        let builder = DatabaseBuilder { config };
-        assert_eq!(builder.config.max_connections, 10);
-        assert_eq!(builder.config.connection_timeout(), Duration::from_secs(30));
-    }
-
-    #[tokio::test]
-    async fn test_database_builder_with_custom_values() {
-        use crate::config::DatabaseConfig;
-        let config = DatabaseConfig {
-            user: "test".to_string(),
-            password: "test_password".to_string(),
-            host: "localhost".to_string(),
-            port: 5432,
-            dbname: "test_db".to_string(),
-            max_connections: 5,
-            connection_timeout_secs: 30,
-            idle_timeout_secs: 600,
-        };
-        let builder = DatabaseBuilder { config };
-
-        let url = format!(
-            "postgres://{}:{}@{}:{}/{}",
-            builder.config.user,
-            builder.config.password,
-            builder.config.host,
-            builder.config.port,
-            builder.config.dbname
-        );
-
-        assert_eq!(url, "postgres://test:test_password@localhost:5432/test_db");
-        assert_eq!(builder.config.max_connections, 5);
-    }
-
-    proptest! {
-        #[test]
-        fn test_database_builder_properties(
-            max_connections in 1u32..=100,
-        ) {
-            use crate::config::DatabaseConfig;
-        let config = DatabaseConfig {
-            user: "test".to_string(),
-            password: "test".to_string(),
-            host: "localhost".to_string(),
-            port: 5432,
-            dbname: "test_db".to_string(),
-            max_connections: max_connections,
-            connection_timeout_secs: 30,
-            idle_timeout_secs: 600,
-        };
-            let builder = DatabaseBuilder {
-                config,
-            };
-
-            prop_assert_eq!(builder.config.max_connections, max_connections);
-        }
     }
 }
 

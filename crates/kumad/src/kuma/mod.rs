@@ -10,6 +10,7 @@ use kuma_core::{
     chain::Chain,
     collector,
     config::{Config, StrategyConfig},
+    database,
 };
 
 pub(super) struct Kuma {
@@ -36,6 +37,8 @@ impl Kuma {
                         token_count = %tokens.len(),
                         "🔗 Initialized chain info from config")
         }
+
+        let db = database::Handle::from_config(cfg.database)?;
 
         // 2. set up collectors for each chain
         let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
