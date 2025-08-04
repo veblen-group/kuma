@@ -231,9 +231,11 @@ fn try_signal_from_row(
     Ok(signals::CrossChainSingleHop {
         slow_chain,
         slow_pair,
+        slow_protocol_component: None, // slow inventory is not stored in the db
         slow_height,
         fast_chain,
         fast_pair,
+        fast_protocol_component: None, // fast inventory is not stored in the db
         fast_height,
         max_slippage_bps,
         congestion_risk_discount_bps,

@@ -1,6 +1,7 @@
 use num_traits::CheckedSub;
 use serde::{Deserialize, Serialize};
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use color_eyre::eyre::{self, ContextCompat};
 use num_bigint::BigUint;
@@ -31,29 +32,35 @@ impl Display for Direction {
 pub struct CrossChainSingleHop {
     pub slow_chain: Chain,
     pub slow_pair: Pair,
+    #[serde(skip)]
+    pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
+    pub slow_pool_id: state::PoolId,
+    pub slow_swap_sim: Swap,
     pub slow_height: u64,
     pub fast_chain: Chain,
     pub fast_pair: Pair,
+    #[serde(skip)]
+    pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
+    pub fast_pool_id: state::PoolId,
+    pub fast_swap_sim: Swap,
     pub fast_height: u64,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
     pub surplus: (BigUint, BigUint),
     pub expected_profit: (BigUint, BigUint),
-    pub slow_pool_id: state::PoolId,
-    pub slow_swap_sim: Swap,
-    pub fast_pool_id: state::PoolId,
-    pub fast_swap_sim: Swap,
 }
 
 impl CrossChainSingleHop {
     pub fn try_from_simulations(
         slow_chain: &Chain,
         slow_pair: &Pair,
+        slow_protocol_component: Arc<ProtocolComponent>,
         slow_id: &state::PoolId,
         slow_height: u64,
         slow_sim: Swap,
         fast_chain: &Chain,
         fast_pair: &Pair,
+        fast_protocol_component: Arc<ProtocolComponent>,
         fast_id: &state::PoolId,
         fast_height: u64,
         fast_sim: Swap,
@@ -79,11 +86,13 @@ impl CrossChainSingleHop {
         Ok(Self {
             slow_chain: slow_chain.clone(),
             slow_pair: slow_pair.clone(),
+            slow_protocol_component: Some(slow_protocol_component),
             slow_height,
             slow_pool_id: slow_id.clone(),
             slow_swap_sim: slow_sim,
             fast_chain: fast_chain.clone(),
             fast_pair: fast_pair.clone(),
+            fast_protocol_component: Some(fast_protocol_component),
             fast_height,
             fast_pool_id: fast_id.clone(),
             fast_swap_sim: fast_sim,

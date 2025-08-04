@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
+use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
     chain::Chain,
@@ -105,9 +108,11 @@ impl CrossChainSingleHop {
                 Direction::AtoB => {
                     if let Some(signal) = self.find_optimal_signal(
                         &precompute.pool_sims[&slow_id].a_to_b,
+                        precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
                         fast_state.states[&fast_id].as_ref(),
+                        fast_state.metadata[&fast_id].clone(),
                         &fast_id,
                         fast_state.block_height,
                         &self.fast_inventory.1,
@@ -129,9 +134,11 @@ impl CrossChainSingleHop {
                 Direction::BtoA => {
                     if let Some(signal) = self.find_optimal_signal(
                         &precompute.pool_sims[&slow_id].b_to_a,
+                        precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
                         fast_state.states[&fast_id].as_ref(),
+                        fast_state.metadata[&fast_id].clone(),
                         &fast_id,
                         fast_state.block_height,
                         &self.fast_inventory.0,
@@ -172,9 +179,11 @@ impl CrossChainSingleHop {
         &self,
         // TODO: have an abstraction around slow = (height, pool_id, sims) and fast = (height, pool_id, protocol_sim, inventory)
         slow_sims: &[Swap],
+        slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
         fast_state: &dyn ProtocolSim,
+        fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
@@ -189,9 +198,11 @@ impl CrossChainSingleHop {
             // make sims for mid
             let mid_signal = match self.try_signal_from_precompute(
                 slow_sims[mid].clone(),
+                slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
                 fast_state,
+                fast_protocol_component.clone(),
                 fast_pool_id,
                 fast_height,
                 fast_inventory,
@@ -216,9 +227,11 @@ impl CrossChainSingleHop {
             // make sims for mid+1
             let next_signal = match self.try_signal_from_precompute(
                 slow_sims[mid + 1].clone(),
+                slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
                 fast_state,
+                fast_protocol_component.clone(),
                 fast_pool_id,
                 fast_height,
                 fast_inventory,
@@ -290,9 +303,11 @@ impl CrossChainSingleHop {
     fn try_signal_from_precompute(
         &self,
         slow_sim: Swap,
+        slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
         fast_state: &dyn ProtocolSim,
+        fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
@@ -314,11 +329,13 @@ impl CrossChainSingleHop {
         signals::CrossChainSingleHop::try_from_simulations(
             &self.slow_chain,
             &self.slow_pair,
+            slow_protocol_component,
             slow_pool_id,
             slow_height,
             slow_sim.clone(),
             &self.fast_chain,
             &self.fast_pair,
+            fast_protocol_component,
             fast_pool_id,
             fast_height,
             fast_sim.clone(),

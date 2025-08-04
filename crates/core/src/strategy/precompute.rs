@@ -18,7 +18,7 @@ pub struct Precomputes {
     pub sorted_spot_prices: Vec<(PoolId, f64)>,
     pub pool_sims: HashMap<state::PoolId, simulation::PoolSteps>,
     #[allow(dead_code)]
-    pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
+    pub pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
 impl Precomputes {
