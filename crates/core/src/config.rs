@@ -65,12 +65,8 @@ impl Config {
         Ok(config)
     }
 
-    /// Parse chain assets from the config, returning tokens and their inventories by chain
-    pub fn build_addrs_and_inventory(
-        &self,
-    ) -> eyre::Result<(TokenAddressesForChain, InventoriesForChain)> {
-        let chains = self
-            .chains
+    pub fn build_chains(&self) -> eyre::Result<Vec<Chain>> {
+        self.chains
             .iter()
             .map(
                 |ChainConfig {
@@ -82,7 +78,14 @@ impl Config {
                 },
             )
             .collect::<eyre::Result<Vec<Chain>>>()
-            .expect("failed to parse chain configs");
+    }
+    /// Parse chain assets from the config, returning tokens and their inventories by chain
+    pub fn build_addrs_and_inventory(
+        &self,
+    ) -> eyre::Result<(TokenAddressesForChain, InventoriesForChain)> {
+        let chains = self
+            .build_chains()
+            .expect("Failed to parse chains from config");
 
         let mut inventories_by_chain: HashMap<Chain, HashMap<Token, BigUint>> = HashMap::new();
 

@@ -1,8 +1,58 @@
-use std::collections::HashMap;
+use core::chain::Chain;
+use std::{collections::HashMap, str::FromStr};
 
+use color_eyre::eyre::{self, Context, Ok};
+use tokio::fs;
 use tracing::info;
 use tycho_common::{Bytes, models::token::Token};
-use tycho_simulation::tycho_client::{HttpRPCClient, rpc::RPCClient as _};
+use tycho_simulation::{
+    evm::tycho_models,
+    tycho_client::{HttpRPCClient, rpc::RPCClient as _},
+};
+
+#[derive(clap::Args, Debug)]
+pub(crate) struct Tokens {
+    /// The Chain to load tokens for
+    #[clap(long)]
+    pub chain: String,
+}
+
+impl Tokens {
+    pub(crate) async fn run(&self, chains: Vec<Chain>, auth_key: &str) -> eyre::Result<()> {
+        let chain = {
+            let chain = tycho_models::Chain::from_str(&self.chain)
+                .wrap_err("Failed to parse chain from CLI argument")?;
+
+            chains.iter().find(|c| c.name == chain).ok_or_else(|| {
+                eyre::eyre!("Chain '{}' not found in the provided chains", self.chain)
+            })?
+        };
+
+        let no_tls = false; // Set to true if you want to use HTTP instead of HTTPS
+
+        let tokens = load_all_tokens(
+            &chain.tycho_url,
+            no_tls,
+            Some(auth_key),
+            chain.name,
+            Some(100), // min_quality
+            None,      // max_days_since_last_trade
+        )
+        .await;
+
+        let chain_json =
+            serde_json::to_string_pretty(&tokens).expect("implements serde::Serialize");
+        let slow_chain_file_name = format!("tokens.{}.json", chain);
+
+        fs::write(slow_chain_file_name, chain_json)
+            .await
+            .wrap_err("failed to save chain tokens json")?;
+
+        println!("Loaded {} tokens for chain {}", tokens.len(), chain);
+
+        Ok(())
+    }
+}
 
 /// Loads all tokens from Tycho and returns them as a Hashmap of address->Token.
 ///

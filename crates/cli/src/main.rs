@@ -1,6 +1,7 @@
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::Parser as _;
+use cli::Cli;
 use tokio::{
     select,
     signal::unix::{SignalKind, signal},
@@ -9,51 +10,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use tracing_subscriber::{self, EnvFilter};
 
-use crate::kuma::Kuma;
+// use crate::kuma::Kuma;
 
 use core::config::Config;
 
+mod cli;
 mod kuma;
 mod tokens;
-
-#[derive(Parser)]
-#[command(name = "kuma", about)]
-struct Cli {
-    /// First token in the pair
-    #[arg(long)]
-    token_a: String,
-
-    /// Second token in the pair
-    #[arg(long)]
-    token_b: String,
-
-    /// First blockchain for the arbitrage
-    #[arg(long)]
-    chain_a: String,
-
-    /// Second blockchain for the arbitrage
-    #[arg(long)]
-    chain_b: String,
-
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Calculate potential arbitrage profit
-    #[command(name = "generate-signals")]
-    GenerateSignals,
-
-    /// Perform a dry run (simulated transaction without execution)
-    DryRun,
-
-    /// Execute arbitrage transaction
-    Execute,
-
-    /// Get all tokens from tycho api
-    Tokens,
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -65,8 +28,10 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+
     eprintln!("starting with config:\n{config:?}");
 
+    // TODO: move to core
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -85,26 +50,16 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
+    let cli = Cli::parse();
     let shutdown_token = CancellationToken::new();
 
-    let cli = Cli::parse();
-    let kuma = {
-        match Kuma::spawn(config, cli, shutdown_token) {
-            Ok(kuma) => kuma,
-            Err(e) => {
-                error!(error=%e, "failed to spawn kuma");
-                return ExitCode::FAILURE;
-            }
-        }
-    };
+    let command_jh = tokio::spawn(cli.run(config, shutdown_token));
 
     // Set up signal handlers for graceful shutdown
     let mut sigterm = signal(SignalKind::terminate())
         .expect("setting sigterm listener on unix should always work");
     let mut sigint = signal(SignalKind::interrupt())
         .expect("setting sigint listener on unix should always work");
-
-    let command_jh = tokio::spawn(async move { kuma.run().await });
 
     // Wait for either command completion or interrupt signal
     let result = select! {
@@ -132,11 +87,11 @@ async fn main() -> ExitCode {
 
     match result {
         Ok(_) => {
-            info!("command completed successfully");
+            info!("command completed");
             ExitCode::SUCCESS
         }
         Err(e) => {
-            error!(%e, "command failed");
+            error!(%e, "command exited unexpectedly");
             ExitCode::FAILURE
         }
     }

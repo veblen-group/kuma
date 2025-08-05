@@ -69,7 +69,7 @@ cd crates/backend
 cargo run
 
 # 4. Test the API
-curl "http://localhost:3000/spot_prices?block_height=19500000&page=1&page_size=10"
+curl "http://localhost:3000/spot_prices?pair=WETH-USDC&page=1&page_size=10"
 ```
 ### Database Management
 
