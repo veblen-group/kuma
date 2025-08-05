@@ -14,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace};
 
 use kuma_core::{
-    signals,
+    database, signals,
+    spot_prices::SpotPrices,
     state::pair::PairStateStream,
     strategy::{self, Precomputes},
 };
@@ -83,6 +84,7 @@ struct Worker {
     signal_tx: broadcast::Sender<signals::CrossChainSingleHop>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,
+    db: database::Handle,
 }
 
 impl Worker {
@@ -139,11 +141,25 @@ impl Worker {
                         block.height = new_precompute.block_height,
                         "✅ Precomputed trade sizes for slow chain"
                     );
-                    precompute = Some(new_precompute);
 
-                    // TODO: db write the spot prices & block update
-                    // db.write(precompute.spot_prices[0])
-                    // db.write(precompute.spot_prices[len-1])
+                    let spot_prices = {
+                        let min = new_precompute.sorted_spot_prices[0].clone();
+                        let max = new_precompute.sorted_spot_prices[new_precompute.sorted_spot_prices.len() - 1].clone();
+                        SpotPrices {
+                            pair: self.strategy.slow_pair.clone(),
+                            block_height: new_precompute.block_height,
+                            min_pool_id: min.0,
+                            min_price: min.1,
+                            max_pool_id: max.0,
+                            max_price: max.1,
+                            chain: self.strategy.slow_chain.clone()
+                        }
+                    };
+
+                    // TODO: fuse future or whatever
+                    self.db.spot_price_repository().insert(&spot_prices).await?;
+
+                    precompute = Some(new_precompute);
 
                     // Start timer for 75% of block time
                     submission_deadline = Some(Instant::now() + submission_delay);

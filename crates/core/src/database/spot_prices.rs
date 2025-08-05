@@ -27,7 +27,7 @@ impl SpotPriceRepository {
     }
 
     #[allow(dead_code)]
-    pub async fn insert(&self, spot_price: &SpotPrices) -> eyre::Result<()> {
+    pub async fn insert(&self, spot_prices: &SpotPrices) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO spot_prices (
@@ -37,14 +37,14 @@ impl SpotPriceRepository {
                 block_height, chain
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
-            spot_price.pair.token_a().symbol,
-            spot_price.pair.token_b().symbol,
-            spot_price.min_price,
-            spot_price.max_price,
-            spot_price.min_pool_id.to_string(),
-            spot_price.max_pool_id.to_string(),
-            spot_price.block_height as i64,
-            spot_price.chain.name.to_string(),
+            spot_prices.pair.token_a().symbol,
+            spot_prices.pair.token_b().symbol,
+            spot_prices.min_price,
+            spot_prices.max_price,
+            spot_prices.min_pool_id.to_string(),
+            spot_prices.max_pool_id.to_string(),
+            spot_prices.block_height as i64,
+            spot_prices.chain.name.to_string(),
         )
         .execute(self.pool.as_ref())
         .await?;

@@ -97,6 +97,7 @@ impl Kuma {
                 slow_stream,
                 fast_stream,
                 slow_block_time,
+                db,
             }
             .build()
             .wrap_err("failed to build strategy worker")?
