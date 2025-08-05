@@ -1,4 +1,3 @@
-use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,8 +9,8 @@ use crate::{
 pub struct SpotPrices {
     pub pair: Pair,
     pub block_height: u64,
-    pub min_price: BigUint,
-    pub max_price: BigUint,
+    pub min_price: f64,
+    pub max_price: f64,
     pub min_pool_id: PoolId,
     pub max_pool_id: PoolId,
     pub chain: Chain,

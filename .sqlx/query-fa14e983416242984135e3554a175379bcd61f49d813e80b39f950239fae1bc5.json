@@ -7,8 +7,8 @@
       "Left": [
         "Varchar",
         "Varchar",
-        "Text",
-        "Text",
+        "Float8",
+        "Float8",
         "Varchar",
         "Varchar",
         "Int8",

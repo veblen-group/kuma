@@ -39,8 +39,8 @@ impl SpotPriceRepository {
             "#,
             spot_price.pair.token_a().symbol,
             spot_price.pair.token_b().symbol,
-            spot_price.min_price.to_string(),
-            spot_price.max_price.to_string(),
+            spot_price.min_price,
+            spot_price.max_price,
             spot_price.min_pool_id.to_string(),
             spot_price.max_pool_id.to_string(),
             spot_price.block_height as i64,
@@ -112,8 +112,8 @@ struct SpotPriceRow {
     block_height: i64,
     min_pool_id: String,
     max_pool_id: String,
-    min_price: String,
-    max_price: String,
+    min_price: f64,
+    max_price: f64,
     token_a_symbol: String,
     token_b_symbol: String,
 }
@@ -124,11 +124,6 @@ fn try_spot_price_from_row(
 ) -> eyre::Result<SpotPrices> {
     let min_pool_id = PoolId::from(row.min_pool_id.as_str());
     let max_pool_id = PoolId::from(row.max_pool_id.as_str());
-
-    let min_price = BigUint::from_str(&row.min_price)
-        .map_err(|e| eyre!("failed to parse min price from db: {e}"))?;
-    let max_price = BigUint::from_str(&row.max_price)
-        .map_err(|e| eyre!("failed to parse max price from db: {e}"))?;
 
     let block_height = row.block_height as u64;
 
@@ -142,8 +137,8 @@ fn try_spot_price_from_row(
     Ok(SpotPrices {
         pair: Pair::new(token_a, token_b),
         block_height,
-        min_price,
-        max_price,
+        min_price: row.min_price,
+        max_price: row.max_price,
         min_pool_id,
         max_pool_id,
         chain,
