@@ -1,15 +1,18 @@
 use core::config::Config;
 
 use clap::{Parser, Subcommand, command};
-use color_eyre::eyre;
+use color_eyre::eyre::{self, eyre};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::{kuma, tokens};
+use crate::{
+    kuma::{self},
+    tokens,
+};
 
 #[derive(Parser)]
 #[command(name = "kuma", about)]
-struct Cli {
+pub(crate) struct Cli {
     #[command(subcommand)]
     command: Commands,
 }
@@ -18,19 +21,19 @@ struct Cli {
 pub(crate) struct StrategyArgs {
     /// First token in the pair
     #[arg(long)]
-    token_a: String,
+    pub(crate) token_a: String,
 
     /// Second token in the pair
     #[arg(long)]
-    token_b: String,
+    pub(crate) token_b: String,
 
     /// Slow blockchain for the arbitrage
     #[arg(long)]
-    slow_chain: String,
+    pub(crate) slow_chain: String,
 
     /// Fast blockchain for the arbitrage
     #[arg(long)]
-    fast_chain: String,
+    pub(crate) fast_chain: String,
 }
 
 #[derive(Subcommand)]
@@ -50,7 +53,11 @@ enum Commands {
 }
 
 impl Cli {
-    async fn run(self, config: Config, shutdown_token: CancellationToken) -> eyre::Result<()> {
+    pub(crate) async fn run(
+        self,
+        config: Config,
+        shutdown_token: CancellationToken,
+    ) -> eyre::Result<()> {
         let (tokens_by_chain, _inventory) = config
             .build_addrs_and_inventory()
             .expect("Failed to parse chain assets");
@@ -63,22 +70,29 @@ impl Cli {
                         "🔗 Initialized chain info from config");
         }
 
-        match self.command {
-            Commands::GenerateSignals(args) | Commands::DryRun(args) | Commands::Execute(args) => {
-                // Ensure the Kuma instance is created only once
-                let kuma = kuma::Kuma::spawn(config, args, shutdown_token.clone())
+        match &self.command {
+            Commands::GenerateSignals(args) | Commands::DryRun(args) => {
+                let kuma = kuma::Kuma::spawn(config, args.clone(), shutdown_token.clone())
                     .map_err(|e| eyre!("Failed to spawn Kuma: {e:}"))?;
 
                 // Run the command with the Kuma instance
-                kuma.run(cmd).await
+                let signal = kuma.generate_signal().await?;
+                info!(%signal, "✅ Generated signal");
+
+                if let Commands::DryRun(_) = self.command {
+                    unimplemented!()
+                };
+            }
+            Commands::Execute(_) => {
+                unimplemented!()
             }
             Commands::Tokens(cmd) => {
-                cmd.run(
-                    tokens_by_chain.keys().cloned().collect(),
-                    &config.tycho_api_key,
-                )
-                .await
+                let chains = config
+                    .build_chains()
+                    .expect("Failed to parse chains from config");
+                cmd.run(chains, &config.tycho_api_key).await?
             }
         }
+        Ok(())
     }
 }

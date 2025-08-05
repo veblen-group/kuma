@@ -12,7 +12,7 @@ use tycho_simulation::{
 
 #[derive(clap::Args, Debug)]
 pub(crate) struct Tokens {
-    // The Chain to load tokens from
+    /// The Chain to load tokens for
     #[clap(long)]
     pub chain: String,
 }

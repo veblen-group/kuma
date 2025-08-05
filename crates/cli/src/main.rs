@@ -1,7 +1,11 @@
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand, arg};
-use color_eyre::eyre::{self, eyre};
+use clap::Parser as _;
+use cli::Cli;
+use tokio::{
+    select,
+    signal::unix::{SignalKind, signal},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use tracing_subscriber::{self, EnvFilter};
@@ -11,9 +15,6 @@ use tracing_subscriber::{self, EnvFilter};
 use core::config::Config;
 
 mod cli;
-mod dry_run;
-mod execute;
-mod generate_signals;
 mod kuma;
 mod tokens;
 
@@ -28,8 +29,9 @@ async fn main() -> ExitCode {
         }
     };
 
-    // eprintln!("starting with config:\n{config:?}");
+    eprintln!("starting with config:\n{config:?}");
 
+    // TODO: move to core
     // Initialize tracing
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -48,12 +50,49 @@ async fn main() -> ExitCode {
         .with_target(false)
         .init();
 
+    let cli = Cli::parse();
     let shutdown_token = CancellationToken::new();
 
-    let cli = Cli::parse();
-    cli.run(config, shutdown_token).await.unwrap_or_else(|e| {
-        error!(error = %e, "Command execution failed");
-        ()
-    });
-    ExitCode::SUCCESS
+    let command_jh = tokio::spawn(cli.run(config, shutdown_token));
+
+    // Set up signal handlers for graceful shutdown
+    let mut sigterm = signal(SignalKind::terminate())
+        .expect("setting sigterm listener on unix should always work");
+    let mut sigint = signal(SignalKind::interrupt())
+        .expect("setting sigint listener on unix should always work");
+
+    // Wait for either command completion or interrupt signal
+    let result = select! {
+        res = command_jh => {
+            // TODO: make sure this is correct
+            res.and_then(|commands_result| {
+                match commands_result {
+                    Ok(_) => Ok(ExitCode::SUCCESS),
+                    Err(e) => {
+                        error!(error=%e, "command failed");
+                        Ok(ExitCode::FAILURE)
+                    },
+                }
+            })
+        }
+        _ = sigterm.recv() => {
+            info!("received SIGTERM signal");
+            Ok(ExitCode::FAILURE)
+        }
+        _ = sigint.recv() => {
+            info!("received SIGINT signal");
+            Ok(ExitCode::FAILURE)
+        }
+    };
+
+    match result {
+        Ok(_) => {
+            info!("command completed");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            error!(%e, "command exited unexpectedly");
+            ExitCode::FAILURE
+        }
+    }
 }
