@@ -35,8 +35,8 @@ impl Tokens {
             no_tls,
             Some(auth_key),
             chain.name,
-            None, // min_quality
-            None, // max_days_since_last_trade
+            Some(100), // min_quality
+            None,      // max_days_since_last_trade
         )
         .await;
 
