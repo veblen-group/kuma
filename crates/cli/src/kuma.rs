@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, str::FromStr as _};
+use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
@@ -6,15 +6,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use tycho_common::models::token::Token;
 
-use crate::{Cli, Commands, tokens::load_all_tokens};
-
 use core::{
-    chain::Chain, collector, config::Config, state::pair::Pair, strategy::CrossChainSingleHop,
+    chain::Chain,
+    collector,
+    config::{Config, StrategyConfig},
+    state::pair::Pair,
+    strategy::CrossChainSingleHop,
 };
 
 pub(crate) struct Kuma {
-    command: Commands,
-
     #[allow(unused)]
     all_tokens: HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
     slow_pair: Pair,
@@ -25,13 +25,14 @@ pub(crate) struct Kuma {
     slow_collector_handle: collector::Handle,
     fast_collector_handle: collector::Handle,
     strategy: CrossChainSingleHop,
-
-    #[allow(dead_code)]
-    shutdown_token: CancellationToken,
 }
 
 impl Kuma {
-    pub fn spawn(cfg: Config, cli: Cli, shutdown_token: CancellationToken) -> eyre::Result<Self> {
+    pub fn spawn(
+        cfg: Config,
+        strategy_config: StrategyConfig,
+        shutdown_token: CancellationToken,
+    ) -> eyre::Result<Self> {
         let (tokens_by_chain, inventory) = cfg
             .build_addrs_and_inventory()
             .expect("Failed to parse chain assets");
@@ -44,7 +45,11 @@ impl Kuma {
                         "🔗 Initialized chain info from config");
         }
 
-        let pairs = Config::get_chain_pairs(&cli.token_a, &cli.token_b, &inventory);
+        let pairs = Config::get_chain_pairs(
+            &strategy_config.token_a,
+            &strategy_config.token_b,
+            &inventory,
+        );
 
         let Config {
             tycho_api_key,
@@ -56,7 +61,11 @@ impl Kuma {
             ..
         } = cfg;
 
-        let (slow_chain, fast_chain) = get_chains_from_cli(&cli, &tokens_by_chain);
+        let (slow_chain, fast_chain) = get_chains_from_cli(
+            strategy_config.slow_chain,
+            strategy_config.fast_chain,
+            &tokens_by_chain,
+        );
         let slow_pair = pairs.get(&slow_chain).expect(&format!(
             "could not find pair info for {:}",
             slow_chain.name
@@ -110,7 +119,6 @@ impl Kuma {
         };
 
         Ok(Self {
-            command: cli.command,
             all_tokens: tokens_by_chain,
             slow_chain,
             slow_pair: slow_pair.clone(),
@@ -119,14 +127,12 @@ impl Kuma {
             slow_collector_handle,
             fast_collector_handle,
             strategy,
-            shutdown_token,
         })
     }
 
     #[instrument(skip(self))]
-    pub async fn run(self) -> eyre::Result<()> {
+    pub async fn generate_signal(self) -> eyre::Result<()> {
         let Self {
-            command,
             slow_chain,
             slow_pair,
             fast_chain,
@@ -137,43 +143,6 @@ impl Kuma {
             ..
         } = self;
 
-        if let Commands::Tokens = command {
-            let slow_chain_token_addrs = load_all_tokens(
-                &slow_chain.tycho_url,
-                false,
-                Some("sampletoken"),
-                slow_chain.name,
-                Some(95),
-                Some(7),
-            )
-            .await;
-            let slow_chain_json = serde_json::to_string_pretty(&slow_chain_token_addrs)
-                .expect("implements serde::Serialize");
-            let slow_chain_file_name = format!("tokens.{}.json", slow_chain.name);
-            fs::write(slow_chain_file_name, slow_chain_json)
-                .wrap_err("failed to save slow chain tokens json")?;
-            info!("loaded slow chain tokens");
-
-            let fast_chain_token_addrs = load_all_tokens(
-                &fast_chain.tycho_url,
-                false,
-                Some("sampletoken"),
-                fast_chain.name,
-                Some(95),
-                Some(7),
-            )
-            .await;
-            let fast_chain_json = serde_json::to_string_pretty(&fast_chain_token_addrs)
-                .expect("implements serde::Serialize");
-            let fast_chain_file_name = format!("tokens.{}.json", fast_chain.name);
-            fs::write(fast_chain_file_name, fast_chain_json)
-                .wrap_err("failed to save fast chain tokens json")?;
-            info!("loaded fast chain tokens");
-
-            return Ok(());
-        }
-
-        // TODO: do i need Commands::GenerateSignal if this is always run?
         info!(command = "generating signal");
 
         let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
@@ -200,15 +169,6 @@ impl Kuma {
         let signal = strategy.generate_signal(&precompute, fast_state)?;
 
         info!(signal = ?signal, "📊 generated signal");
-
-        if let Commands::DryRun = command {
-            // set up tycho encoder
-            // set up signer
-        }
-
-        if let Commands::Execute = command {
-            // set up submission stuff
-        }
 
         Ok(())
     }
@@ -237,27 +197,28 @@ pub(crate) fn make_collector(
 }
 
 pub(crate) fn get_chains_from_cli(
-    cli: &Cli,
+    slow_chain: String,
+    fast_chain: String,
     chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
 ) -> (Chain, Chain) {
-    let chain_a = chain_tokens
+    let slow_chain = chain_tokens
         .keys()
         .find(|chain| {
             chain.name
-                == tycho_common::models::Chain::from_str(&cli.chain_a)
-                    .expect("Invalid chain a name")
+                == tycho_common::models::Chain::from_str(&slow_chain)
+                    .expect("Invalid slow chain name")
         })
         .expect("Chain A not configured")
         .clone();
-    let chain_b = chain_tokens
+    let fast_chain = chain_tokens
         .keys()
         .find(|chain| {
             chain.name
-                == tycho_common::models::Chain::from_str(&cli.chain_b)
-                    .expect("Invalid chain b name")
+                == tycho_common::models::Chain::from_str(&fast_chain)
+                    .expect("Invalid fast chain name")
         })
         .expect("Chain B not configured")
         .clone();
 
-    (chain_a, chain_b)
+    (slow_chain, fast_chain)
 }

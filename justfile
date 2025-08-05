@@ -1,12 +1,7 @@
 default:
   @just --list
 
-set dotenv-load
 set fallback
-
-default_env := 'local'
-copy-env type=default_env:
-    cp {{ type }}.env.example .env
 
 dev-webapp:
     cd webapp && npm run dev
@@ -14,17 +9,13 @@ dev-webapp:
 # CLI commands
 ###################
 
-generate-signals:
-    cargo run -p kuma-cli -- \
-    --token-a usdc --token-b weth \
-    --chain-a ethereum --chain-b unichain \
-    generate-signals
+generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
+    cargo run -p kuma-cli generate-signals \
+    --token-a {{token-a}} --token-b {{token-b}} \
+    --slow-chain {{slow-chain}} --fast-chain {{fast-chain}} \
 
-get-tokens:
-    cargo run -p kuma-cli -- \
-    --token-a usdc --token-b weth \
-    --chain-a base --chain-b unichain \
-    tokens
+get-tokens chain="ethereum":
+    cargo run -p kuma-cli tokens --chain {{chain}}
 
 # Bot commands
 
