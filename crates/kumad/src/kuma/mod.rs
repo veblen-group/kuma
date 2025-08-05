@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{self, Context, eyre};
 use tokio::select;
@@ -10,6 +10,7 @@ use kuma_core::{
     chain::Chain,
     collector,
     config::{Config, StrategyConfig},
+    database,
 };
 
 pub(super) struct Kuma {
@@ -36,6 +37,8 @@ impl Kuma {
                         token_count = %tokens.len(),
                         "🔗 Initialized chain info from config")
         }
+
+        let db = database::Handle::from_config(cfg.database, Arc::new(addrs_for_chain.clone()))?;
 
         // 2. set up collectors for each chain
         let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
@@ -94,6 +97,7 @@ impl Kuma {
                 slow_stream,
                 fast_stream,
                 slow_block_time,
+                db,
             }
             .build()
             .wrap_err("failed to build strategy worker")?
