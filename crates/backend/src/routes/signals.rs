@@ -36,7 +36,7 @@ pub async fn get_signals_by_pair(
         "Fetching arbitrage signals"
     );
 
-    let repo = state.db.signal_repository(state.token_configs.clone());
+    let repo = state.db.signal_repository();
 
     let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_lowercase()) {
         Ok(pair) => pair,

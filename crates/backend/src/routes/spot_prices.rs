@@ -36,7 +36,7 @@ pub async fn get_spot_prices_by_pair(
         "Fetching spot prices"
     );
 
-    let repo = state.db.spot_price_repository(state.token_configs.clone());
+    let repo = state.db.spot_price_repository();
 
     let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_lowercase()) {
         Ok(pair) => pair,

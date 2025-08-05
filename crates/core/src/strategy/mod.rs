@@ -398,6 +398,7 @@ mod tests {
         state::{self, pair::PairState},
         strategy::{self, CrossChainSingleHop},
     };
+    use sqlx::types::chrono::NaiveDateTime;
     use std::{
         collections::{HashMap, HashSet},
         str::FromStr as _,
@@ -540,6 +541,7 @@ mod tests {
         pool_id: &str,
         reserve_a: u64,
         reserve_b: u64,
+        chain: tycho_common::models::Chain,
     ) -> PairState {
         PairState {
             states: HashMap::from([(
@@ -552,7 +554,20 @@ mod tests {
             block_height,
             modified_pools: Arc::new(HashSet::from([state::PoolId::from(pool_id)])),
             unmodified_pools: Arc::new(HashSet::new()),
-            metadata: HashMap::new(),
+            metadata: HashMap::from([(
+                state::PoolId::from(pool_id),
+                Arc::new(ProtocolComponent::new(
+                    pool_id.as_bytes().into(),
+                    String::from("univ2"),
+                    String::from("univ2"),
+                    chain,
+                    vec![pair.token_a().clone(), pair.token_b().clone()],
+                    vec![pool_id.as_bytes().into()],
+                    HashMap::new(),
+                    tycho_common::Bytes::from_str("0123").unwrap(),
+                    NaiveDateTime::default(),
+                )),
+            )]),
         }
     }
 
@@ -644,8 +659,14 @@ mod tests {
 
         // 0x123 -> univ2(1m, 1k)
         // spot price should be ~1000/ or 0.001
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 0, "0x123", 1_000_000, 1_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            0,
+            "0x123",
+            1_000_000,
+            1_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
         // Act
         let precompute = strategy.precompute(slow_state.clone());
@@ -709,8 +730,14 @@ mod tests {
 
         // 0x123 -> univ2(1m, 1k)
         // spot price should be ~1000/ or 0.001
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 0, "0x123", 1_000_000, 1_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            0,
+            "0x123",
+            1_000_000,
+            1_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
         // Act
         let precompute = strategy.precompute(slow_state.clone());
@@ -770,11 +797,23 @@ mod tests {
     fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 10_000, 5_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            2000,
+            "0x123",
+            10_000,
+            5_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
-        let fast_state =
-            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 10_000, 2_000);
+        let fast_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            100,
+            "0x456",
+            10_000,
+            2_000,
+            tycho_common::models::Chain::Base,
+        );
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
@@ -841,11 +880,23 @@ mod tests {
     fn generate_signal_same_decimals_bab() {
         let strategy = make_same_decimals_strategy();
 
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 5_000, 10_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            2000,
+            "0x123",
+            5_000,
+            10_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
-        let fast_state =
-            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 2_000, 10_000);
+        let fast_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            100,
+            "0x456",
+            2_000,
+            10_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
@@ -911,11 +962,23 @@ mod tests {
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 10_000_000, 5_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            2000,
+            "0x123",
+            10_000_000,
+            5_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
-        let fast_state =
-            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 10_000_000, 2_000);
+        let fast_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            100,
+            "0x456",
+            10_000_000,
+            2_000,
+            tycho_common::models::Chain::Base,
+        );
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy
@@ -982,11 +1045,23 @@ mod tests {
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
-        let slow_state =
-            make_single_univ2_pair_state(&strategy.slow_pair, 2000, "0x123", 5_000, 10_000);
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            2000,
+            "0x123",
+            5_000,
+            10_000,
+            tycho_common::models::Chain::Ethereum,
+        );
 
-        let fast_state =
-            make_single_univ2_pair_state(&strategy.fast_pair, 100, "0x456", 2_000, 10_000);
+        let fast_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            100,
+            "0x456",
+            2_000,
+            10_000,
+            tycho_common::models::Chain::Base,
+        );
 
         let precompute = strategy.precompute(slow_state);
         let signal = strategy

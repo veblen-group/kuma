@@ -4,7 +4,7 @@ use color_eyre::eyre::{self};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
-use kuma_core::{signals, state::pair::PairStateStream, strategy};
+use kuma_core::{database, signals, state::pair::PairStateStream, strategy};
 
 use super::{Handle, Worker};
 
@@ -13,6 +13,7 @@ pub struct Builder {
     pub slow_stream: PairStateStream,
     pub fast_stream: PairStateStream,
     pub slow_block_time: Duration,
+    pub db: database::Handle,
 }
 
 impl Builder {
@@ -22,6 +23,7 @@ impl Builder {
             slow_stream,
             fast_stream,
             slow_block_time: slow_block_time_ms,
+            db,
         } = self;
 
         // Create broadcast channel for signals
@@ -36,6 +38,7 @@ impl Builder {
             signal_tx,
             shutdown_token: shutdown_token.clone(),
             slow_block_time: slow_block_time_ms,
+            db,
         };
 
         let worker_handle = tokio::task::spawn(async move { worker.run().await });

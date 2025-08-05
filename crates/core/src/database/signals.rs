@@ -30,8 +30,7 @@ impl SignalRepository {
     }
 
     #[instrument(skip(self, signal))]
-    #[allow(dead_code)]
-    pub async fn insert(&self, signal: &signals::CrossChainSingleHop) -> eyre::Result<()> {
+    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO signals (

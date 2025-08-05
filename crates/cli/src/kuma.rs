@@ -26,6 +26,7 @@ pub(crate) struct Kuma {
     fast_collector_handle: collector::Handle,
     strategy: CrossChainSingleHop,
 
+    #[allow(dead_code)]
     shutdown_token: CancellationToken,
 }
 
