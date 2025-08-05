@@ -7,12 +7,11 @@ use tracing::{info, instrument};
 use tycho_common::models::token::Token;
 
 use core::{
-    chain::Chain,
-    collector,
-    config::{Config, StrategyConfig},
-    state::pair::Pair,
+    chain::Chain, collector, config::Config, signals, state::pair::Pair,
     strategy::CrossChainSingleHop,
 };
+
+use crate::cli::StrategyArgs;
 
 pub(crate) struct Kuma {
     #[allow(unused)]
@@ -30,7 +29,7 @@ pub(crate) struct Kuma {
 impl Kuma {
     pub fn spawn(
         cfg: Config,
-        strategy_config: StrategyConfig,
+        strategy_config: StrategyArgs,
         shutdown_token: CancellationToken,
     ) -> eyre::Result<Self> {
         let (tokens_by_chain, inventory) = cfg
@@ -61,7 +60,7 @@ impl Kuma {
             ..
         } = cfg;
 
-        let (slow_chain, fast_chain) = get_chains_from_cli(
+        let (slow_chain, fast_chain) = get_chains_from_names(
             strategy_config.slow_chain,
             strategy_config.fast_chain,
             &tokens_by_chain,
@@ -131,7 +130,7 @@ impl Kuma {
     }
 
     #[instrument(skip(self))]
-    pub async fn generate_signal(self) -> eyre::Result<()> {
+    pub async fn generate_signal(self) -> eyre::Result<signals::CrossChainSingleHop> {
         let Self {
             slow_chain,
             slow_pair,
@@ -170,7 +169,7 @@ impl Kuma {
 
         info!(signal = ?signal, "📊 generated signal");
 
-        Ok(())
+        Ok(signal)
     }
 }
 
@@ -196,7 +195,7 @@ pub(crate) fn make_collector(
     handle.wrap_err("failed to start tycho collector for chain : {chain}")
 }
 
-pub(crate) fn get_chains_from_cli(
+pub(crate) fn get_chains_from_names(
     slow_chain: String,
     fast_chain: String,
     chain_tokens: &HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
