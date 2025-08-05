@@ -1,7 +1,6 @@
-use std::{str::FromStr as _, sync::Arc};
+use std::sync::Arc;
 
 use color_eyre::eyre::{self, eyre};
-use num_bigint::BigUint;
 use sqlx::PgPool;
 
 use crate::{
@@ -26,8 +25,7 @@ impl SpotPriceRepository {
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn insert(&self, spot_prices: &SpotPrices) -> eyre::Result<()> {
+    pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO spot_prices (

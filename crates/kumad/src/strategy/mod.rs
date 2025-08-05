@@ -1,13 +1,9 @@
 //! Strategy module for managing cross-chain arbitrage signal generation
-//!
-//! This module implements the Builder-Handle-Worker pattern for strategy execution.
-//! The strategy reads from two different blockchain networks (slow and fast) and
-//! generates trading signals based on cross-chain arbitrage opportunities.
 
 use std::{pin::Pin, time::Duration};
 
-use color_eyre::eyre::{self, WrapErr as _};
-use futures::Future;
+use color_eyre::eyre::{self, WrapErr as _, eyre};
+use futures::{Future, FutureExt as _, stream::FuturesUnordered};
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -96,6 +92,9 @@ impl Worker {
         let mut submission_deadline = None;
         let mut precompute: Option<Precomputes> = None;
         let mut curr_signal = None;
+        let mut db_writes: FuturesUnordered<
+            Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
+        > = FuturesUnordered::new();
 
         // biased loop
         // 1. shutdown signal
@@ -103,6 +102,7 @@ impl Worker {
         // 2. slow chain updates
         //  1. set up signal generation timer
         //  2. precompute
+        //  3. save spot prices to db
         // 3. fast chain updates
         //  1. try to generate signal from precompute
         //  2. overwrite current signal
@@ -129,12 +129,20 @@ impl Worker {
                     let signal = curr_signal.take().expect("Signal checked to be Some");
                     debug!(%signal, "📡 Emitting signal");
 
-                    let signal_tx = self.signal_tx.clone();
-                    signal_tx.send(signal).wrap_err("Signal sent")?;
+                    self.signal_tx.send(signal).wrap_err("Signal sent")?;
                 }
 
                 // Handle slow chain updates
                 Some(slow_state) = self.slow_stream.next() => {
+                    // Start timer for 75% of block time
+                    submission_deadline = Some(Instant::now() + submission_delay);
+
+                    debug!(
+                        ?submission_deadline,
+                        "⏰ Started timer for next signal generation"
+                    );
+
+                    // Generate precomputes
                     let new_precompute = self.strategy.precompute(slow_state);
 
                     debug!(
@@ -142,33 +150,20 @@ impl Worker {
                         "✅ Precomputed trade sizes for slow chain"
                     );
 
-                    let spot_prices = {
-                        let min = new_precompute.sorted_spot_prices[0].clone();
-                        let max = new_precompute.sorted_spot_prices[new_precompute.sorted_spot_prices.len() - 1].clone();
-                        SpotPrices {
-                            pair: self.strategy.slow_pair.clone(),
-                            block_height: new_precompute.block_height,
-                            min_pool_id: min.0,
-                            min_price: min.1,
-                            max_pool_id: max.0,
-                            max_price: max.1,
-                            chain: self.strategy.slow_chain.clone()
-                        }
-                    };
-
-                    // TODO: fuse future or whatever
-                    self.db.spot_price_repository().insert(&spot_prices).await?;
-
-                    precompute = Some(new_precompute);
-
-                    // Start timer for 75% of block time
-                    submission_deadline = Some(Instant::now() + submission_delay);
-
-                    // TODO: clean up log
-                    debug!(
-                        ?submission_deadline,
-                        "⏰ Started timer for next signal generation"
+                    // Write spot prices to db
+                    let spot_prices = SpotPrices::from_precompute(
+                        &new_precompute,
+                        self.strategy.slow_chain.clone(),
+                        self.strategy.slow_pair.clone()
                     );
+
+                    let repo = self.db.spot_price_repository();
+                    db_writes.push(async move {
+                        repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
+                    }.boxed());
+
+                    // Save precompute
+                    precompute = Some(new_precompute);
                 }
 
                 // TODO: handle for processing fast blocks
@@ -189,7 +184,16 @@ impl Worker {
                                     %signal,
                                     "📡 Generated cross-chain signal"
                                 );
-                                curr_signal = Some(signal);
+
+                                curr_signal = Some(signal.clone());
+
+                                // Save generated signal to db and update it for emission
+                                let repo = self.db.signal_repository();
+                                db_writes.push(async move {
+                                    repo.insert(signal.clone()).await.map_err(|e| {
+                                        eyre!("failed to write signal to db: {e:}")
+                                    })
+                                }.boxed());
                                 panic!("Signal generated")
                             }
                             Err(e) => {
@@ -203,6 +207,12 @@ impl Worker {
                         }
                     } else {
                         trace!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
+                    }
+                }
+
+                Some(res) = db_writes.next() => {
+                    if let Err(e) = res {
+                        error!("DB insert failed: {:?}", e);
                     }
                 }
             }

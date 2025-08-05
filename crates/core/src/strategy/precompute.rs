@@ -5,7 +5,6 @@ use tracing::{error, instrument, trace};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
-    spot_prices::SpotPrices,
     state::{
         self, PoolId,
         pair::{Pair, PairState},
