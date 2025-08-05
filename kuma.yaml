@@ -78,9 +78,9 @@ chains:
     rpc_url: "https://mainnet.infura.io/v3/your-project-id"
     tycho_url: "tycho-beta.propellerheads.xyz/"
 
-  # - name: base
-  #   rpc_url: "https://mainnet.base.org"
-  #   tycho_url: "tycho-base-beta.propellerheads.xyz"
+  - name: base
+    rpc_url: "https://mainnet.base.org"
+    tycho_url: "tycho-base-beta.propellerheads.xyz"
 
   - name: unichain
     rpc_url: "https://mainnet.unichain.org"
