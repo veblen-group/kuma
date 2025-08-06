@@ -1,4 +1,4 @@
-use core::chain::Chain;
+use core::config::Config;
 use std::{collections::HashMap, str::FromStr};
 
 use color_eyre::eyre::{self, Context, Ok};
@@ -18,7 +18,10 @@ pub(crate) struct Tokens {
 }
 
 impl Tokens {
-    pub(crate) async fn run(&self, chains: Vec<Chain>, auth_key: &str) -> eyre::Result<()> {
+    pub(crate) async fn run(&self, config: Config) -> eyre::Result<()> {
+        let chains = config
+            .build_chains()
+            .expect("Failed to parse chains from config");
         let chain = {
             let chain = tycho_models::Chain::from_str(&self.chain)
                 .wrap_err("Failed to parse chain from CLI argument")?;
@@ -33,7 +36,7 @@ impl Tokens {
         let tokens = load_all_tokens(
             &chain.tycho_url,
             no_tls,
-            Some(auth_key),
+            Some(config.tycho_api_key.as_str()),
             chain.name,
             Some(100), // min_quality
             None,      // max_days_since_last_trade

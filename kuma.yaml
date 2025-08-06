@@ -75,16 +75,19 @@ tokens:
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "https://mainnet.infura.io/v3/your-project-id"
+    rpc_url: "https://ethereum-rpc.publicnode.com"
     tycho_url: "tycho-beta.propellerheads.xyz/"
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
 
   - name: base
     rpc_url: "https://mainnet.base.org"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
 
   - name: unichain
     rpc_url: "https://mainnet.unichain.org"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
 
 binary_search_steps: 1024
 
@@ -98,3 +101,6 @@ remove_tvl_threshold: 5.0
 
 # tycho simulation
 tycho_api_key: "sampletoken"
+
+# private key for signing transactions
+private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
