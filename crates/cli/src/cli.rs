@@ -52,8 +52,8 @@ enum Commands {
     Tokens(tokens::Tokens),
 
     /// sign permit2 for a token
-    #[command(name = "sign-permit2")]
-    SignPermit2(permit::SignPermit2),
+    #[command(name = "init-permit2")]
+    SignPermit2(permit::Permit2),
 }
 
 impl Cli {

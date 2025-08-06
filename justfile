@@ -17,6 +17,9 @@ generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain=
 get-tokens chain="ethereum":
     cargo run -p kuma-cli tokens --chain {{chain}}
 
+init-permit2:
+    cargo run -p kuma-cli init-permit2
+
 # Bot commands
 
 kumad:

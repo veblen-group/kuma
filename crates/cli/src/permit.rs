@@ -14,9 +14,9 @@ use core::config::Config;
 use tracing::info;
 
 #[derive(clap::Args, Debug)]
-pub(crate) struct SignPermit2 {}
+pub(crate) struct Permit2 {}
 
-impl SignPermit2 {
+impl Permit2 {
     pub(crate) async fn run(&self, config: Config) -> eyre::Result<()> {
         let (tokens_by_chain, _) = config
             .build_addrs_and_inventory()

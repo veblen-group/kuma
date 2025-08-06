@@ -75,7 +75,7 @@ tokens:
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "https://mainnet.infura.io/v3/your-project-id"
+    rpc_url: "https://ethereum-rpc.publicnode.com"
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
 
