@@ -1,3 +1,4 @@
+use crate::{chain::Chain, state::pair::Pair};
 use color_eyre::eyre::{self, Context as _, OptionExt as _, eyre};
 use figment::{
     Figment,
@@ -8,8 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
 use tracing::{info, warn};
 use tycho_common::{Bytes, models::token::Token};
-
-use crate::{chain::Chain, state::pair::Pair};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -43,7 +42,11 @@ pub struct Config {
     /// Maximum acceptable slippage percentage
     pub max_slippage_bps: u64,
 
+    /// Number of binary search steps
     pub binary_search_steps: usize,
+
+    /// Private key for signing transactions
+    pub private_key: String,
 }
 
 pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;
@@ -73,8 +76,10 @@ impl Config {
                      name,
                      rpc_url,
                      tycho_url,
+                     permit2_address,
                  }| {
-                    Chain::new(name, rpc_url, tycho_url).wrap_err("failed to parse chain info")
+                    Chain::new(name, rpc_url, tycho_url, permit2_address)
+                        .wrap_err("failed to parse chain info")
                 },
             )
             .collect::<eyre::Result<Vec<Chain>>>()
@@ -196,6 +201,9 @@ pub struct ChainConfig {
 
     /// RPC endpoint URL for Tycho Indexer
     pub tycho_url: String,
+
+    /// Address of the Permit2 contract
+    pub permit2_address: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyConfig {

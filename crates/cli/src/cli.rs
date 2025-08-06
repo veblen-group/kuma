@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::{
     kuma::{self},
-    tokens,
+    permit, tokens,
 };
 
 #[derive(Parser)]
@@ -50,6 +50,10 @@ enum Commands {
 
     /// Get all tokens from tycho api
     Tokens(tokens::Tokens),
+
+    /// sign permit2 for a token
+    #[command(name = "sign-permit2")]
+    SignPermit2(permit::SignPermit2),
 }
 
 impl Cli {
@@ -58,18 +62,6 @@ impl Cli {
         config: Config,
         shutdown_token: CancellationToken,
     ) -> eyre::Result<()> {
-        let (tokens_by_chain, _inventory) = config
-            .build_addrs_and_inventory()
-            .expect("Failed to parse chain assets");
-
-        info!("Parsed {} chains from config:", tokens_by_chain.len());
-
-        for (chain, _tokens) in &tokens_by_chain {
-            info!(chain.name = %chain.name,
-                        chain.id = %chain.metadata.id(),
-                        "🔗 Initialized chain info from config");
-        }
-
         match &self.command {
             Commands::GenerateSignals(args) | Commands::DryRun(args) => {
                 let kuma = kuma::Kuma::spawn(config, args.clone(), shutdown_token.clone())
@@ -86,12 +78,8 @@ impl Cli {
             Commands::Execute(_) => {
                 unimplemented!()
             }
-            Commands::Tokens(cmd) => {
-                let chains = config
-                    .build_chains()
-                    .expect("Failed to parse chains from config");
-                cmd.run(chains, &config.tycho_api_key).await?
-            }
+            Commands::Tokens(cmd) => cmd.run(config).await?,
+            Commands::SignPermit2(cmd) => cmd.run(config).await?,
         }
         Ok(())
     }
