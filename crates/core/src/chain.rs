@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+use alloy::primitives::Address;
 use alloy_chains::{self, NamedChain};
 use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
@@ -18,7 +19,7 @@ pub struct Chain {
     #[serde(skip)]
     pub tycho_url: String,
     #[serde(skip)]
-    pub permit2_address: String,
+    pub permit2_address: Address,
 }
 
 impl Chain {
@@ -37,12 +38,15 @@ impl Chain {
             _ => return Err(eyre!("unsupported chain {}", name)),
         };
 
+        let permit2_address =
+            Address::from_str(permit2_address).wrap_err("failed to parse address")?;
+
         Ok(Self {
             name,
             metadata,
             rpc_url: rpc_url.to_string(),
             tycho_url: tycho_url.to_string(),
-            permit2_address: permit2_address.to_string(),
+            permit2_address: permit2_address,
         })
     }
 
@@ -58,7 +62,8 @@ impl Chain {
             metadata: alloy_chains::Chain::from_named(NamedChain::Mainnet),
             rpc_url: "https://mainnet.infura.io/v3/".to_string(),
             tycho_url: "tycho-beta.propellerheads.xyz".to_string(),
-            permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3".to_string(),
+            permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
+                .expect("Couldn't convert to address"),
         }
     }
 
@@ -69,7 +74,8 @@ impl Chain {
             metadata: alloy_chains::Chain::from_named(NamedChain::Base),
             rpc_url: "https://base-mainnet.infura.io/v3/".to_string(),
             tycho_url: "tycho-base-beta.propellerheads.xyz".to_string(),
-            permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3".to_string(),
+            permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
+                .expect("Couldn't convert to address"),
         }
     }
 
@@ -81,7 +87,8 @@ impl Chain {
             metadata: alloy_chains::Chain::from_named(NamedChain::Unichain),
             rpc_url: "https://unichain-mainnet.infura.io/v3/".to_string(),
             tycho_url: "tycho-unichain-beta.propellerheads.xyz".to_string(),
-            permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3".to_string(),
+            permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
+                .expect("Couldn't convert to address"),
         }
     }
 }

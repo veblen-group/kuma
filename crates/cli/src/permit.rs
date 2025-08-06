@@ -1,8 +1,6 @@
-use std::str::FromStr as _;
-
 use alloy::{
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{Address, Keccak256, U256},
+    primitives::{Keccak256, U256},
     providers::{Provider as _, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -39,7 +37,7 @@ impl Permit2 {
         let approve_function_signature = "approve(address,uint256)";
         for (chain, tokens) in tokens_by_chain.iter() {
             let args = (
-                Address::from_str(&chain.permit2_address).expect("Couldn't convert to address"),
+                chain.permit2_address,
                 U256::MAX, // Approve maximum amount
             );
             let call_data = encode_input(approve_function_signature, args.abi_encode());
@@ -47,10 +45,10 @@ impl Permit2 {
                 .wallet(wallet.clone())
                 .connect_http(chain.rpc_url.parse().wrap_err("Failed to parse RPC URL")?);
 
-            for address in tokens.keys() {
+            for (address_bytes, token) in tokens.iter() {
                 let tx = TransactionRequest::default()
                     .with_to(
-                        address
+                        address_bytes
                             .to_string()
                             .parse()
                             .wrap_err("Failed to parse token address")?,
@@ -58,16 +56,16 @@ impl Permit2 {
                     .with_chain_id(chain.chain_id())
                     .with_input(call_data.clone());
 
-                let builder = provider.send_transaction(tx).await?;
-                let pending_tx = builder.register().await?;
-                let tx_hash = pending_tx.await?;
-                let receipt = provider
-                    .get_transaction_receipt(tx_hash)
+                let tx_hash = provider
+                    .send_transaction(tx)
                     .await?
-                    .expect("Transaction receipt not found");
+                    .with_required_confirmations(1)
+                    .with_timeout(Some(std::time::Duration::from_secs(60)))
+                    .watch()
+                    .await?;
                 info!(
-                    "Transaction successful with hash: {}",
-                    receipt.transaction_hash
+                    "Transaction successful with hash: {} on chain: {} for token: {}",
+                    tx_hash, chain.name, token.symbol
                 );
             }
         }
