@@ -16,6 +16,7 @@ use core::config::Config;
 
 mod cli;
 mod kuma;
+mod permit;
 mod tokens;
 
 #[tokio::main]
