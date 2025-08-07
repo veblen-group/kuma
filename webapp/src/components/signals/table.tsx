@@ -19,13 +19,17 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
-import { ArbitrageSignal } from "@/lib/types"
+import { Signal } from "@/lib/types"
 import { apiClient } from "@/lib/api-client"
 
+const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
+
 export function SignalTable() {
-  const [data, setData] = React.useState<ArbitrageSignal[]>([])
+  const [data, setData] = React.useState<Signal[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [selectedPair, setSelectedPair] = React.useState(TOKEN_PAIRS[0])
+
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -46,7 +50,7 @@ export function SignalTable() {
     const loadData = async () => {
       try {
         setLoading(true)
-        const signals = await apiClient.getSignals()
+        const signals = await apiClient.getSignals(selectedPair)
         setData(signals)
         setError(null)
       } catch (err) {

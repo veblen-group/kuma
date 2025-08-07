@@ -22,10 +22,14 @@ import { columns } from "./columns"
 import { SpotPrice } from "@/lib/types"
 import { apiClient } from "@/lib/api-client"
 
+const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
+
 export function SpotPriceTable() {
   const [data, setData] = React.useState<SpotPrice[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [selectedPair, setSelectedPair] = React.useState(TOKEN_PAIRS[0])
+
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -46,7 +50,7 @@ export function SpotPriceTable() {
     const loadData = async () => {
       try {
         setLoading(true)
-        const spotPrices = await apiClient.getSpotPrices()
+        const spotPrices = await apiClient.getSpotPrices(selectedPair)
         setData(spotPrices)
         setError(null)
       } catch (err) {

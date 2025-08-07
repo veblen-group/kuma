@@ -122,8 +122,8 @@ impl SignalRepository {
             FROM signals
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
                 AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1))
-                OR ((fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)
-                AND (fast_swap_token_in_symbol = $2 AND fast_swap_token_out_symbol = $1)))
+                OR ((slow_swap_token_in_symbol = $2 AND slow_swap_token_out_symbol = $1)
+                AND (fast_swap_token_in_symbol = $1 AND fast_swap_token_out_symbol = $2)))
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
