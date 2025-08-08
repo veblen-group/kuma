@@ -46,7 +46,8 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable}  antialiased`}
         >
           {children}
-          <ReactQueryDevtools initialIsOpen={false} />
+          {process.env.NODE_ENV === 'development' &&
+            <ReactQueryDevtools initialIsOpen={false} />}
         </body>
       </QueryClientProvider>
     </html>
