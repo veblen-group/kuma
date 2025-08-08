@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  ColumnDef,
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
@@ -19,54 +18,64 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
-import { SpotPrice } from "@/lib/types"
-import { apiClient } from "@/lib/api-client"
+import { useSpotPrices } from "@/lib/api-client"
+
+const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
 
 export function SpotPriceTable() {
-  const [data, setData] = React.useState<SpotPrice[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<string | null>(null)
+  const [selectedPair, setSelectedPair] = React.useState(TOKEN_PAIRS[0])
+
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
   })
 
+  const {
+    data, isLoading, isError, error, refetch
+  } = useSpotPrices(
+    {
+      pair: selectedPair,
+      page: pagination.pageIndex + 1,
+      pageSize: pagination.pageSize
+    },
+    {
+      placeholderData: previousData => previousData,
+      staleTime: 1000 * 60 * 5, // 1 minute
+    }
+  );
+
   const table = useReactTable({
-    data,
+    data: data?.data || [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    pageCount: data?.pagination.total_pages ?? 0,
     onPaginationChange: setPagination,
     state: {
       pagination,
     },
-  })
+  });
 
-  React.useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        const spotPrices = await apiClient.getSpotPrices()
-        setData(spotPrices)
-        setError(null)
-      } catch (err) {
-        setError('Failed to load spot prices')
-        console.error('Error loading spot prices:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-24">Loading spot prices...</div>
+    )
+  };
 
-    loadData()
-  }, [])
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-24 text-red-500">
+        <div>
+          <p>Error: {error instanceof Error ? error.message : 'Unknown error'}</p>
+          <Button onClick={() => refetch()} variant="outline" className="mt-2">
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  };
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-24">Loading...</div>
-  }
-
-  if (error) {
-    return <div className="flex items-center justify-center h-24 text-red-500">Error: {error}</div>
-  }
 
   return (
     <div>
@@ -125,13 +134,13 @@ export function SpotPriceTable() {
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
           Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()}
+          {data?.pagination.total_pages ?? 0}
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
+          disabled={!data?.pagination.has_previous}
         >
           Previous
         </Button>
@@ -139,7 +148,7 @@ export function SpotPriceTable() {
           variant="outline"
           size="sm"
           onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
+          disabled={!data?.pagination.has_next}
         >
           Next
         </Button>
