@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:15
@@ -12,6 +10,93 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_user -d api_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - kuma-network
+
+  migrations:
+    image: postgres:15
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=api_user
+      - PGPASSWORD=password
+      - PGDATABASE=api_db
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      sh -c "
+        for file in /migrations/*.sql; do
+          echo \"Running migration: $$file\"
+          psql -f \"$$file\"
+        done
+      "
+    restart: "no"
+    networks:
+      - kuma-network
+
+  kumad:
+    image: kumad:latest
+    container_name: kuma-daemon
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      - RUST_LOG=trace
+      - KUMA_DATABASE__HOST=postgres
+    volumes:
+      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
+      - ./tokens.base.json:/app/tokens.base.json:ro
+      - ./tokens.unichain.json:/app/tokens.unichain.json:ro
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  kuma-backend:
+    image: kuma-backend:latest
+    container_name: kuma-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      - RUST_LOG=info
+      - KUMA_DATABASE__HOST=postgres
+    volumes:
+      - ./kuma.yaml:/app/kuma.yaml:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  webapp:
+    image: kuma-webapp:latest
+    container_name: kuma-webapp
+    depends_on:
+      - kuma-backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://kuma-backend:8080
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+networks:
+  kuma-network:
+    driver: bridge
 
 volumes:
   postgres_data:
