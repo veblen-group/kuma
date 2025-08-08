@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-  ColumnDef,
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
@@ -19,8 +18,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
-import { SpotPrice } from "@/lib/types"
-import { apiClient, useSpotPrices } from "@/lib/api-client"
+import { useSpotPrices } from "@/lib/api-client"
 
 const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
 

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ApiClientProvider from "@/lib/api-client";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,20 +19,6 @@ export const metadata: Metadata = {
 };
 
 
-// Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Global settings
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 60, // 1 hour
-      retry: 2, // Retry failed requests twice
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
-    },
-  },
-})
-
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,15 +26,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <QueryClientProvider client={queryClient}>
-        <body
-          className={`${geistSans.variable} ${geistMono.variable}  antialiased`}
-        >
+      <body
+        className={`${geistSans.variable} ${geistMono.variable}  antialiased`}
+      >
+        <ApiClientProvider>
           {children}
-          {process.env.NODE_ENV === 'development' &&
-            <ReactQueryDevtools initialIsOpen={false} />}
-        </body>
-      </QueryClientProvider>
+        </ApiClientProvider>
+      </body>
     </html>
   );
 }

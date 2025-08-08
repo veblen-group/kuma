@@ -1,6 +1,10 @@
+'use client';
+
 import { SpotPrice, Signal, PaginatedResponse } from "@/lib/types";
-import { useQuery, UseQueryOptions } from "@tanstack/react-query";
-import React from "react";
+import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+
+import React, { useState } from "react";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -36,7 +40,7 @@ class ApiClient {
   }
 
   async getSpotPrices(params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
-    return this.request<SpotPrice>('/spot-prices', {
+    return this.request<SpotPrice>('/spot_prices', {
       pair: params.pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
@@ -55,31 +59,52 @@ class ApiClient {
 export const apiClient = new ApiClient();
 
 export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<SpotPrice>>>) {
-  const queryKey = React.useMemo(() => [
-    'spot-prices',
-    params.pair,
-    params.page ?? 1,
-    params.pageSize ?? 10
-  ], [params.pair, params.page, params.pageSize]);
-
   return useQuery<PaginatedResponse<SpotPrice>>({
     ...options,
-    queryKey: queryKey,
+    queryKey: [
+      'spot_prices',
+      params.pair,
+      params.page ?? 1,
+      params.pageSize ?? 10
+    ],
     queryFn: () => apiClient.getSpotPrices(params),
   });
 }
 
 export function useSignals(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<Signal>>>) {
-  const queryKey = React.useMemo(() => [
-    'signals',
-    params.pair,
-    params.page ?? 1,
-    params.pageSize ?? 10
-  ], [params.pair, params.page, params.pageSize]);
-
   return useQuery<PaginatedResponse<Signal>>({
     ...options,
-    queryKey: queryKey,
+    queryKey: [
+      'signals',
+      params.pair,
+      params.page ?? 1,
+      params.pageSize ?? 10
+    ],
     queryFn: () => apiClient.getSignals(params),
   });
+}
+
+export default function ApiClientProvider({
+  children
+}: {
+  children: React.ReactNode
+}) {
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Global settings
+        staleTime: 1000 * 60 * 5, // 5 minutes
+        gcTime: 1000 * 60 * 60, // 1 hour
+        retry: 2, // Retry failed requests twice
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+      },
+    },
+  }));
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
+  );
 }
