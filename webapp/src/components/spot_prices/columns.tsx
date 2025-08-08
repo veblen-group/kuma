@@ -21,19 +21,19 @@ export const columns: ColumnDef<SpotPrice>[] = [
     accessorFn: (row) => row.pair[1].symbol,
   },
   {
-    header: "Min Price",
-    accessorKey: "min_price",
-  },
-  {
-    header: "Max Price",
-    accessorKey: "max_price",
-  },
-  {
     header: "Min Pool ID",
     accessorKey: "min_pool_id",
   },
   {
+    header: "Min Price",
+    accessorKey: "min_price",
+  },
+  {
     header: "Max Pool ID",
     accessorKey: "max_pool_id",
+  },
+  {
+    header: "Max Price",
+    accessorKey: "max_price",
   },
 ];

@@ -48,12 +48,4 @@ export const columns: ColumnDef<Signal>[] = [
     header: "Expected Profit B",
     accessorKey: "expected_profit_b",
   },
-  {
-    header: "Max Slippage (bps)",
-    accessorKey: "max_slippage_bps",
-  },
-  {
-    header: "Congestion Risk Discount (bps)",
-    accessorKey: "congestion_risk_discount_bps",
-  },
 ];
