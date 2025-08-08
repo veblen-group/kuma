@@ -38,7 +38,7 @@ pub async fn get_spot_prices_by_pair(
 
     let repo = state.db.spot_price_repository();
 
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_lowercase()) {
+    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
         Ok(pair) => pair,
         Err(e) => {
             tracing::error!("Failed to parse pair: {}", e);
