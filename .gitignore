@@ -3,3 +3,6 @@
 
 # Added by cargo
 /target
+
+# webapp
+/node_modules
