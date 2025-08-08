@@ -26,6 +26,7 @@ pub struct Builder {
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
     pub shutdown_token: CancellationToken,
+    // TODO: take in provider
 }
 
 impl Builder {
@@ -62,6 +63,9 @@ impl Builder {
             chain: chain.clone(),
             block_tx,
             shutdown_token: shutdown_token.clone(),
+            account_addr: todo!(),
+            token_addrs: todo!(),
+            ws_url: todo!(),
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 

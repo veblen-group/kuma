@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use alloy::{primitives::Address, rpc::types::Header};
+use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 use tycho_simulation::protocol::models::{ProtocolComponent, Update};
@@ -23,6 +25,15 @@ pub struct Block {
 }
 
 impl Block {
+    pub fn from_components(
+        header: Header,
+        block_sim: Block,
+        token_balances: HashMap<Address, BigUint>,
+    ) -> Self {
+        todo!(" probably move this to a diff type and rename Block to BlockSim")
+    }
+
+    // TODO: take in header, balances, gas price
     pub fn new(block_update: Update) -> Self {
         let Update {
             block_number_or_timestamp,
