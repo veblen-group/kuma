@@ -1,6 +1,8 @@
 services:
   postgres:
     image: postgres:15
+    profiles:
+      - db
     container_name: kuma-db
     environment:
       POSTGRES_DB: api_db
@@ -20,6 +22,8 @@ services:
 
   migrations:
     image: postgres:15
+    profiles:
+      - db
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,6 +68,8 @@ services:
 
   kuma-backend:
     image: kuma-backend:latest
+    profiles:
+      - backend
     container_name: kuma-api
     depends_on:
       postgres:
@@ -83,6 +89,8 @@ services:
 
   webapp:
     image: kuma-webapp:latest
+    profiles:
+      - frontend
     container_name: kuma-webapp
     depends_on:
       - kuma-backend
