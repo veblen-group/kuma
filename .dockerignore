@@ -18,7 +18,6 @@ Thumbs.db
 # Documentation
 README.md
 *.md
-!CLAUDE.md
 
 # Development
 justfile

@@ -17,6 +17,8 @@ COPY crates/core/Cargo.toml ./crates/core/
 COPY crates/kumad/Cargo.toml ./crates/kumad/
 COPY crates/backend/Cargo.toml ./crates/backend/
 
+RUN cargo fetch --locked
+
 # Copy source code
 COPY . .
 
