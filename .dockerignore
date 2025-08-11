@@ -1,0 +1,31 @@
+# Rust
+target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Development
+justfile
+docker-compose.yml
+
+# Frontend
+webapp/
+node_modules/
+
+# Logs
+*.log

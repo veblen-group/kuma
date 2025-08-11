@@ -36,12 +36,33 @@ backend:
 backend-test endpoint="spot_prices" pair="USDC-WETH" page="1" page_size="10":
     curl "http://localhost:8080/{{endpoint}}?pair={{pair}}&page={{page}}&page_size={{page_size}}"
 
+# Docker commands
+##################th
+
+# Build specific binary images
+docker-build-kumad tag="kumad:latest":
+  docker build --build-arg BINARY=kumad -t {{tag}} .
+
+docker-build-backend tag="kuma-backend:latest":
+  docker build --build-arg BINARY=kuma-backend -t {{tag}} .
+
+docker-build-webapp tag="kuma-webapp:latest":
+  cd webapp && docker build -t {{tag}} .
+
+# Start the backend API server with Docker Compose
+docker-kuma-run:
+  docker compose up -d
+
+# Stop the backend API server
+docker-kuma-stop:
+  docker compose down
+
 # Database commands
 ###################
 
-# Start PostgreSQL database with Docker Compose
+# Start PostgreSQL database with Docker Compose and run migrations
 db-start:
-  docker-compose up -d
+  docker compose --profile db up -d
 
 # Stop PostgreSQL database
 db-stop:

@@ -62,7 +62,7 @@ impl Config {
     pub fn load() -> Result<Self, figment::Error> {
         let config: Config = Figment::new()
             .merge(Yaml::file("kuma.yaml"))
-            .merge(Env::prefixed("KUMA_CLI_"))
+            .merge(Env::prefixed("KUMA_").split("__"))
             .extract()?;
 
         Ok(config)
