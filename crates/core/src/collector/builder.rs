@@ -7,8 +7,9 @@ use tycho_common::{Bytes, models::token::Token};
 use tycho_simulation::{
     evm::{
         protocol::{
-            pancakeswap_v2::state::PancakeswapV2State, uniswap_v2::state::UniswapV2State,
-            uniswap_v3::state::UniswapV3State,
+            filters::uniswap_v4_pool_with_hook_filter, pancakeswap_v2::state::PancakeswapV2State,
+            uniswap_v2::state::UniswapV2State, uniswap_v3::state::UniswapV3State,
+            uniswap_v4::state::UniswapV4State,
         },
         stream::ProtocolStreamBuilder,
     },
@@ -84,13 +85,23 @@ impl Builder {
                 .exchange::<UniswapV2State>("sushiswap_v2", tvl_filter.clone(), None)
                 .exchange::<PancakeswapV2State>("pancakeswap_v2", tvl_filter.clone(), None)
                 .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)
+                .exchange::<UniswapV4State>(
+                    "uniswap_v4",
+                    tvl_filter.clone(),
+                    Some(uniswap_v4_pool_with_hook_filter),
+                )
                 .exchange::<UniswapV3State>("pancakeswap_v3", tvl_filter.clone(), None)),
             tycho_common::models::Chain::Base => Ok(protocol_stream
                 .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
                 .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
             tycho_common::models::Chain::Unichain => Ok(protocol_stream
                 .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
-                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
+                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)
+                .exchange::<UniswapV4State>(
+                    "uniswap_v4",
+                    tvl_filter.clone(),
+                    Some(uniswap_v4_pool_with_hook_filter),
+                )),
             _ => Err(eyre!("unsupported chain variant")),
         }
     }

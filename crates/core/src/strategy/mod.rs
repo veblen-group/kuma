@@ -461,12 +461,39 @@ mod tests {
         )
     }
 
+    // both creates a token with 18 decimals with the same 0x0000..00 address
     fn make_mainnet_pepe() -> Token {
         make_18_dec_token(tycho_common::models::Chain::Ethereum, "PEPE")
     }
 
     fn make_base_pepe() -> Token {
         make_18_dec_token(tycho_common::models::Chain::Base, "PEPE")
+    }
+
+    fn make_mainnet_pepe_with_address(address: String) -> Token {
+        Token::new(
+            // 0x0..04 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str(&address).unwrap(),
+            "PEPE",
+            18,
+            1000,
+            &[Some(1000u64)],
+            tycho_common::models::Chain::Ethereum,
+            100,
+        )
+    }
+
+    fn make_base_pepe_with_address(address: String) -> Token {
+        Token::new(
+            // 0x0..05 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str(&address).unwrap(),
+            "PEPE",
+            18,
+            1000,
+            &[Some(1000u64)],
+            tycho_common::models::Chain::Base,
+            100,
+        )
     }
 
     fn make_mainnet_weth() -> Token {
@@ -603,6 +630,53 @@ mod tests {
             scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
         );
 
+        Arc::new(CrossChainSingleHop {
+            slow_chain,
+            slow_pair,
+            slow_inventory: available_inventory_slow,
+            fast_chain,
+            fast_pair,
+            fast_inventory: available_inventory_fast,
+            max_slippage_bps: 25, // 0.25%
+            congestion_risk_discount_bps: 25,
+            // min_profit_threshold: 0.5, // 0.5%
+            binary_search_steps: 16,
+        })
+    }
+
+    fn make_same_decimal_reverse_address_strategy() -> Arc<strategy::CrossChainSingleHop> {
+        init_tracing();
+
+        // custom pepe addr 0x0..4
+        // custom weth addr 0x0..2
+        // so pair order is always (weth, pepe) for uniswap zero2one
+        let slow_chain = Chain::eth_mainnet();
+        let slow_pair = Pair::new(
+            make_mainnet_pepe_with_address(
+                "0x0000000000000000000000000000000000000004".to_string(),
+            ),
+            make_mainnet_weth(),
+        );
+        let available_inventory_slow = (
+            scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
+        );
+
+        // custom pepe addr 0x0..1
+        // custom weth addr 0x0..2
+        // so pair order is always (pepe, weth) for uniswap zero2one
+
+        let fast_chain = Chain::base_mainnet();
+        let fast_pair = Pair::new(
+            make_base_pepe_with_address(
+                "0x00000000000000000000000000000000000000000001".to_string(),
+            ),
+            make_base_weth(),
+        );
+        let available_inventory_fast = (
+            scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
+            scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
+        );
         Arc::new(CrossChainSingleHop {
             slow_chain,
             slow_pair,
@@ -958,6 +1032,99 @@ mod tests {
             .unwrap()
         )
     }
+
+    #[test]
+    fn generate_signal_reversed() {
+        // This test checks the same strategy as above, but with the slow and fast pools addresses.
+        let strategy = make_same_decimal_reverse_address_strategy();
+
+        let slow_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            2000,
+            "0x123",
+            5_000,
+            10_000,
+            tycho_common::models::Chain::Ethereum,
+        );
+
+        let fast_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            100,
+            "0x456",
+            2_000,
+            10_000,
+            tycho_common::models::Chain::Base,
+        );
+
+        let precompute = strategy.precompute(slow_state);
+        let signal = strategy
+            .generate_signal(&precompute, fast_state.clone())
+            .unwrap();
+
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
+
+        // assert pepe->weth and weth->pepe legs
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
+        assert_eq!(
+            signal.slow_swap_sim.token_out,
+            make_mainnet_pepe_with_address(
+                "0x0000000000000000000000000000000000000004".to_string()
+            )
+        );
+        assert_eq!(
+            signal.fast_swap_sim.token_in,
+            make_base_pepe_with_address("0x0000000000000000000000000000000000000001".to_string())
+        );
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_weth());
+
+        let expected_slow_sim = precompute
+            .pool_sims
+            .get(&PoolId::from("0x123"))
+            .unwrap()
+            .b_to_a
+            .last()
+            .unwrap();
+        assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
+        assert_eq!(
+            signal.slow_swap_sim.amount_out,
+            expected_slow_sim.amount_out
+        );
+
+        // assert fast amount in = slow amount out with slippage adjustment
+        let expected_fast_amount_in =
+            bps_discount(&expected_slow_sim.amount_out, strategy.max_slippage_bps);
+        assert_eq!(signal.fast_swap_sim.amount_in, expected_fast_amount_in);
+
+        // assert fast amount out is calculated from the right pool
+        let expected_fast_sim = simulate_swap_for_pool_id(
+            "0x456",
+            expected_fast_amount_in,
+            &make_base_pepe(),
+            &make_base_weth(),
+            fast_state,
+        );
+        assert_eq!(
+            signal.fast_swap_sim.amount_out,
+            expected_fast_sim.amount_out
+        );
+
+        assert_eq!(
+            signal.surplus,
+            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+        );
+        assert_eq!(
+            signal.expected_profit,
+            calculate_expected_profits(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                strategy.max_slippage_bps,
+                strategy.congestion_risk_discount_bps
+            )
+            .unwrap()
+        )
+    }
+
     #[test]
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
