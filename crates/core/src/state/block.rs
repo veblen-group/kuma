@@ -12,8 +12,9 @@ use tycho_simulation::protocol::models::{ProtocolComponent, Update};
 use super::pair::{Pair, PairState};
 use crate::state;
 
+// TODO: rename to something better
 #[derive(Clone, Debug)]
-pub struct Block {
+pub struct BlockSim {
     pub height: u64,
     /// The current states
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
@@ -24,16 +25,7 @@ pub struct Block {
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
-impl Block {
-    pub fn from_components(
-        header: Header,
-        block_sim: Block,
-        token_balances: HashMap<Address, BigUint>,
-    ) -> Self {
-        todo!(" probably move this to a diff type and rename Block to BlockSim")
-    }
-
-    // TODO: take in header, balances, gas price
+impl BlockSim {
     pub fn new(block_update: Update) -> Self {
         let Update {
             block_number_or_timestamp,
