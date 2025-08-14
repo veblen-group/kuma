@@ -16,7 +16,7 @@ use tycho_simulation::{
 };
 
 use super::Worker;
-use crate::{chain::Chain, state::block::Block};
+use crate::{chain::Chain, state::block::BlockSim};
 
 pub struct Builder {
     pub chain: Chain,
@@ -53,7 +53,7 @@ impl Builder {
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
 
-        let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
+        let (block_tx, block_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
 
         let worker = Worker {
             // TODO: do i really wanna get rid of these or keep them for reconnect?

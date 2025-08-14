@@ -18,33 +18,23 @@ use futures::{
     future::{Fuse, FusedFuture as _},
 };
 use num_bigint::BigUint;
-use tokio::{select, sync::watch};
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace};
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
-use crate::{
-    chain::Chain,
-    config::AddressForToken,
-    state::{
-        block::BlockSim,
-        pair::{Pair, PairStateStream},
-    },
-};
-
-pub use builder::Builder;
-mod builder;
-mod eth;
-mod tycho;
+use crate::{chain::Chain, config::AddressForToken, state::block::BlockSim};
 
 pub struct Handle {
     #[allow(unused)]
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    // TODO: get rid of option
-    block_rx: watch::Receiver<Arc<Option<BlockSim>>>,
+    block_rx: mpsc::Receiver<BlockSim>,
 }
 
 impl Handle {
@@ -61,16 +51,6 @@ impl Handle {
             return Err(e.into());
         }
         Ok(())
-    }
-
-    #[allow(unused)]
-    pub fn get_block_rx(&self) -> watch::Receiver<Arc<Option<BlockSim>>> {
-        self.block_rx.clone()
-    }
-
-    pub fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
-        let block_rx = self.block_rx.clone();
-        PairStateStream::from_block_rx(pair.clone(), block_rx)
     }
 }
 
@@ -101,8 +81,7 @@ impl Future for Handle {
 
 struct Worker {
     chain: Chain,
-    protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    block_tx: watch::Sender<Arc<Option<BlockSim>>>,
+    block_tx: mpsc::Sender<(Header, TokenBalances)>,
     shutdown_token: CancellationToken,
     account_addr: Address,
     token_addrs: AddressForToken,
@@ -113,7 +92,6 @@ impl Worker {
     #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            protocol_stream_builder,
             chain,
             block_tx,
             shutdown_token,
@@ -134,57 +112,19 @@ impl Worker {
             })
             .collect::<eyre::Result<Vec<_>>>()?;
 
-        // get token contract handle
-        let tokens = addrs
-            .iter()
-            .cloned()
-            .map(|addr| IERC20::new(addr, provider.clone()))
-            .collect::<Vec<_>>();
-
-        // get initial balances
-        let mut curr_token_balances = HashMap::new();
-        for token in &tokens {
-            let start: U256 = token.balanceOf(account_addr).call().await?;
-            let current_balance = BigUint::from_bytes_be(&start.to_be_bytes::<32usize>());
-            curr_token_balances.insert(token.address().clone(), current_balance);
-        }
-        // pin!(curr_token_balances);
+        let curr_token_balances =
+            TokenBalances::from_curr_balances(account_addr, addrs, provider.clone()).await?;
 
         // TODO: print this nicely
         debug!(?curr_token_balances, "Initialized token balances");
 
-        let from_filter = Filter::new()
-            .address(addrs.clone())
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic1(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
-        let to_filter = Filter::new()
-            .address(addrs.clone())
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic2(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
-
         // set up header stream
         let mut headers = provider.clone().subscribe_blocks().await?.into_stream();
-
-        let mut protocol_stream = protocol_stream_builder
-            .await
-            .build()
-            .await
-            .wrap_err("Failed building protocol stream")?;
-
-        info!(
-            chain.name = ?chain.name,
-            chain.id = ?chain.metadata.id(),
-            "Initialized header and protocol streams"
-        );
 
         let mut transfer_fetch = Fuse::terminated();
 
         let mut curr_header = None;
         let mut curr_block_sim = None;
-
-        // TODO: combine headers, balances with protocol stream
 
         loop {
             select! {
@@ -212,40 +152,6 @@ impl Worker {
                     curr_header = Some(header);
                     transfer_fetch = update_token_balances(&mut curr_token_balances, to_filter.clone(), from_filter.clone(), provider.clone()).fuse();
                     debug!("Received header");
-                }
-
-                Some(message_result) = protocol_stream.next() => {
-                    let block_update = match message_result {
-                        Ok(msg) => msg,
-                        Err(e) => {
-                            error!("Failed to receive message: {}", e);
-                            continue;
-                        }
-                    };
-
-                    debug!(
-                        block.height = ?block_update.block_number_or_timestamp,
-                        "🎁 Received block update"
-                    );
-                    curr_block_sim = {
-                        if let Some(old_block) = block_tx.borrow().as_ref().clone() {
-                            let new_block = old_block.apply_update(block_update);
-                            trace!(
-                                block.number = new_block.height,
-                                "Applied block update from Tycho Simulation stream."
-                            );
-
-                            Some(new_block)
-                        } else {
-                            trace!(
-                                block.number = block_update.block_number_or_timestamp,
-                                "Received initial block from Tycho Simulation stream."
-                            );
-                            Some(BlockSim::new(block_update))
-                        }
-                    };
-                    // TODO: put the header, balances, and tycho block sim in the watch and set locals to none
-
                 }
             }
         }

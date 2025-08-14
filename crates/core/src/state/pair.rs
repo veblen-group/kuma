@@ -6,8 +6,7 @@ use std::{
     task::{self, Poll},
 };
 
-use super::block::Block;
-use crate::state;
+use crate::state::{self, block::BlockSim};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -69,11 +68,11 @@ pub struct PairState {
 #[derive(Debug)]
 pub struct PairStateStream {
     pair: Pair,
-    block_rx: WatchStream<Arc<Option<Block>>>,
+    block_rx: WatchStream<Arc<Option<BlockSim>>>,
 }
 
 impl PairStateStream {
-    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
+    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<BlockSim>>>) -> Self {
         Self {
             pair,
             block_rx: WatchStream::from_changes(block_rx),

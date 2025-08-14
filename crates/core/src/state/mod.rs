@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
+pub mod balances;
 pub mod block;
 pub mod pair;
 
