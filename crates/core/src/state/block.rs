@@ -3,6 +3,8 @@ use std::{
     sync::Arc,
 };
 
+use alloy::{primitives::Address, rpc::types::Header};
+use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
 use tycho_common::simulation::protocol_sim::ProtocolSim;
 use tycho_simulation::protocol::models::{ProtocolComponent, Update};
@@ -10,8 +12,9 @@ use tycho_simulation::protocol::models::{ProtocolComponent, Update};
 use super::pair::{Pair, PairState};
 use crate::state;
 
+// TODO: rename to something better
 #[derive(Clone, Debug)]
-pub struct Block {
+pub struct BlockSim {
     pub height: u64,
     /// The current states
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
@@ -22,7 +25,7 @@ pub struct Block {
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
-impl Block {
+impl BlockSim {
     pub fn new(block_update: Update) -> Self {
         let Update {
             block_number_or_timestamp,

@@ -16,7 +16,7 @@ use tycho_simulation::{
 };
 
 use super::Worker;
-use crate::{chain::Chain, state::block::Block};
+use crate::{chain::Chain, state::block::BlockSim};
 
 pub struct Builder {
     pub chain: Chain,
@@ -26,6 +26,7 @@ pub struct Builder {
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
     pub shutdown_token: CancellationToken,
+    // TODO: take in provider
 }
 
 impl Builder {
@@ -52,7 +53,7 @@ impl Builder {
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
 
-        let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
+        let (block_tx, block_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
 
         let worker = Worker {
             // TODO: do i really wanna get rid of these or keep them for reconnect?
@@ -62,6 +63,9 @@ impl Builder {
             chain: chain.clone(),
             block_tx,
             shutdown_token: shutdown_token.clone(),
+            account_addr: todo!(),
+            token_addrs: todo!(),
+            ws_url: todo!(),
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 

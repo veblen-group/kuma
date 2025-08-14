@@ -13,7 +13,7 @@ use tokio_stream::wrappers::WatchStream;
 use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
-use super::block::Block;
+use super::block::BlockSim;
 use crate::state;
 
 /// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
@@ -69,11 +69,11 @@ pub struct PairState {
 #[derive(Debug)]
 pub struct PairStateStream {
     pair: Pair,
-    block_rx: WatchStream<Arc<Option<Block>>>,
+    block_rx: WatchStream<Arc<Option<BlockSim>>>,
 }
 
 impl PairStateStream {
-    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
+    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<BlockSim>>>) -> Self {
         Self {
             pair,
             block_rx: WatchStream::from_changes(block_rx),
