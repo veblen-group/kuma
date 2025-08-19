@@ -669,7 +669,7 @@ mod tests {
         let fast_chain = Chain::base_mainnet();
         let fast_pair = Pair::new(
             make_base_pepe_with_address(
-                "0x00000000000000000000000000000000000000000001".to_string(),
+                "0x0000000000000000000000000000000000000001".to_string(),
             ),
             make_base_weth(),
         );

@@ -22,8 +22,7 @@ pub struct Pair(Token, Token);
 
 impl Pair {
     pub fn new(token_a: Token, token_b: Token) -> Self {
-        let zero2one = token_a.address < token_b.address;
-        if zero2one {
+        if token_a.symbol < token_b.symbol {
             Self(token_a, token_b)
         } else {
             Self(token_b, token_a)
