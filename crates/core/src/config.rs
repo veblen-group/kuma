@@ -44,9 +44,6 @@ pub struct Config {
 
     /// Number of binary search steps
     pub binary_search_steps: usize,
-
-    /// Private key for signing transactions
-    pub private_key: String,
 }
 
 pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;
@@ -77,8 +74,9 @@ impl Config {
                      rpc_url,
                      tycho_url,
                      permit2_address,
+                     private_key,
                  }| {
-                    Chain::new(name, rpc_url, tycho_url, permit2_address)
+                    Chain::new(name, rpc_url, tycho_url, permit2_address, private_key)
                         .wrap_err("failed to parse chain info")
                 },
             )
@@ -204,6 +202,9 @@ pub struct ChainConfig {
 
     /// Address of the Permit2 contract
     pub permit2_address: String,
+
+    /// Private key for signing transactions
+    pub private_key: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyConfig {
