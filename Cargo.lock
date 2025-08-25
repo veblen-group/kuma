@@ -85,9 +85,9 @@ dependencies = [
 
 [[package]]
 name = "alloy-chains"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2672194d5865f00b03e5c7844d2c6f172a842e5c3bc49d7f9b871c42c95ae65"
+checksum = "ef8ff73a143281cb77c32006b04af9c047a6b8fe5860e85a88ad325328965355"
 dependencies = [
  "alloy-primitives",
  "num_enum",
@@ -1349,9 +1349,9 @@ dependencies = [
 
 [[package]]
 name = "async-compression"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6448dfb3960f0b038e88c781ead1e7eb7929dfc3a71a1336ec9086c00f6d1e75"
+checksum = "5bee399cc3a623ec5a2db2c5b90ee0190a2260241fbe0c023ac8f7bab426aaf8"
 dependencies = [
  "compression-codecs",
  "compression-core",
@@ -2358,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "compression-codecs"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46cc6539bf1c592cff488b9f253b30bc0ec50d15407c2cf45e27bd8f308d5905"
+checksum = "c7eea68f0e02c2b0aa8856e9a9478444206d4b6828728e7b0697c0f8cca265cb"
 dependencies = [
  "compression-core",
  "flate2",
@@ -2371,9 +2371,9 @@ dependencies = [
 
 [[package]]
 name = "compression-core"
-version = "0.4.28"
+version = "0.4.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2957e823c15bde7ecf1e8b64e537aa03a6be5fda0e2334e99887669e75b12e01"
+checksum = "e47641d3deaf41fb1538ac1f54735925e275eaf3bf4d55c81b137fba797e5cbb"
 
 [[package]]
 name = "console"
@@ -4037,7 +4037,7 @@ dependencies = [
  "js-sys",
  "libc",
  "r-efi",
- "wasi 0.14.2+wasi-0.2.4",
+ "wasi 0.14.3+wasi-0.2.4",
  "wasm-bindgen",
 ]
 
@@ -4939,7 +4939,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.82.0",
+ "tycho-common",
  "tycho-execution",
  "tycho-simulation",
 ]
@@ -4957,13 +4957,15 @@ dependencies = [
  "num-traits",
  "proptest",
  "serde",
+ "serde_json",
  "sqlx",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.82.0",
+ "tycho-common",
+ "tycho-execution",
  "tycho-simulation",
 ]
 
@@ -4989,7 +4991,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.82.0",
+ "tycho-common",
  "tycho-simulation",
 ]
 
@@ -6766,9 +6768,9 @@ dependencies = [
 
 [[package]]
 name = "revm-inspectors"
-version = "0.26.5"
+version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7b99a2332cf8eed9e9a22fffbf76dfadc99d2c45de6ae6431a1eb9f657dd97a"
+checksum = "c3a316893eac04491a224ba7b65b2765aeaf7bbc7d24b8c34a6ce9afed39cd56"
 dependencies = [
  "alloy-primitives",
  "alloy-rpc-types-eth",
@@ -7711,6 +7713,15 @@ dependencies = [
 [[package]]
 name = "solar-config"
 version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "643ddf85ab917f5643ec47eb79ee6db6c6158cfaf7415e39840e154eecf7176f"
+dependencies = [
+ "strum 0.27.2",
+]
+
+[[package]]
+name = "solar-config"
+version = "0.1.5"
 source = "git+https://github.com/paradigmxyz/solar.git?rev=3062e90c0f1aacfee7b01d2c3812a14804140daf#3062e90c0f1aacfee7b01d2c3812a14804140daf"
 dependencies = [
  "strum 0.27.2",
@@ -7748,7 +7759,7 @@ dependencies = [
  "normalize-path",
  "rayon",
  "scoped-tls",
- "solar-config",
+ "solar-config 0.1.5 (git+https://github.com/paradigmxyz/solar.git?rev=3062e90c0f1aacfee7b01d2c3812a14804140daf)",
  "solar-data-structures",
  "solar-macros",
  "thiserror 2.0.16",
@@ -9034,9 +9045,9 @@ dependencies = [
 
 [[package]]
 name = "tycho-client"
-version = "0.81.6"
+version = "0.82.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05d26b88038925afa54281c40b2fb16186e656a4598eaebe117136bd7fa055b8"
+checksum = "19a7ed885ea7e01efc3c98135b1be5c0472e81ada6455517f61ca67313271587"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9055,32 +9066,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber 0.3.19",
- "tycho-common 0.81.6",
- "uuid 1.18.0",
-]
-
-[[package]]
-name = "tycho-common"
-version = "0.81.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68d44780891254a0155d1aaa765a8625b48672158b6e12ce4f06771e9d369ffa"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "chrono",
- "hex",
- "num-bigint",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "thiserror 1.0.69",
- "tiny-keccak",
- "tracing",
- "typetag",
- "utoipa",
+ "tycho-common",
  "uuid 1.18.0",
 ]
 
@@ -9128,13 +9114,13 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "tycho-common 0.82.0",
+ "tycho-common",
 ]
 
 [[package]]
 name = "tycho-simulation"
-version = "0.152.0"
-source = "git+https://github.com/propeller-heads/tycho-simulation.git?tag=0.152.0#6239b465a117a77bdc20c8b69baa548ec5c8f9dc"
+version = "0.155.0"
+source = "git+https://github.com/veblen-group/tycho-simulation.git?branch=quasystaty1%2Fprotocol%2Fdeserialize-pc#b473114a05b23b927e87205ed021710bb0ca876c"
 dependencies = [
  "alloy",
  "async-stream",
@@ -9160,6 +9146,7 @@ dependencies = [
  "revm-inspectors",
  "serde",
  "serde_json",
+ "solar-config 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "thiserror 1.0.69",
@@ -9168,7 +9155,7 @@ dependencies = [
  "tokio-tungstenite 0.26.2",
  "tracing",
  "tycho-client",
- "tycho-common 0.81.6",
+ "tycho-common",
  "uuid 1.18.0",
 ]
 
@@ -9531,11 +9518,11 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasi"
-version = "0.14.2+wasi-0.2.4"
+version = "0.14.3+wasi-0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9683f9a5a998d873c0d21fcbe3c083009670149a8fab228644b8bd36b2c48cb3"
+checksum = "6a51ae83037bdd272a9e28ce236db8c07016dd0d50c27038b3f407533c030c95"
 dependencies = [
- "wit-bindgen-rt",
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -10029,13 +10016,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "wit-bindgen-rt"
-version = "0.39.0"
+name = "wit-bindgen"
+version = "0.45.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
-dependencies = [
- "bitflags 2.9.3",
-]
+checksum = "052283831dbae3d879dc7f51f3d92703a316ca49f91540417d38591826127814"
 
 [[package]]
 name = "writeable"

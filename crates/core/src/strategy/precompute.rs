@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
-use tracing::{error, instrument, trace};
+use tracing::{error, info, instrument, trace};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
@@ -17,7 +17,6 @@ pub struct Precomputes {
     pub block_height: u64,
     pub sorted_spot_prices: Vec<(PoolId, f64)>,
     pub pool_sims: HashMap<state::PoolId, simulation::PoolSteps>,
-    #[allow(dead_code)]
     pub pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
@@ -71,11 +70,10 @@ impl Precomputes {
                     }
                 }
             });
-
         pool_sims.extend(precomputes);
 
         let sorted_spot_prices: Vec<(state::PoolId, f64)> = make_sorted_spot_prices(&state, &pair);
-
+        info!("{:?}", state.metadata.clone(),);
         if sorted_spot_prices.is_empty() {
             trace!(pair= %pair, "No spot prices found");
         } else {

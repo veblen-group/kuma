@@ -1,0 +1,197 @@
+{
+    "slow_chain": {
+        "name": "ethereum",
+        "metadata": "mainnet",
+        "rpc_url": "https://ethereum-rpc.publicnode.com",
+        "tycho_url": "tycho-beta.propellerheads.xyz",
+        "permit2_address": "0x000000000022d473030f116ddee9f6b43ac78ba3"
+    },
+    "slow_pair": [
+        {
+            "address": "0x0000000000000000000000000000000000000001",
+            "symbol": "PEPE",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "ethereum",
+            "quality": 100
+        },
+        {
+            "address": "0x0000000000000000000000000000000000000002",
+            "symbol": "WETH",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "ethereum",
+            "quality": 100
+        }
+    ],
+    "slow_protocol_component": {
+        "id": "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+        "protocol_system": "uniswap_v2",
+        "protocol_type_name": "uniswap_v2",
+        "chain": "ethereum",
+        "tokens": [
+            "0x0000000000000000000000000000000000000001",
+            "0x0000000000000000000000000000000000000002"
+        ],
+        "contract_addresses": [
+            "0x3078313233"
+        ],
+        "static_attributes": {},
+        "change": "Update",
+        "creation_tx": "0x0123",
+        "created_at": "1970-01-01T00:00:00"
+    },
+    "slow_pool_id": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+    "slow_swap_sim": {
+        "token_in": {
+            "address": "0x0000000000000000000000000000000000000002",
+            "symbol": "WETH",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "ethereum",
+            "quality": 100
+        },
+        "amount_in": [
+            1661992960,
+            1808227885,
+            5
+        ],
+        "token_out": {
+            "address": "0x0000000000000000000000000000000000000001",
+            "symbol": "PEPE",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "ethereum",
+            "quality": 100
+        },
+        "amount_out": [
+            3598443246,
+            2902097434,
+            2
+        ],
+        "gas_cost": [
+            120000
+        ]
+    },
+    "slow_height": 2000,
+    "fast_chain": {
+        "name": "base",
+        "metadata": "base",
+        "rpc_url": "https://mainnet.base.org",
+        "tycho_url": "tycho-base-beta.propellerheads.xyz",
+        "permit2_address": "0x000000000022d473030f116ddee9f6b43ac78ba3"
+    },
+    "fast_pair": [
+        {
+            "address": "0x0000000000000000000000000000000000000001",
+            "symbol": "PEPE",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "base",
+            "quality": 100
+        },
+        {
+            "address": "0x0000000000000000000000000000000000000002",
+            "symbol": "WETH",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "base",
+            "quality": 100
+        }
+    ],
+    "fast_protocol_component": {
+        "id": "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640",
+        "protocol_system": "uniswap_v2",
+        "protocol_type_name": "uniswap_v2",
+        "chain": "ethereum",
+        "tokens": [
+            "0x0000000000000000000000000000000000000001",
+            "0x0000000000000000000000000000000000000002"
+        ],
+        "contract_addresses": [
+            "0x3078343536"
+        ],
+        "static_attributes": {},
+        "change": "Update",
+        "creation_tx": "0x0123",
+        "created_at": "1970-01-01T00:00:00"
+    },
+    "fast_pool_id": "0x7bea39867e4169dbe237d55c8242a8f2fcdcc387",
+    "fast_swap_sim": {
+        "token_in": {
+            "address": "0x0000000000000000000000000000000000000001",
+            "symbol": "PEPE",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "base",
+            "quality": 100
+        },
+        "amount_in": [
+            3310274263,
+            2873367354,
+            2
+        ],
+        "token_out": {
+            "address": "0x0000000000000000000000000000000000000002",
+            "symbol": "WETH",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "base",
+            "quality": 100
+        },
+        "amount_out": [
+            1143753096,
+            4236028803,
+            12
+        ],
+        "gas_cost": [
+            120000
+        ]
+    },
+    "fast_height": 100,
+    "max_slippage_bps": 25,
+    "congestion_risk_discount_bps": 25,
+    "surplus": [
+        [
+            3776727432,
+            2427800917,
+            7
+        ],
+        [
+            288168983,
+            28730080
+        ]
+    ],
+    "expected_profit": [
+        [
+            3194142252,
+            2207478994,
+            7
+        ],
+        []
+    ]
+}

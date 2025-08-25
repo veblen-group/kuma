@@ -32,14 +32,12 @@ impl Display for Direction {
 pub struct CrossChainSingleHop {
     pub slow_chain: Chain,
     pub slow_pair: Pair,
-    #[serde(skip)]
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
     pub slow_pool_id: state::PoolId,
     pub slow_swap_sim: Swap,
     pub slow_height: u64,
     pub fast_chain: Chain,
     pub fast_pair: Pair,
-    #[serde(skip)]
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
     pub fast_pool_id: state::PoolId,
     pub fast_swap_sim: Swap,

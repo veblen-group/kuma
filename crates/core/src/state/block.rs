@@ -40,7 +40,10 @@ impl Block {
 
         let metadata: HashMap<state::PoolId, Arc<ProtocolComponent>> = new_pairs
             .into_iter()
-            .map(|(id, metadata)| (state::PoolId::from(id), Arc::from(metadata)))
+            .map(|(id, metadata)| {
+                let common_metadata: ProtocolComponent = metadata.into();
+                (state::PoolId::from(id), Arc::from(common_metadata))
+            })
             .collect();
 
         Self {
@@ -127,7 +130,7 @@ impl Block {
             states.insert(pair_id.clone(), Arc::from(pair_state));
 
             // update metadata map
-            if let Some(metadata) = metadata.insert(pair_id.clone(), Arc::new(new_pair)) {
+            if let Some(metadata) = metadata.insert(pair_id.clone(), Arc::new(new_pair.into())) {
                 debug!(block.number = %height, pair.id = %metadata.id, "Updated metadata for pair");
             }
 

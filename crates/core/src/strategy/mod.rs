@@ -913,6 +913,10 @@ mod tests {
             .generate_signal(&precompute, fast_state.clone())
             .unwrap();
 
+        let json_str = serde_json::to_string_pretty(&signal).unwrap();
+
+        println!("{}", json_str);
+
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
 
