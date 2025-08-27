@@ -1,7 +1,10 @@
 use std::str::FromStr as _;
+use std::u64;
 
+use alloy::hex;
 use alloy::network::EthereumWallet;
 use alloy::primitives::{Address, Bytes as AlloyBytes, Keccak256};
+use alloy::providers::Provider;
 use alloy::providers::ext::AnvilApi;
 use alloy::rpc::types::{TransactionInput, TransactionRequest};
 use alloy::signers::Signature;
@@ -9,9 +12,8 @@ use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
 use color_eyre::eyre::{self, Context as _};
 use num_bigint::BigUint;
-use tracing::error;
-use tycho_common::Bytes;
-use tycho_simulation::tycho_common::models::token::Token as SimToken;
+use tracing::info;
+use tycho_common::{Bytes, models::token::Token};
 
 use tycho_execution::encoding::errors::EncodingError;
 use tycho_execution::encoding::evm::approvals::permit2::PermitSingle;
@@ -30,15 +32,11 @@ pub async fn get_tx_request(
     _chain: &alloy::core::primitives::ChainId,
     rpc_url: &str,
 ) -> eyre::Result<TransactionRequest> {
-    use std::time::Duration;
-    use tokio::time::timeout;
-
     tracing::info!("Connecting to RPC: {}", rpc_url);
 
     let wallet = EthereumWallet::new(signer.clone());
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
-        .with_cached_nonce_management()
         .connect_http(rpc_url.parse().wrap_err("Invalid RPC URL")?);
 
     provider.anvil_set_logging(true).await.ok();
@@ -50,47 +48,17 @@ pub async fn get_tx_request(
         })
         .value(biguint_to_u256(&transaction.value));
 
-    tracing::info!("Filling transaction with provider data (nonce, gas, etc.)");
-
-    // Add timeout to prevent hanging
-    let filled_request = match timeout(Duration::from_secs(30), provider.fill(base_request))
-        .await
-        .inspect_err(|e| error!("failed: {e}"))
-    {
-        Ok(Ok(filled)) => filled,
-        Ok(Err(provider_err)) => {
-            tracing::warn!(
-                "Provider fill failed: {}. Using basic transaction without gas estimation.",
-                provider_err
-            );
-            // Fallback to basic transaction without provider filling
-            return Ok(TransactionRequest {
-                from: Some(signer.address()),
-                to: Some(Address::from_slice(&transaction.to).into()),
-                gas: Some(300_000),
-                gas_price: Some(20_000_000_000u128),
-                value: Some(biguint_to_u256(&transaction.value)),
-                input: TransactionInput {
-                    input: Some(AlloyBytes::from(transaction.data.clone())),
-                    data: None,
-                },
-                ..Default::default()
-            });
-        }
-        Err(_) => {
-            return Err(eyre::eyre!(
-                "RPC request timed out after 30 seconds for: {}",
-                rpc_url
-            ));
-        }
-    };
-
-    let transaction_request = filled_request
-        .try_into_request()
-        .wrap_err("Failed to convert to transaction request")?;
+    let tx_hash = provider
+        .send_transaction(base_request.clone())
+        .await?
+        .with_required_confirmations(1)
+        .with_timeout(Some(std::time::Duration::from_secs(60)))
+        .watch()
+        .await?;
+    info!("Transaction successful with hash: {} ", tx_hash);
 
     tracing::info!("Successfully filled transaction request");
-    Ok(transaction_request)
+    Ok(base_request.clone())
 }
 
 pub fn try_transactions_from_signal(
@@ -136,6 +104,7 @@ fn encode_tycho_router_call(
     let p = encoded_solution.permit.expect("Permit object must be set");
     let permit = PermitSingle::try_from(&p)
         .map_err(|_| EncodingError::InvalidInput("Invalid permit".to_string()))?;
+    info!("Signing permit2 approval: {:?}", permit);
     let signature = sign_permit(chain_id, &p, signer)?;
     let given_amount = biguint_to_u256(&solution.given_amount);
     let min_amount_out = biguint_to_u256(&solution.checked_amount);
@@ -156,7 +125,6 @@ fn encode_tycho_router_call(
         encoded_solution.swaps,
     )
         .abi_encode();
-
     let contract_interaction = encode_input(&encoded_solution.function_signature, method_calldata);
     let value = if solution.given_token == native_address {
         solution.given_amount.clone()
@@ -175,6 +143,7 @@ fn sign_permit(
     permit_single: &models::PermitSingle,
     signer: PrivateKeySigner,
 ) -> Result<Signature, EncodingError> {
+    // TODO: make permit2 address configurable
     let permit2_address = Address::from_str("0x000000000022D473030F116dDEE9F6B43aC78BA3")
         .map_err(|_| EncodingError::FatalError("Permit2 address not valid".to_string()))?;
     let domain = eip712_domain! {
@@ -193,8 +162,11 @@ fn try_solutions_from_signal(
     signal: CrossChainSingleHop,
     user_address: Bytes,
 ) -> eyre::Result<(Solution, Solution)> {
-    let sell_token = &signal.slow_swap_sim.token_in;
-    let buy_token = &signal.slow_swap_sim.token_out;
+    let sell_token_slow = signal.slow_swap_sim.token_in;
+    let buy_token_slow = signal.slow_swap_sim.token_out;
+
+    let sell_token_fast = signal.fast_swap_sim.token_in;
+    let buy_token_fast = signal.fast_swap_sim.token_out;
 
     let slow_chain_amount_in = signal.slow_swap_sim.amount_in;
     let slow_chain_min_amount_out = signal.slow_swap_sim.amount_out;
@@ -207,8 +179,8 @@ fn try_solutions_from_signal(
 
     let slow_solution = create_solution(
         slow_protocol_component,
-        sell_token,
-        buy_token,
+        &sell_token_slow,
+        &buy_token_slow,
         slow_chain_amount_in,
         slow_chain_min_amount_out,
         user_address.clone(),
@@ -216,8 +188,8 @@ fn try_solutions_from_signal(
 
     let fast_solution = create_solution(
         fast_protocol_component,
-        buy_token,
-        sell_token,
+        &sell_token_fast,
+        &buy_token_fast,
         fast_chain_amount_in,
         fast_chain_min_amount_out,
         user_address.clone(),
@@ -228,8 +200,8 @@ fn try_solutions_from_signal(
 
 fn create_solution(
     component: ProtocolComponent,
-    sell_token: &SimToken,
-    buy_token: &SimToken,
+    sell_token: &Token,
+    buy_token: &Token,
     amount_in: BigUint,
     min_amount_out: BigUint,
     user_address: Bytes,
@@ -302,6 +274,8 @@ pub(crate) fn encode_solution(solution: Solution, chain: &Chain) -> eyre::Result
         .encode_solutions(vec![solution.clone()])
         .expect("Failed to encode router calldata")[0]
         .clone();
+
+    info!("Encoded solution: {:?}", encoded_solution);
 
     Ok(encoded_solution)
 }
