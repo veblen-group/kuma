@@ -3,7 +3,6 @@ use std::{collections::HashMap, sync::Arc};
 use color_eyre::eyre::{self, Context as _, eyre};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tycho_common::{Bytes, models::token::Token};
 use tycho_simulation::{
     evm::{
         protocol::{
@@ -13,6 +12,7 @@ use tycho_simulation::{
         stream::ProtocolStreamBuilder,
     },
     tycho_client::feed::component_tracker::ComponentFilter,
+    tycho_common::{self, Bytes, models::token::Token},
 };
 
 use super::Worker;

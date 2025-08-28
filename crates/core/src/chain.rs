@@ -7,7 +7,7 @@ use alloy::primitives::Address;
 use alloy_chains::{self, NamedChain};
 use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
-use tycho_common::models as tycho_models;
+use tycho_simulation::evm::tycho_models;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Chain {

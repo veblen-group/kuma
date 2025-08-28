@@ -3,8 +3,9 @@ use std::sync::Arc;
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
-use tycho_common::simulation::protocol_sim::ProtocolSim;
-use tycho_simulation::protocol::models::ProtocolComponent;
+use tycho_simulation::{
+    protocol::models::ProtocolComponent, tycho_core::simulation::protocol_sim::ProtocolSim,
+};
 
 use crate::{
     chain::Chain,
@@ -405,8 +406,8 @@ mod tests {
         sync::{Arc, OnceLock},
     };
     use tracing_subscriber::EnvFilter;
-    use tycho_common::models::token::Token;
     use tycho_common::simulation::protocol_sim::ProtocolSim;
+    use tycho_simulation::tycho_common::{self, models::token::Token};
 
     static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 

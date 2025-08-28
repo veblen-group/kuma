@@ -4,10 +4,10 @@ use std::{collections::HashMap, str::FromStr};
 use color_eyre::eyre::{self, Context, Ok};
 use tokio::fs;
 use tracing::info;
-use tycho_common::{Bytes, models::token::Token};
 use tycho_simulation::{
     evm::tycho_models,
     tycho_client::{HttpRPCClient, rpc::RPCClient as _},
+    tycho_common::{self, Bytes, models::token::Token},
 };
 
 #[derive(clap::Args, Debug)]

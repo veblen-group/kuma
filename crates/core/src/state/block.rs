@@ -4,8 +4,10 @@ use std::{
 };
 
 use tracing::{debug, instrument, trace};
-use tycho_common::simulation::protocol_sim::ProtocolSim;
-use tycho_simulation::protocol::models::{ProtocolComponent, Update};
+use tycho_simulation::{
+    protocol::models::{ProtocolComponent, Update},
+    tycho_core::simulation::protocol_sim::ProtocolSim,
+};
 
 use super::pair::{Pair, PairState};
 use crate::state;
@@ -83,6 +85,7 @@ impl Block {
             states: mut updated_states,
             new_pairs,
             removed_pairs,
+            .. // TODO
         } = block_update;
 
         let mut modified_pools = modified_pools.as_ref().clone();
