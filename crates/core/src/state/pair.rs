@@ -10,8 +10,10 @@ use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
-use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
-use tycho_simulation::protocol::models::ProtocolComponent;
+use tycho_simulation::{
+    protocol::models::ProtocolComponent, tycho_common::models::token::Token,
+    tycho_core::simulation::protocol_sim::ProtocolSim,
+};
 
 use super::block::Block;
 use crate::state;

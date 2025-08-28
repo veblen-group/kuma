@@ -4,7 +4,9 @@ use color_eyre::eyre::{self, Context as _, eyre};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
-use tycho_common::{models::token::Token, simulation::protocol_sim::ProtocolSim};
+use tycho_simulation::{
+    tycho_common::models::token::Token, tycho_core::simulation::protocol_sim::ProtocolSim,
+};
 
 use crate::{
     signals::Direction,

@@ -8,7 +8,7 @@ use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
 use tracing::{info, warn};
-use tycho_common::{Bytes, models::token::Token};
+use tycho_simulation::tycho_common::{self, Bytes, models::token::Token};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
