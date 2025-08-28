@@ -20,6 +20,8 @@ pub struct Chain {
     pub tycho_url: String,
     #[serde(skip)]
     pub permit2_address: Address,
+    #[serde(skip)]
+    pub private_key: String,
 }
 
 impl Chain {
@@ -28,6 +30,7 @@ impl Chain {
         rpc_url: &str,
         tycho_url: &str,
         permit2_address: &str,
+        private_key: &str,
     ) -> eyre::Result<Self> {
         let name = tycho_models::Chain::from_str(name)
             .wrap_err("failed to parse chain name into tycho::models::Chain")?;
@@ -47,6 +50,7 @@ impl Chain {
             rpc_url: rpc_url.to_string(),
             tycho_url: tycho_url.to_string(),
             permit2_address: permit2_address,
+            private_key: private_key.to_string(),
         })
     }
 
@@ -64,6 +68,8 @@ impl Chain {
             tycho_url: "tycho-beta.propellerheads.xyz".to_string(),
             permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
                 .expect("Couldn't convert to address"),
+            private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                .to_string(),
         }
     }
 
@@ -76,6 +82,8 @@ impl Chain {
             tycho_url: "tycho-base-beta.propellerheads.xyz".to_string(),
             permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
                 .expect("Couldn't convert to address"),
+            private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                .to_string(),
         }
     }
 
@@ -89,6 +97,8 @@ impl Chain {
             tycho_url: "tycho-unichain-beta.propellerheads.xyz".to_string(),
             permit2_address: Address::from_str("0x000000000022d473030f116ddee9f6b43ac78ba3")
                 .expect("Couldn't convert to address"),
+            private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                .to_string(),
         }
     }
 }
