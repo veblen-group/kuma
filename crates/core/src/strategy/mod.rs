@@ -84,8 +84,7 @@ impl CrossChainSingleHop {
 
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
-                |(slow_id, slow_price, fast_id, fast_price)| {
-                    let spread = slow_price - fast_price;
+                |(slow_id, slow_price, fast_id, fast_price, spread)| {
                     let slow_direction = if spread > 0.0 {
                         Direction::AtoB
                     } else {
@@ -365,7 +364,7 @@ impl CrossChainSingleHop {
 fn find_first_crossed_pools(
     sorted_slow_prices: &[(state::PoolId, f64)],
     sorted_fast_prices: &[(state::PoolId, f64)],
-) -> Option<(state::PoolId, f64, state::PoolId, f64)> {
+) -> Option<(state::PoolId, f64, state::PoolId, f64, f64)> {
     if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
         return None;
     }
@@ -376,24 +375,26 @@ fn find_first_crossed_pools(
     let (fast_max_id, fast_max) = &sorted_fast_prices[sorted_fast_prices.len() - 1];
 
     // Two possible "extreme" spreads
-    let spread1 = slow_max - fast_min;
-    let spread2 = fast_max - slow_min;
+    let short_slow_long_fast_spread = slow_max - fast_min;
+    let long_slow_short_fast_spread = slow_min - fast_max;
 
-    if spread1.abs() >= spread2.abs() {
-        trace!(%slow_max_id, %slow_max, %fast_min_id, %fast_min, %spread1, "max spread slow_max - fast_min");
+    if short_slow_long_fast_spread.abs() >= long_slow_short_fast_spread.abs() {
+        trace!(%slow_max_id, %slow_max, %fast_min_id, %fast_min, %short_slow_long_fast_spread, "max spread slow_max - fast_min");
         Some((
             slow_max_id.clone(),
             *slow_max,
             fast_min_id.clone(),
             *fast_min,
+            short_slow_long_fast_spread,
         ))
     } else {
-        trace!(%slow_min_id, %slow_min, %fast_max_id, %fast_max, %spread2, "max spread fast_max - slow_min");
+        trace!(%slow_min_id, %slow_min, %fast_max_id, %fast_max, %long_slow_short_fast_spread, "max spread fast_max - slow_min");
         Some((
             slow_min_id.clone(),
             *slow_min,
             fast_max_id.clone(),
             *fast_max,
+            long_slow_short_fast_spread,
         ))
     }
 }
