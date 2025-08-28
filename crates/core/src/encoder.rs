@@ -1,7 +1,6 @@
 use std::str::FromStr as _;
 use std::u64;
 
-use alloy::hex;
 use alloy::network::EthereumWallet;
 use alloy::primitives::{Address, Bytes as AlloyBytes, Keccak256};
 use alloy::providers::Provider;
