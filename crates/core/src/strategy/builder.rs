@@ -2,6 +2,8 @@ use std::str::FromStr as _;
 
 use color_eyre::eyre::{self, OptionExt};
 
+use tycho_simulation::tycho_common;
+
 use crate::{
     config::{Config, InventoriesForChain},
     strategy::CrossChainSingleHop,

@@ -2,7 +2,7 @@ use color_eyre::eyre::{self, OptionExt as _, Result, eyre};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{str::FromStr as _, sync::Arc};
 use tracing::info;
-use tycho_common::models::token::Token;
+use tycho_simulation::tycho_common::{self, models::token::Token};
 
 use crate::{
     chain::Chain,
