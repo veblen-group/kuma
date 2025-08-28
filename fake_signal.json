@@ -31,42 +31,47 @@
         }
     ],
     "slow_protocol_component": {
-        "id": "faa318479b7755b2dbfdd34dc306cb28b420ad12",
+        "address": "0x",
+        "id": "0xfaa318479b7755b2dbfdd34dc306cb28b420ad12",
+        "tokens": [
+            {
+                "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+                "symbol": "UNI",
+                "decimals": 18,
+                "tax": 1000,
+                "gas": [
+                    1000
+                ],
+                "chain": "ethereum",
+                "quality": 100
+            },
+            {
+                "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+                "symbol": "WETH",
+                "decimals": 18,
+                "tax": 1000,
+                "gas": [
+                    1000
+                ],
+                "chain": "ethereum",
+                "quality": 100
+            }
+        ],
         "protocol_system": "uniswap_v3",
         "protocol_type_name": "uniswap_v3_pool",
         "chain": "ethereum",
-        "tokens": [
-            "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
-            "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-        ],
-        "contract_addresses": [],
+        "contract_ids": [],
         "static_attributes": {
-            "tick_spacing": "0x0a",
+            "pool_address": "0xfaa318479b7755b2dbfdd34dc306cb28b420ad12",
             "fee": "0x01f4",
-            "pool_address": "0xfaa318479b7755b2dbfdd34dc306cb28b420ad12"
+            "tick_spacing": "0x0a"
         },
-        "change": "Update",
         "creation_tx": "0xbdcd3cf27500bee010bf9cc92121dbb46e6ee86be0a1b1b5cee795008284a13b",
         "created_at": "2021-05-05T19:31:28"
     },
     "slow_pool_id": "0xfaa318479b7755b2dbfdd34dc306cb28b420ad12",
     "slow_swap_sim": {
         "token_in": {
-            "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
-            "symbol": "UNI",
-            "decimals": 18,
-            "tax": 1000,
-            "gas": [
-                1000
-            ],
-            "chain": "ethereum",
-            "quality": 100
-        },
-        "amount_in": [
-            3071769216,
-            15210854
-        ],
-        "token_out": {
             "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
             "symbol": "WETH",
             "decimals": 18,
@@ -77,15 +82,30 @@
             "chain": "ethereum",
             "quality": 100
         },
+        "amount_in": [
+            3046980384,
+            29421
+        ],
+        "token_out": {
+            "address": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+            "symbol": "UNI",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "ethereum",
+            "quality": 100
+        },
         "amount_out": [
-            2333925484,
-            31291
+            1900656836,
+            12981211
         ],
         "gas_cost": [
             132000
         ]
     },
-    "slow_height": 23225779,
+    "slow_height": 23242400,
     "fast_chain": {
         "name": "unichain",
         "metadata": "unichain",
@@ -118,42 +138,47 @@
         }
     ],
     "fast_protocol_component": {
-        "id": "d49174dba635489c67fa628864c2d0d04824ebd8",
+        "address": "0x",
+        "id": "0xd49174dba635489c67fa628864c2d0d04824ebd8",
+        "tokens": [
+            {
+                "address": "0x4200000000000000000000000000000000000006",
+                "symbol": "WETH",
+                "decimals": 18,
+                "tax": 1000,
+                "gas": [
+                    1000
+                ],
+                "chain": "unichain",
+                "quality": 100
+            },
+            {
+                "address": "0x8f187aa05619a017077f5308904739877ce9ea21",
+                "symbol": "UNI",
+                "decimals": 18,
+                "tax": 1000,
+                "gas": [
+                    1000
+                ],
+                "chain": "unichain",
+                "quality": 100
+            }
+        ],
         "protocol_system": "uniswap_v3",
         "protocol_type_name": "uniswap_v3_pool",
         "chain": "unichain",
-        "tokens": [
-            "0x4200000000000000000000000000000000000006",
-            "0x8f187aa05619a017077f5308904739877ce9ea21"
-        ],
-        "contract_addresses": [],
+        "contract_ids": [],
         "static_attributes": {
-            "tick_spacing": "0x3c",
             "fee": "0x0bb8",
+            "tick_spacing": "0x3c",
             "pool_address": "0xd49174dba635489c67fa628864c2d0d04824ebd8"
         },
-        "change": "Update",
         "creation_tx": "0x03affca42e165da72f3e5d949176282752e6b39e7ad34c71b475d5cd77be988f",
         "created_at": "2025-02-18T12:05:16"
     },
     "fast_pool_id": "0xd49174dba635489c67fa628864c2d0d04824ebd8",
     "fast_swap_sim": {
         "token_in": {
-            "address": "0x4200000000000000000000000000000000000006",
-            "symbol": "WETH",
-            "decimals": 18,
-            "tax": 1000,
-            "gas": [
-                1000
-            ],
-            "chain": "unichain",
-            "quality": 100
-        },
-        "amount_in": [
-            1350985610,
-            32213
-        ],
-        "token_out": {
             "address": "0x8f187aa05619a017077f5308904739877ce9ea21",
             "symbol": "UNI",
             "decimals": 18,
@@ -164,31 +189,46 @@
             "chain": "unichain",
             "quality": 100
         },
+        "amount_in": [
+            1777793593,
+            13948758
+        ],
+        "token_out": {
+            "address": "0x4200000000000000000000000000000000000006",
+            "symbol": "WETH",
+            "decimals": 18,
+            "tax": 1000,
+            "gas": [
+                1000
+            ],
+            "chain": "unichain",
+            "quality": 100
+        },
         "amount_out": [
-            4189130646,
-            14281128
+            4284513362,
+            28526
         ],
         "gas_cost": [
             132000
         ]
     },
-    "fast_height": 25468895,
+    "fast_height": 25669343,
     "max_slippage_bps": 25,
     "congestion_risk_discount_bps": 0,
     "surplus": [
         [
-            1117361430,
-            70274
+            1237532978,
+            105
         ],
         [
-            982939874,
-            78
+            122863243,
+            32453
         ]
     ],
     "expected_profit": [
         [
-            1879982716,
-            34571
+            4168874292,
+            33
         ],
         []
     ]
