@@ -22,20 +22,14 @@ impl Permit2 {
 
         info!("Parsed {} chains from config:", tokens_by_chain.len());
 
-        for (chain, _tokens) in &tokens_by_chain {
-            info!(chain.name = %chain.name,
-                        chain.id = %chain.metadata.id(),
-                        "🔗 Initialized chain info from config");
-        }
-
-        let signer: PrivateKeySigner = config
-            .private_key
-            .parse()
-            .wrap_err("Failed to parse private key")?;
-
-        let wallet = EthereumWallet::new(signer.clone());
         let approve_function_signature = "approve(address,uint256)";
         for (chain, tokens) in tokens_by_chain.iter() {
+            let signer: PrivateKeySigner = chain
+                .private_key
+                .parse()
+                .wrap_err("Failed to parse private key")?;
+            let wallet = EthereumWallet::new(signer.clone());
+
             let args = (
                 chain.permit2_address,
                 U256::MAX, // Approve maximum amount
