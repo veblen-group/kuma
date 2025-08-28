@@ -4,7 +4,7 @@ use color_eyre::eyre::{self, Context as _};
 use futures::StreamExt as _;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
-use tycho_common::models::token::Token;
+use tycho_simulation::tycho_common::{self, models::token::Token};
 
 use core::{
     chain::Chain, collector, config::Config, signals, state::pair::Pair,
