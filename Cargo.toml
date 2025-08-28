@@ -32,11 +32,11 @@ tracing-subscriber = { version = "0.3.19", features = [
     "once_cell",
     "tracing",
 ] }
-tycho-execution = "0.111.0"
+tycho-execution = "0.121.0"
 tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.152.0", features = [
     "evm",
 ] }
-tycho-common = "0.77.1"
+tycho-common = "0.82.0"
 uniswap-sdk-core = "5.1.0"
 uniswap-v3-sdk = { version = "5.0.0", features = ["extensions"] }
 
