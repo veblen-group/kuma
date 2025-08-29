@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
+    block,
     kuma::{self},
     permit, tokens,
 };
@@ -54,6 +55,8 @@ enum Commands {
     /// sign permit2 for a token
     #[command(name = "init-permit2")]
     SignPermit2(permit::Permit2),
+
+    GetBlocks(StrategyArgs),
 }
 
 impl Cli {
@@ -80,6 +83,23 @@ impl Cli {
             }
             Commands::Tokens(cmd) => cmd.run(config).await?,
             Commands::SignPermit2(cmd) => cmd.run(config).await?,
+            Commands::GetBlocks(args) => {
+                let kuma = kuma::Kuma::spawn(config, args.clone(), shutdown_token.clone())
+                    .map_err(|e| eyre!("Failed to spawn Kuma: {e:}"))?;
+
+                let (slow_block, fast_block) = kuma.get_blocks().await?;
+
+                info!(%slow_block.block_height, %fast_block.block_height, "✅ Got blocks");
+
+                let slow_name =
+                    format!("block-{}-{}.json", args.slow_chain, slow_block.block_height);
+
+                let fast_name =
+                    format!("block-{}-{}.json", args.fast_chain, fast_block.block_height);
+
+                // TODO: slow_block.states implement ProtocolSim + Serialize + Deserialize, use this to serialize them into a file
+                // TODO: fast_block.states implement ProtocolSim + Serialize + Deserialize, use this to serialize them into a file
+            }
         }
         Ok(())
     }

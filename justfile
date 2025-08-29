@@ -17,6 +17,11 @@ generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain=
 get-tokens chain="ethereum":
     cargo run -p kuma-cli tokens --chain {{chain}}
 
+get-blocks token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
+    cargo run -p kuma-cli get-blocks \
+    --token-a {{token-a}} --token-b {{token-b}} \
+    --slow-chain {{slow-chain}} --fast-chain {{fast-chain}} \
+
 init-permit2:
     cargo run -p kuma-cli init-permit2
 

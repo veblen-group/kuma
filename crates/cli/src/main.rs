@@ -14,6 +14,7 @@ use tracing_subscriber::{self, EnvFilter};
 
 use core::config::Config;
 
+mod block;
 mod cli;
 mod kuma;
 mod permit;
@@ -37,16 +38,10 @@ async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::from_default_env()
-                .add_directive(
-                    "tycho_client=warn"
-                        .parse()
-                        .expect("well-formed tracing directive should parse"),
-                )
-                .add_directive(
-                    "tycho_simulation=warn"
-                        .parse()
-                        .expect("well-formed tracing directive should parse"),
-                ),
+                .add_directive("tycho_client=warn".parse().expect("well-formed"))
+                .add_directive("tycho_simulation=warn".parse().expect("well-formed"))
+                .add_directive("h2=warn".parse().expect("well-formed"))
+                .add_directive("hyper_util=warn".parse().expect("well-formed")),
         )
         .with_target(false)
         .init();
