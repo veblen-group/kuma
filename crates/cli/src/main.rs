@@ -15,6 +15,7 @@ use tracing_subscriber::{self, EnvFilter};
 use core::config::Config;
 
 mod cli;
+mod dryrun;
 mod kuma;
 mod permit;
 mod tokens;
