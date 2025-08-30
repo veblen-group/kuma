@@ -19,7 +19,7 @@ use crate::{
 
 mod builder;
 mod precompute;
-mod simulation;
+pub mod simulation;
 pub use builder::Builder;
 pub use precompute::Precomputes;
 pub use simulation::Swap;
@@ -64,9 +64,9 @@ impl CrossChainSingleHop {
         &self,
         precompute: &Precomputes,
         fast_state: PairState,
+        fast_sorted_spot_prices: Vec<(PoolId, f64)>,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
-        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.fast_pair);
         if fast_sorted_spot_prices.is_empty() {
             return Err(eyre::eyre!("No spot prices found for fast chain"));
         } else {
@@ -826,8 +826,9 @@ mod tests {
         );
 
         let precompute = strategy.precompute(slow_state);
+        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -909,8 +910,9 @@ mod tests {
         );
 
         let precompute = strategy.precompute(slow_state);
+        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -991,8 +993,9 @@ mod tests {
         );
 
         let precompute = strategy.precompute(slow_state);
+        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1074,8 +1077,9 @@ mod tests {
         );
 
         let precompute = strategy.precompute(slow_state);
+        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone())
+            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));

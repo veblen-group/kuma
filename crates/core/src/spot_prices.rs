@@ -31,4 +31,25 @@ impl SpotPrices {
             chain,
         }
     }
+    pub fn from_sorted_prices(
+        sorted_spot_prices: &Vec<(PoolId, f64)>,
+        block_height: u64,
+        chain: Chain,
+        pair: Pair,
+    ) -> Option<Self> {
+        if sorted_spot_prices.is_empty() {
+            return None;
+        }
+        let min = sorted_spot_prices[0].clone();
+        let max = sorted_spot_prices[sorted_spot_prices.len() - 1].clone();
+        Some(SpotPrices {
+            pair,
+            block_height,
+            min_pool_id: min.0,
+            min_price: min.1,
+            max_pool_id: max.0,
+            max_price: max.1,
+            chain,
+        })
+    }
 }
