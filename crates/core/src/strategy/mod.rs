@@ -84,8 +84,7 @@ impl CrossChainSingleHop {
 
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
-                |(slow_id, slow_price, fast_id, fast_price)| {
-                    let spread = slow_price - fast_price;
+                |(slow_id, slow_price, fast_id, fast_price, spread)| {
                     let slow_direction = if spread > 0.0 {
                         Direction::AtoB
                     } else {
@@ -355,39 +354,49 @@ impl CrossChainSingleHop {
 /// on the provided direction. The direction denotes the trade direction on the
 /// slow chain.
 ///
-/// slow_prices contain the A -> B prices on the slow chain, sorted from lowest to highest.
-/// fast_prices contain the A -> B prices on the fast chain, sorted from lowest to highest.
+/// `sorted_slow_prices` contain the A -> B prices on the slow chain, sorted ascending.
+/// `sorted_fast_prices` contain the A -> B prices on the fast chain, sorted ascending.
 ///
 /// # Returns
-/// A tuple of pool IDs (slow_id, fast_id, spread) denoting the pool IDs corresponding to the
-/// slow and fast chains respectively, and the spread between the two prices.
+/// A tuple `(slow_id, slow_price, fast_id, fast_price)` corresponding to the
+/// pools with the largest spread between them.
 #[instrument]
 fn find_first_crossed_pools(
     sorted_slow_prices: &[(state::PoolId, f64)],
     sorted_fast_prices: &[(state::PoolId, f64)],
-) -> Option<(state::PoolId, f64, state::PoolId, f64)> {
+) -> Option<(state::PoolId, f64, state::PoolId, f64, f64)> {
     if sorted_slow_prices.is_empty() || sorted_fast_prices.is_empty() {
         return None;
     }
-    // need to find the max spread
-    // because the spot prices are sorted, we can start from the highest slow price
-    // and the lowest fast price, iterating backwards over slow prices and forwards over fast prices:
-    // slow:   [1, 2, 3]
-    // spread:  ↱ =2  ↲  <- highest spread
-    // fast:   [1, 2, 3]
-    sorted_slow_prices
-        .iter()
-        .rev()
-        .find_map(|(slow_id, slow_price)| {
-            sorted_fast_prices.iter().find_map(|(fast_id, fast_price)| {
-                let spread = slow_price - fast_price;
-                if spread.abs() > 0.0 {
-                    Some((slow_id.clone(), *slow_price, fast_id.clone(), *fast_price))
-                } else {
-                    None
-                }
-            })
-        })
+
+    let (slow_min_id, slow_min) = &sorted_slow_prices[0];
+    let (slow_max_id, slow_max) = &sorted_slow_prices[sorted_slow_prices.len() - 1];
+    let (fast_min_id, fast_min) = &sorted_fast_prices[0];
+    let (fast_max_id, fast_max) = &sorted_fast_prices[sorted_fast_prices.len() - 1];
+
+    // Two possible "extreme" spreads
+    let short_slow_long_fast_spread = slow_max - fast_min;
+    let long_slow_short_fast_spread = slow_min - fast_max;
+
+    if short_slow_long_fast_spread.abs() >= long_slow_short_fast_spread.abs() {
+        trace!(%slow_max_id, %slow_max, %fast_min_id, %fast_min, %short_slow_long_fast_spread, "max spread slow_max - fast_min");
+        Some((
+            slow_max_id.clone(),
+            *slow_max,
+            fast_min_id.clone(),
+            *fast_min,
+            short_slow_long_fast_spread,
+        ))
+    } else {
+        trace!(%slow_min_id, %slow_min, %fast_max_id, %fast_max, %long_slow_short_fast_spread, "max spread fast_max - slow_min");
+        Some((
+            slow_min_id.clone(),
+            *slow_min,
+            fast_max_id.clone(),
+            *fast_max,
+            long_slow_short_fast_spread,
+        ))
+    }
 }
 
 #[cfg(test)]

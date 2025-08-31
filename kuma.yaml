@@ -92,7 +92,7 @@ chains:
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-binary_search_steps: 1024
+binary_search_steps: 16384
 
 # Risk and trading parameters
 congestion_risk_discount_bps: 0
