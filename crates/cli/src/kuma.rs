@@ -7,11 +7,7 @@ use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
 use core::{
-    chain::Chain,
-    collector,
-    config::Config,
-    signals,
-    state::pair::{Pair, PairState},
+    chain::Chain, collector, config::Config, signals, state::pair::Pair,
     strategy::CrossChainSingleHop,
 };
 
@@ -175,38 +171,6 @@ impl Kuma {
 
         Ok(signal)
     }
-
-    pub async fn get_blocks(self) -> eyre::Result<(PairState, PairState)> {
-        let Self {
-            slow_chain,
-            slow_pair,
-            fast_chain,
-            fast_pair,
-            slow_collector_handle,
-            fast_collector_handle,
-            strategy,
-            ..
-        } = self;
-
-        info!(command = "generating signal");
-
-        let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
-        let mut fast_chain_states = fast_collector_handle.get_pair_state_stream(&fast_pair);
-        // read state from stream
-        let slow_state = slow_chain_states
-            .next()
-            .await
-            .expect("chain a stream should yield initial block");
-        let fast_state = fast_chain_states
-            .next()
-            .await
-            .expect("chain b stream should yield initial block");
-
-        info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
-        info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
-
-        Ok((slow_state, fast_state))
-    }
 }
 
 pub(crate) fn make_collector(
@@ -217,7 +181,7 @@ pub(crate) fn make_collector(
     remove_tvl_threshold: f64,
     shutdown_token: CancellationToken,
 ) -> eyre::Result<collector::Handle> {
-    let handle = collector::Builder {
+    collector::Builder {
         tycho_url: chain.tycho_url.clone(),
         api_key: tycho_api_key.to_string(),
         add_tvl_threshold,
@@ -226,9 +190,8 @@ pub(crate) fn make_collector(
         chain,
         shutdown_token,
     }
-    .build();
-
-    handle.wrap_err("failed to start tycho collector for chain : {chain}")
+    .build()
+    .wrap_err("failed to start tycho collector for chain : {chain}")
 }
 
 pub(crate) fn get_chains_from_names(

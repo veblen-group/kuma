@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument, trace};
 use tycho_simulation::{
     protocol::models::{ProtocolComponent, Update},
@@ -12,7 +13,7 @@ use tycho_simulation::{
 use super::pair::{Pair, PairState};
 use crate::state;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Block {
     pub height: u64,
     /// The current states
