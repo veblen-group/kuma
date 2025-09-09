@@ -1,15 +1,21 @@
-//! Module for interacting with Tycho Simulation's ProtocolStream
-//! TODO: move this to a simulation submodule and add an execution submodule for the encoder
-//! and submission stuff?
-use std::{collections::HashMap, pin::Pin, str::FromStr, sync::Arc};
+//! This module provides functionality to collect Ethereum block headers and token balances from an Ethereum node's JSON-RPC API.
+//! Headers are collected from `eth_getBlock` and token balances are parsed from logs using the `TokenBalances` struct.
+//!
+//! The `Handle` struct represents a handle to the collector, allowing for shutdown, awaiting the worker's result
+//! and getting a receiver for the latest block.
+//! The `Worker` struct represents the worker that collects data from the Ethereum node's JSON-RPC API.
+//!
+//! The `EthBlock` type represents a block header and token balances.
+//!
+//! The `Handle` struct provides methods for shutting down the collector and awaiting the worker's result.
+//! The `Future` trait implementation for the `Handle` struct allows for awaiting the worker's result.
+
+use std::{pin::Pin, str::FromStr, sync::Arc};
 
 use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256},
+    primitives::Address,
     providers::{Provider, ProviderBuilder, WsConnect},
-    rpc::types::{Filter, Header},
-    sol,
-    sol_types::SolEvent as _,
+    rpc::types::Header,
 };
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
@@ -17,24 +23,24 @@ use futures::{
     FutureExt as _,
     future::{Fuse, FusedFuture as _},
 };
-use num_bigint::BigUint;
 use tokio::{
     select,
-    sync::{mpsc, watch},
+    sync::{Mutex, watch},
+    task::JoinHandle,
 };
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace};
-use tycho_simulation::evm::stream::ProtocolStreamBuilder;
+use tracing::{debug, error, info, instrument};
 
-use crate::{chain::Chain, config::AddressForToken, state::block::BlockSim};
+use crate::{chain::Chain, config::AddressForToken, state::balances::TokenBalances};
+
+pub type EthBlock = (Header, TokenBalances);
 
 pub struct Handle {
-    #[allow(unused)]
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    block_rx: mpsc::Receiver<BlockSim>,
+    latest_block_rx: watch::Receiver<EthBlock>,
 }
 
 impl Handle {
@@ -79,9 +85,9 @@ impl Future for Handle {
     }
 }
 
-struct Worker {
+pub(super) struct Worker {
     chain: Chain,
-    block_tx: mpsc::Sender<(Header, TokenBalances)>,
+    latest_block_tx: watch::Sender<EthBlock>,
     shutdown_token: CancellationToken,
     account_addr: Address,
     token_addrs: AddressForToken,
@@ -92,12 +98,12 @@ impl Worker {
     #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            chain,
-            block_tx,
+            latest_block_tx,
             shutdown_token,
             account_addr,
             token_addrs,
             ws_url,
+            ..
         } = self;
 
         let ws = WsConnect::new(ws_url);
@@ -112,19 +118,32 @@ impl Worker {
             })
             .collect::<eyre::Result<Vec<_>>>()?;
 
-        let curr_token_balances =
-            TokenBalances::from_curr_balances(account_addr, addrs, provider.clone()).await?;
+        // TODO: std or tokio mutex?
+        let curr_token_balances = Arc::new(Mutex::new(
+            TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?,
+        ));
 
         // TODO: print this nicely
         debug!(?curr_token_balances, "Initialized token balances");
 
         // set up header stream
         let mut headers = provider.clone().subscribe_blocks().await?.into_stream();
+        let mut headers_and_blocks = headers.then(move |header| {
+            let provider = provider.clone();
+            let curr_token_balances = curr_token_balances.clone();
 
-        let mut transfer_fetch = Fuse::terminated();
+            async move {
+                let mut token_balances_guard = curr_token_balances.lock().await;
+                token_balances_guard
+                    .update_from_logs(provider.clone())
+                    .await?;
+                debug!(block_height = %header.number, "Received header");
+                Ok((header, token_balances_guard.clone()))
+            }
+        });
 
-        let mut curr_header = None;
-        let mut curr_block_sim = None;
+        // let mut balance_update_fut: Fuse<JoinHandle<eyre::Result<(Header, TokenBalances)>>> =
+        //     Fuse::terminated();
 
         loop {
             select! {
@@ -133,75 +152,37 @@ impl Worker {
                     break Ok(())
                 }
 
-                res = transfer_fetch, if !transfer_fetch.is_terminated() => {
+                res = balance_update_fut, if !balance_update_fut.is_terminated() => {
                     match res {
-                        Ok(_) => {
-                            debug!("transfer fetch completed");
-                            if let (Some(header), Some(block_sim)) = (&mut curr_header, &mut curr_block_sim) {
-                                send_block(block_tx.clone(), header, block_sim, &curr_token_balances);
+                        Ok(Ok((header, token_balances))) => {
+                            debug!(block_height = ?header.number, "token balances updated");
+                            let send_res = latest_block_tx.send((header, token_balances.clone()));
+                            if let Err(e) = send_res {
+                                // TODO: handle send_res more
+                                error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
                             }
                         }
+                        Ok(Err(e)) => {
+                            error!(error = %e, "failed to update token balances");
+                        }
                         Err(e) => {
-                            error!(error = %e, "transfer fetch failed");
+                            error!(error = %e, "balance update task panicked");
                         }
                     }
 
                 }
 
-                Some(header) = headers.next() => {
-                    curr_header = Some(header);
-                    transfer_fetch = update_token_balances(&mut curr_token_balances, to_filter.clone(), from_filter.clone(), provider.clone()).fuse();
-                    debug!("Received header");
+                Some(header) = headers.next(), if balance_update_fut.is_terminated() => {
+                    let provider = provider.clone();
+                    let curr_token_balances = curr_token_balances.clone();
+                    balance_update_fut = tokio::spawn(async move {
+                        let mut token_balances_guard = curr_token_balances.lock().await;
+                        token_balances_guard.update_from_logs(provider.clone()).await?;
+                        debug!(block_height = %header.number, "Received header");
+                        Ok((header, token_balances_guard.clone()))
+                    }).fuse();
                 }
             }
         }
     }
-}
-
-async fn update_token_balances<P: Provider + Clone>(
-    curr_token_balances: &mut HashMap<Address, BigUint>,
-    to_filter: Filter,
-    from_filter: Filter,
-    provider: P,
-) -> eyre::Result<()> {
-    let to_logs = provider
-        .get_logs(&to_filter)
-        .await
-        .wrap_err("failed to get transfer logs to account addr")?;
-
-    for log in to_logs {
-        let event = log
-            .log_decode::<IERC20::Transfer>()
-            .wrap_err("failed to parse transfer event")?;
-        let IERC20::Transfer { from: _, to, value } = event.inner.data;
-        // TODO: update curr_balances
-        let value = BigUint::from_bytes_be(&value.to_be_bytes::<32>());
-        let curr = curr_token_balances
-            .entry(to)
-            .and_modify(|curr| *curr += value);
-    }
-
-    let from_logs = provider
-        .get_logs(&from_filter)
-        .await
-        .wrap_err("failed to get transfer logs from account addr")?;
-
-    // TODO: process logs to update token balances
-    Ok(())
-}
-
-fn send_block(
-    tx: watch::Sender<Arc<Option<BlockSim>>>,
-    curr_header: &Header,
-    curr_block_sim: &BlockSim,
-    curr_token_balances: &HashMap<Address, BigUint>,
-) -> eyre::Result<()> {
-    // TODO: send block on watch channel
-    let block = BlockSim::from_components(curr_header, curr_block_sim, curr_token_balances.clone());
-    let send_res = tx.send(Arc::new(Some(block)));
-    if let Err(e) = send_res {
-        // TODO: handle send_res more
-        error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
-    }
-    Ok(())
 }

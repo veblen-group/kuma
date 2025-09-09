@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub mod balances;
 pub mod block;
 pub mod pair;
+pub mod tycho;
 
 // TODO: maybe some address sanitization?
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

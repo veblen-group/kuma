@@ -1,5 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
+use ::tycho_common::dto::TokenBalances;
+use alloy::rpc::types::Header;
 use color_eyre::eyre::{self, Context as _, eyre};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
@@ -16,7 +18,11 @@ use tycho_simulation::{
 };
 
 use super::Worker;
-use crate::{chain::Chain, state::block::BlockSim};
+use crate::{
+    chain::Chain,
+    collector::{self, tycho},
+    state::tycho::BlockSim,
+};
 
 pub struct Builder {
     pub chain: Chain,
@@ -53,15 +59,24 @@ impl Builder {
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
 
+        let (eth_tx, eth_rx) =
+            watch::channel::<Arc<Option<(Header, TokenBalances)>>>(Arc::new(None));
         let (block_tx, block_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
+        let (block_sim_tx, block_sim_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
+
+        let tycho_worker = collector::tycho::Worker {
+            protocol_stream_builder: Box::pin(protocol_stream_builder),
+            chain: chain.clone(),
+            block_sim_tx: block_tx.clone(),
+            shutdown_token: shutdown_token.clone(),
+        };
 
         let worker = Worker {
             // TODO: do i really wanna get rid of these or keep them for reconnect?
             // uri: Uri::from_str(&url).expect("invalid uri"),
             // api_key: api_key.clone(),
-            protocol_stream_builder: Box::pin(protocol_stream_builder),
             chain: chain.clone(),
-            block_tx,
+            sim_tx: block_tx,
             shutdown_token: shutdown_token.clone(),
             account_addr: todo!(),
             token_addrs: todo!(),

@@ -28,8 +28,9 @@ use crate::{
     chain::Chain,
     config::AddressForToken,
     state::{
-        block::BlockSim,
+        balances::TokenBalances,
         pair::{Pair, PairStateStream},
+        tycho::BlockSim,
     },
 };
 
@@ -101,8 +102,8 @@ impl Future for Handle {
 
 struct Worker {
     chain: Chain,
-    protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    block_tx: watch::Sender<Arc<Option<BlockSim>>>,
+    sim_tx: watch::Receiver<BlockSim>,
+    eth_tx: watch::Receiver<(Header, TokenBalances)>,
     shutdown_token: CancellationToken,
     account_addr: Address,
     token_addrs: AddressForToken,
@@ -113,75 +114,16 @@ impl Worker {
     #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            protocol_stream_builder,
             chain,
-            block_tx,
+            sim_tx,
+            eth_tx,
             shutdown_token,
             account_addr,
             token_addrs,
             ws_url,
         } = self;
 
-        let ws = WsConnect::new(ws_url);
-        let provider = ProviderBuilder::new().connect_ws(ws).await?;
-
-        let addrs = token_addrs
-            .keys()
-            .map(|addr_bytes| {
-                let addr = Address::from_str(&addr_bytes.to_string())
-                    .wrap_err("Failed to parse address")?;
-                Ok(addr)
-            })
-            .collect::<eyre::Result<Vec<_>>>()?;
-
-        // get token contract handle
-        let tokens = addrs
-            .iter()
-            .cloned()
-            .map(|addr| IERC20::new(addr, provider.clone()))
-            .collect::<Vec<_>>();
-
-        // get initial balances
-        let mut curr_token_balances = HashMap::new();
-        for token in &tokens {
-            let start: U256 = token.balanceOf(account_addr).call().await?;
-            let current_balance = BigUint::from_bytes_be(&start.to_be_bytes::<32usize>());
-            curr_token_balances.insert(token.address().clone(), current_balance);
-        }
-        // pin!(curr_token_balances);
-
-        // TODO: print this nicely
-        debug!(?curr_token_balances, "Initialized token balances");
-
-        let from_filter = Filter::new()
-            .address(addrs.clone())
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic1(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
-        let to_filter = Filter::new()
-            .address(addrs.clone())
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic2(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
-
-        // set up header stream
-        let mut headers = provider.clone().subscribe_blocks().await?.into_stream();
-
-        let mut protocol_stream = protocol_stream_builder
-            .await
-            .build()
-            .await
-            .wrap_err("Failed building protocol stream")?;
-
-        info!(
-            chain.name = ?chain.name,
-            chain.id = ?chain.metadata.id(),
-            "Initialized header and protocol streams"
-        );
-
-        let mut transfer_fetch = Fuse::terminated();
-
-        let mut curr_header = None;
+        let mut curr_eth_block = None;
         let mut curr_block_sim = None;
 
         // TODO: combine headers, balances with protocol stream
@@ -193,95 +135,26 @@ impl Worker {
                     break Ok(())
                 }
 
-                res = transfer_fetch, if !transfer_fetch.is_terminated() => {
-                    match res {
-                        Ok(_) => {
-                            debug!("transfer fetch completed");
-                            if let (Some(header), Some(block_sim)) = (&mut curr_header, &mut curr_block_sim) {
-                                send_block(block_tx.clone(), header, block_sim, &curr_token_balances);
-                            }
-                        }
-                        Err(e) => {
-                            error!(error = %e, "transfer fetch failed");
-                        }
+                eth_block = eth_tx.changed() => {
+                    if curr_block_sim.is_some() {
+                        // TODO: send block on watch channel
+                        block_tx.send(Arc::new(Some(Block::from_components())))
+                    } else {
+                        // TODO: update curr_block_sim
                     }
-
                 }
 
-                Some(header) = headers.next() => {
-                    curr_header = Some(header);
-                    transfer_fetch = update_token_balances(&mut curr_token_balances, to_filter.clone(), from_filter.clone(), provider.clone()).fuse();
-                    debug!("Received header");
-                }
-
-                Some(message_result) = protocol_stream.next() => {
-                    let block_update = match message_result {
-                        Ok(msg) => msg,
-                        Err(e) => {
-                            error!("Failed to receive message: {}", e);
-                            continue;
-                        }
-                    };
-
-                    debug!(
-                        block.height = ?block_update.block_number_or_timestamp,
-                        "🎁 Received block update"
-                    );
-                    curr_block_sim = {
-                        if let Some(old_block) = block_tx.borrow().as_ref().clone() {
-                            let new_block = old_block.apply_update(block_update);
-                            trace!(
-                                block.number = new_block.height,
-                                "Applied block update from Tycho Simulation stream."
-                            );
-
-                            Some(new_block)
-                        } else {
-                            trace!(
-                                block.number = block_update.block_number_or_timestamp,
-                                "Received initial block from Tycho Simulation stream."
-                            );
-                            Some(BlockSim::new(block_update))
-                        }
-                    };
-                    // TODO: put the header, balances, and tycho block sim in the watch and set locals to none
-
+                // TODO: fix this branch
+                block_sim = sim_tx.changed() => {
+                    if curr_eth_block.is_some() {
+                        // TODO: send block on watch channel
+                    } else {
+                        // TODO: update curr_block_sim
+                    }
                 }
             }
         }
     }
-}
-
-async fn update_token_balances<P: Provider + Clone>(
-    curr_token_balances: &mut HashMap<Address, BigUint>,
-    to_filter: Filter,
-    from_filter: Filter,
-    provider: P,
-) -> eyre::Result<()> {
-    let to_logs = provider
-        .get_logs(&to_filter)
-        .await
-        .wrap_err("failed to get transfer logs to account addr")?;
-
-    for log in to_logs {
-        let event = log
-            .log_decode::<IERC20::Transfer>()
-            .wrap_err("failed to parse transfer event")?;
-        let IERC20::Transfer { from: _, to, value } = event.inner.data;
-        // TODO: update curr_balances
-        let value = BigUint::from_bytes_be(&value.to_be_bytes::<32>());
-        let curr = curr_token_balances
-            .entry(to)
-            .and_modify(|curr| *curr += value);
-    }
-
-    let from_logs = provider
-        .get_logs(&from_filter)
-        .await
-        .wrap_err("failed to get transfer logs from account addr")?;
-
-    // TODO: process logs to update token balances
-    Ok(())
 }
 
 fn send_block(

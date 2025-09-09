@@ -29,20 +29,17 @@ use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
 use crate::{
     chain::Chain,
-    config::AddressForToken,
     state::{
-        block::BlockSim,
         pair::{Pair, PairStateStream},
+        tycho::BlockSim,
     },
 };
 
 pub struct Handle {
-    #[allow(unused)]
     chain: Chain,
-    #[allow(unused)]
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    block_rx: mpsc::Receiver<BlockSim>,
+    sim_rx: watch::Receiver<BlockSim>,
 }
 
 impl Handle {
@@ -62,12 +59,12 @@ impl Handle {
     }
 
     #[allow(unused)]
-    pub fn get_block_rx(&self) -> watch::Receiver<Arc<Option<BlockSim>>> {
-        self.block_rx.clone()
+    pub fn get_sim_rx(&self) -> watch::Receiver<BlockSim> {
+        self.sim_rx.clone()
     }
 
     pub fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
-        let block_rx = self.block_rx.clone();
+        let block_rx = self.sim_rx.clone();
         PairStateStream::from_block_rx(pair.clone(), block_rx)
     }
 }
@@ -97,11 +94,11 @@ impl Future for Handle {
     }
 }
 
-struct Worker {
-    chain: Chain,
-    protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    block_tx: watch::Sender<Arc<Option<BlockSim>>>,
-    shutdown_token: CancellationToken,
+pub(super) struct Worker {
+    pub(super) chain: Chain,
+    pub(super) protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
+    pub(super) block_sim_tx: watch::Sender<BlockSim>,
+    pub(super) shutdown_token: CancellationToken,
 }
 
 impl Worker {
@@ -110,7 +107,6 @@ impl Worker {
         let Self {
             protocol_stream_builder,
             chain,
-            block_tx,
             shutdown_token,
         } = self;
 
@@ -138,27 +134,6 @@ impl Worker {
                 () = shutdown_token.cancelled() => {
                     info!("tycho collector received shutdown signal");
                     break Ok(())
-                }
-
-                res = transfer_fetch, if !transfer_fetch.is_terminated() => {
-                    match res {
-                        Ok(_) => {
-                            debug!("transfer fetch completed");
-                            if let (Some(header), Some(block_sim)) = (&mut curr_header, &mut curr_block_sim) {
-                                send_block(block_tx.clone(), header, block_sim, &curr_token_balances);
-                            }
-                        }
-                        Err(e) => {
-                            error!(error = %e, "transfer fetch failed");
-                        }
-                    }
-
-                }
-
-                Some(header) = headers.next() => {
-                    curr_header = Some(header);
-                    transfer_fetch = update_token_balances(&mut curr_token_balances, to_filter.clone(), from_filter.clone(), provider.clone()).fuse();
-                    debug!("Received header");
                 }
 
                 Some(message_result) = protocol_stream.next() => {
