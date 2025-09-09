@@ -17,16 +17,11 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::Header,
 };
-use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use futures::{
-    FutureExt as _,
-    future::{Fuse, FusedFuture as _},
-};
+use color_eyre::eyre::{self, eyre};
 use tokio::{
-    select,
+    pin, select,
     sync::{Mutex, watch},
-    task::JoinHandle,
 };
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -118,7 +113,6 @@ impl Worker {
             })
             .collect::<eyre::Result<Vec<_>>>()?;
 
-        // TODO: std or tokio mutex?
         let curr_token_balances = Arc::new(Mutex::new(
             TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?,
         ));
@@ -127,62 +121,53 @@ impl Worker {
         debug!(?curr_token_balances, "Initialized token balances");
 
         // set up header stream
-        let mut headers = provider.clone().subscribe_blocks().await?.into_stream();
-        let mut headers_and_blocks = headers.then(move |header| {
-            let provider = provider.clone();
-            let curr_token_balances = curr_token_balances.clone();
-
-            async move {
-                let mut token_balances_guard = curr_token_balances.lock().await;
-                token_balances_guard
-                    .update_from_logs(provider.clone())
-                    .await?;
-                debug!(block_height = %header.number, "Received header");
-                Ok((header, token_balances_guard.clone()))
-            }
-        });
-
-        // let mut balance_update_fut: Fuse<JoinHandle<eyre::Result<(Header, TokenBalances)>>> =
-        //     Fuse::terminated();
+        let headers = provider.clone().subscribe_blocks().await?.into_stream();
+        let headers_and_blocks = headers
+            .then(|header| process_header(header, provider.clone(), curr_token_balances.clone()));
+        pin!(headers_and_blocks);
 
         loop {
             select! {
                 () = shutdown_token.cancelled() => {
-                    info!("tycho collector received shutdown signal");
+                    info!("Eth Collector received shutdown signal");
                     break Ok(())
                 }
 
-                res = balance_update_fut, if !balance_update_fut.is_terminated() => {
+                Some(res) = headers_and_blocks.next() => {
                     match res {
-                        Ok(Ok((header, token_balances))) => {
+                        Ok((header, token_balances)) => {
                             debug!(block_height = ?header.number, "token balances updated");
-                            let send_res = latest_block_tx.send((header, token_balances.clone()));
-                            if let Err(e) = send_res {
-                                // TODO: handle send_res more
-                                error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
+                            if latest_block_tx.send((header, token_balances.clone())).is_err() {
+                                error!("Watch channel closed, shutting down collector.");
+                                break Ok(());
                             }
                         }
-                        Ok(Err(e)) => {
-                            error!(error = %e, "failed to update token balances");
-                        }
                         Err(e) => {
-                            error!(error = %e, "balance update task panicked");
-                        }
+                            break Err(eyre!("Balance update failed: {}", e));
+                       }
                     }
-
-                }
-
-                Some(header) = headers.next(), if balance_update_fut.is_terminated() => {
-                    let provider = provider.clone();
-                    let curr_token_balances = curr_token_balances.clone();
-                    balance_update_fut = tokio::spawn(async move {
-                        let mut token_balances_guard = curr_token_balances.lock().await;
-                        token_balances_guard.update_from_logs(provider.clone()).await?;
-                        debug!(block_height = %header.number, "Received header");
-                        Ok((header, token_balances_guard.clone()))
-                    }).fuse();
                 }
             }
         }
     }
+}
+
+async fn process_header(
+    header: Header,
+    provider: impl Provider + Clone,
+    token_balances: Arc<Mutex<TokenBalances>>,
+) -> eyre::Result<EthBlock> {
+    let mut token_balances_guard = token_balances.lock().await;
+    token_balances_guard
+        .update_from_logs(provider.clone())
+        .await
+        .wrap_err_with(|| {
+            format!(
+                "Failed to update token balances for block {}",
+                header.number
+            )
+        })?;
+
+    debug!(block_height = %header.number, "Received header");
+    Ok((header, token_balances_guard.clone()))
 }
