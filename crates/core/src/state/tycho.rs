@@ -3,8 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use alloy::{primitives::Address, rpc::types::Header};
-use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
 use tycho_simulation::{
     protocol::models::{ProtocolComponent, Update},

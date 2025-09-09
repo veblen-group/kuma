@@ -2,7 +2,7 @@ use alloy::rpc::types::Header;
 
 use crate::state::{balances::TokenBalances, tycho::BlockSim};
 
-struct Block {
+pub struct Block {
     header: Header,
     token_balances: TokenBalances,
     sims: BlockSim,

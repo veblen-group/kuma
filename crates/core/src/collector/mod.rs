@@ -1,34 +1,27 @@
-//! Module for interacting with Tycho Simulation's ProtocolStream
-//! TODO: move this to a simulation submodule and add an execution submodule for the encoder
-//! and submission stuff?
-use std::{collections::HashMap, pin::Pin, str::FromStr, sync::Arc};
+//! This collector multiplexes data from the Ethereum JSON RPC collector and the Tycho simulation stream.
+//! It provides a simplified handle getting blocks, or pair-specific state updates.
+use std::{pin::Pin, sync::Arc};
 
-use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256},
-    providers::{Provider, ProviderBuilder, WsConnect},
-    rpc::types::{Filter, Header},
-    sol,
-    sol_types::SolEvent as _,
-};
+use alloy::{primitives::Address, rpc::types::Header};
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use futures::{
-    FutureExt as _,
-    future::{Fuse, FusedFuture as _},
+use tokio::{
+    select,
+    sync::{
+        broadcast::{self, error::RecvError},
+        watch,
+    },
 };
-use num_bigint::BigUint;
-use tokio::{select, sync::watch};
-use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace};
-use tycho_simulation::evm::stream::ProtocolStreamBuilder;
+use tracing::{error, info, instrument};
 
 use crate::{
     chain::Chain,
+    collector::eth::EthBlock,
     config::AddressForToken,
     state::{
         balances::TokenBalances,
+        block::Block,
         pair::{Pair, PairStateStream},
         tycho::BlockSim,
     },
@@ -102,8 +95,10 @@ impl Future for Handle {
 
 struct Worker {
     chain: Chain,
-    sim_tx: watch::Receiver<BlockSim>,
-    eth_tx: watch::Receiver<(Header, TokenBalances)>,
+    sim_rx: broadcast::Receiver<BlockSim>,
+    eth_rx: broadcast::Receiver<(Header, TokenBalances)>,
+    // TODO: change to broadcast
+    block_tx: watch::Sender<Arc<Option<Block>>>,
     shutdown_token: CancellationToken,
     account_addr: Address,
     token_addrs: AddressForToken,
@@ -111,64 +106,89 @@ struct Worker {
 }
 
 impl Worker {
-    #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
+    #[instrument(name = "block_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            chain,
-            sim_tx,
-            eth_tx,
+            mut sim_rx,
+            mut eth_rx,
+            block_tx,
             shutdown_token,
-            account_addr,
-            token_addrs,
-            ws_url,
+            ..
         } = self;
 
-        let mut curr_eth_block = None;
-        let mut curr_block_sim = None;
-
-        // TODO: combine headers, balances with protocol stream
+        let mut curr_eth_block: Option<EthBlock> = None;
+        let mut curr_block_sim: Option<BlockSim> = None;
 
         loop {
             select! {
                 () = shutdown_token.cancelled() => {
-                    info!("tycho collector received shutdown signal");
+                    info!("block collector received shutdown signal");
                     break Ok(())
                 }
 
-                eth_block = eth_tx.changed() => {
-                    if curr_block_sim.is_some() {
-                        // TODO: send block on watch channel
-                        block_tx.send(Arc::new(Some(Block::from_components())))
-                    } else {
-                        // TODO: update curr_block_sim
+                res = eth_rx.recv() => {
+                    match res {
+                        Ok((header, token_balances)) => {
+                            if let Some(block_sim) = curr_block_sim.take() {
+                                if header.number == block_sim.height {
+                                    let block = Block::from_components(header, token_balances, block_sim);
+
+                                    if let Err(e) = block_tx.send(Arc::new(Some(block))) {
+                                        // TODO: handle send_res more
+                                        error!(err = %e, "failed to send block after receiving eth block");
+                                    }
+                                } else {
+                                    error!(
+                                        eth_block.height = header.number,
+                                        sim_block.height = block_sim.height,
+                                        "Block heights out of order"
+                                    );
+                                }
+                            } else {
+                                curr_eth_block = Some((header, token_balances));
+                            }
+                        },
+                        Err(RecvError::Lagged(missed_count)) => {
+                            error!(missed_count = missed_count, "Tycho Simulation stream lagged");
+                        },
+                        Err(RecvError::Closed) => {
+                            error!("EthBlock channel closed, shutting down");
+                            break Ok(());
+                        },
                     }
                 }
 
-                // TODO: fix this branch
-                block_sim = sim_tx.changed() => {
-                    if curr_eth_block.is_some() {
-                        // TODO: send block on watch channel
-                    } else {
-                        // TODO: update curr_block_sim
+                res = sim_rx.recv() => {
+                    match res {
+                        Ok(block_sim) => {
+                            if let Some((header, token_balances)) = curr_eth_block.take() {
+                                if header.number == block_sim.height {
+                                    let block = Block::from_components(header, token_balances, block_sim);
+
+                                    let send_res = block_tx.send(Arc::new(Some(block)));
+                                    if let Err(e) = send_res {
+                                        // TODO: handle send_res more
+                                        error!(err = %e, "failed to send block after receiving tycho block");
+                                    }
+                                } else {
+                                    error!(eth_block.height = header.number, sim_block.height = block_sim.height, "Block heights out of order");
+                                }
+                                curr_eth_block = None;
+                                curr_block_sim = None;
+                            } else {
+                                curr_block_sim = Some(block_sim);
+                            }
+                        },
+                        Err(RecvError::Lagged(missed_count)) => {
+                            error!(missed_count = missed_count, "Tycho Simulation stream lagged");
+                        },
+                        Err(RecvError::Closed) => {
+                            error!("Tycho Simulation stream closed, shutting down");
+                            break Ok(())
+                        },
                     }
                 }
             }
         }
     }
-}
-
-fn send_block(
-    tx: watch::Sender<Arc<Option<BlockSim>>>,
-    curr_header: &Header,
-    curr_block_sim: &BlockSim,
-    curr_token_balances: &HashMap<Address, BigUint>,
-) -> eyre::Result<()> {
-    // TODO: send block on watch channel
-    let block = BlockSim::from_components(curr_header, curr_block_sim, curr_token_balances.clone());
-    let send_res = tx.send(Arc::new(Some(block)));
-    if let Err(e) = send_res {
-        // TODO: handle send_res more
-        error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
-    }
-    Ok(())
 }

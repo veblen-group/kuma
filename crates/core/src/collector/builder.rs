@@ -1,9 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
-use ::tycho_common::dto::TokenBalances;
-use alloy::rpc::types::Header;
 use color_eyre::eyre::{self, Context as _, eyre};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use tokio_util::sync::CancellationToken;
 use tycho_simulation::{
     evm::{
@@ -17,10 +15,12 @@ use tycho_simulation::{
     tycho_common::{self, Bytes, models::token::Token},
 };
 
-use super::Worker;
 use crate::{
     chain::Chain,
-    collector::{self, tycho},
+    collector::{
+        self,
+        eth::{self, EthBlock},
+    },
     state::tycho::BlockSim,
 };
 
@@ -59,24 +59,33 @@ impl Builder {
             .skip_state_decode_failures(true)
             .set_tokens(tokens.clone());
 
-        let (eth_tx, eth_rx) =
-            watch::channel::<Arc<Option<(Header, TokenBalances)>>>(Arc::new(None));
+        let (eth_tx, eth_rx) = broadcast::channel::<EthBlock>(1);
+        let (block_sim_tx, block_sim_rx) = broadcast::channel::<BlockSim>(1);
+
         let (block_tx, block_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
-        let (block_sim_tx, block_sim_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
+
+        let eth_worker = eth::Worker {
+            shutdown_token: shutdown_token.clone(),
+            chain,
+            latest_block_tx: eth_tx,
+            account_addr: todo!(),
+            token_addrs: todo!(),
+            ws_url: todo!(),
+        };
 
         let tycho_worker = collector::tycho::Worker {
             protocol_stream_builder: Box::pin(protocol_stream_builder),
             chain: chain.clone(),
-            block_sim_tx: block_tx.clone(),
+            block_sim_tx: block_sim_tx.clone(),
             shutdown_token: shutdown_token.clone(),
         };
 
-        let worker = Worker {
+        let worker = collector::Worker {
             // TODO: do i really wanna get rid of these or keep them for reconnect?
             // uri: Uri::from_str(&url).expect("invalid uri"),
             // api_key: api_key.clone(),
             chain: chain.clone(),
-            sim_tx: block_tx,
+            block_tx: block_tx,
             shutdown_token: shutdown_token.clone(),
             account_addr: todo!(),
             token_addrs: todo!(),

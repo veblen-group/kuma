@@ -1,45 +1,21 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
-//! TODO: move this to a simulation submodule and add an execution submodule for the encoder
-//! and submission stuff?
-use std::{collections::HashMap, pin::Pin, str::FromStr, sync::Arc};
+use std::pin::Pin;
 
-use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256},
-    providers::{Provider, ProviderBuilder, WsConnect},
-    rpc::types::{Filter, Header},
-    sol,
-    sol_types::SolEvent as _,
-};
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use futures::{
-    FutureExt as _,
-    future::{Fuse, FusedFuture as _},
-};
-use num_bigint::BigUint;
-use tokio::{
-    select,
-    sync::{mpsc, watch},
-};
+use tokio::{select, sync::broadcast};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace};
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
-use crate::{
-    chain::Chain,
-    state::{
-        pair::{Pair, PairStateStream},
-        tycho::BlockSim,
-    },
-};
+use crate::{chain::Chain, state::tycho::BlockSim};
 
 pub struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    sim_rx: watch::Receiver<BlockSim>,
+    block_sim_tx: broadcast::Sender<BlockSim>,
 }
 
 impl Handle {
@@ -59,13 +35,8 @@ impl Handle {
     }
 
     #[allow(unused)]
-    pub fn get_sim_rx(&self) -> watch::Receiver<BlockSim> {
-        self.sim_rx.clone()
-    }
-
-    pub fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
-        let block_rx = self.sim_rx.clone();
-        PairStateStream::from_block_rx(pair.clone(), block_rx)
+    pub fn get_block_sim_rx(&self) -> broadcast::Receiver<BlockSim> {
+        self.block_sim_tx.subscribe()
     }
 }
 
@@ -97,7 +68,7 @@ impl Future for Handle {
 pub(super) struct Worker {
     pub(super) chain: Chain,
     pub(super) protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    pub(super) block_sim_tx: watch::Sender<BlockSim>,
+    pub(super) block_sim_tx: broadcast::Sender<BlockSim>,
     pub(super) shutdown_token: CancellationToken,
 }
 
@@ -108,6 +79,7 @@ impl Worker {
             protocol_stream_builder,
             chain,
             shutdown_token,
+            block_sim_tx,
         } = self;
 
         let mut protocol_stream = protocol_stream_builder
@@ -122,10 +94,7 @@ impl Worker {
             "Initialized header and protocol streams"
         );
 
-        let mut transfer_fetch = Fuse::terminated();
-
-        let mut curr_header = None;
-        let mut curr_block_sim = None;
+        let mut curr_block_sim: Option<BlockSim> = None;
 
         // TODO: combine headers, balances with protocol stream
 
@@ -149,75 +118,30 @@ impl Worker {
                         block.height = ?block_update.block_number_or_timestamp,
                         "🎁 Received block update"
                     );
-                    curr_block_sim = {
-                        if let Some(old_block) = block_tx.borrow().as_ref().clone() {
+                    let block = {
+                        if let Some(old_block) = curr_block_sim.take() {
                             let new_block = old_block.apply_update(block_update);
                             trace!(
                                 block.number = new_block.height,
                                 "Applied block update from Tycho Simulation stream."
                             );
 
-                            Some(new_block)
+                            new_block
                         } else {
                             trace!(
                                 block.number = block_update.block_number_or_timestamp,
                                 "Received initial block from Tycho Simulation stream."
                             );
-                            Some(BlockSim::new(block_update))
+                            BlockSim::new(block_update)
                         }
                     };
-                    // TODO: put the header, balances, and tycho block sim in the watch and set locals to none
-
+                    if let Err(e) = block_sim_tx.send(block.clone()) {
+                        error!("Failed to send block simulation update: {}", e);
+                    } else {
+                        curr_block_sim = Some(block);
+                    }
                 }
             }
         }
     }
-}
-
-async fn update_token_balances<P: Provider + Clone>(
-    curr_token_balances: &mut HashMap<Address, BigUint>,
-    to_filter: Filter,
-    from_filter: Filter,
-    provider: P,
-) -> eyre::Result<()> {
-    let to_logs = provider
-        .get_logs(&to_filter)
-        .await
-        .wrap_err("failed to get transfer logs to account addr")?;
-
-    for log in to_logs {
-        let event = log
-            .log_decode::<IERC20::Transfer>()
-            .wrap_err("failed to parse transfer event")?;
-        let IERC20::Transfer { from: _, to, value } = event.inner.data;
-        // TODO: update curr_balances
-        let value = BigUint::from_bytes_be(&value.to_be_bytes::<32>());
-        let curr = curr_token_balances
-            .entry(to)
-            .and_modify(|curr| *curr += value);
-    }
-
-    let from_logs = provider
-        .get_logs(&from_filter)
-        .await
-        .wrap_err("failed to get transfer logs from account addr")?;
-
-    // TODO: process logs to update token balances
-    Ok(())
-}
-
-fn send_block(
-    tx: watch::Sender<Arc<Option<BlockSim>>>,
-    curr_header: &Header,
-    curr_block_sim: &BlockSim,
-    curr_token_balances: &HashMap<Address, BigUint>,
-) -> eyre::Result<()> {
-    // TODO: send block on watch channel
-    let block = BlockSim::from_components(curr_header, curr_block_sim, curr_token_balances.clone());
-    let send_res = tx.send(Arc::new(Some(block)));
-    if let Err(e) = send_res {
-        // TODO: handle send_res more
-        error!(err = %e, "Failed to receive block update from Tycho Simulation stream.");
-    }
-    Ok(())
 }

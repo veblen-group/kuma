@@ -21,7 +21,7 @@ use color_eyre::eyre::WrapErr as _;
 use color_eyre::eyre::{self, eyre};
 use tokio::{
     pin, select,
-    sync::{Mutex, watch},
+    sync::{Mutex, broadcast, watch},
 };
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -81,12 +81,12 @@ impl Future for Handle {
 }
 
 pub(super) struct Worker {
-    chain: Chain,
-    latest_block_tx: watch::Sender<EthBlock>,
-    shutdown_token: CancellationToken,
-    account_addr: Address,
-    token_addrs: AddressForToken,
-    ws_url: String,
+    pub(super) chain: Chain,
+    pub(super) latest_block_tx: broadcast::Sender<EthBlock>,
+    pub(super) shutdown_token: CancellationToken,
+    pub(super) account_addr: Address,
+    pub(super) token_addrs: AddressForToken,
+    pub(super) ws_url: String,
 }
 
 impl Worker {
@@ -137,8 +137,8 @@ impl Worker {
                     match res {
                         Ok((header, token_balances)) => {
                             debug!(block_height = ?header.number, "token balances updated");
-                            if latest_block_tx.send((header, token_balances.clone())).is_err() {
-                                error!("Watch channel closed, shutting down collector.");
+                            if let Err(err) = latest_block_tx.send((header, token_balances)) {
+                                error!(%err, "broadcast channel has no receivers, block dropped.");
                                 break Ok(());
                             }
                         }

@@ -11,7 +11,7 @@ use alloy::{
     sol,
     sol_types::SolEvent as _,
 };
-use color_eyre::eyre::{self, Context as _, eyre};
+use color_eyre::eyre::{self, Context as _};
 use num_bigint::BigUint;
 use tycho_simulation::tycho_core::models::token::Token;
 
@@ -35,10 +35,10 @@ pub struct TokenBalances {
 }
 
 impl TokenBalances {
-    pub async fn get_curr_balances<P: Provider + Clone>(
+    pub async fn get_curr_balances(
         account_addr: Address,
         token_addrs: Vec<Address>,
-        provider: P,
+        provider: impl Provider + Clone,
     ) -> eyre::Result<Self> {
         // get token contract handle
         let tokens = token_addrs
@@ -77,7 +77,7 @@ impl TokenBalances {
     }
 
     /// Fetch logs for transfers to/from account address and update balances in place
-    pub async fn update_from_logs<P: Provider + Clone>(&mut self, provider: P) -> eyre::Result<()> {
+    pub async fn update_from_logs(&mut self, provider: impl Provider + Clone) -> eyre::Result<()> {
         let to_logs = provider
             .get_logs(&self.to_filter)
             .await
@@ -126,10 +126,10 @@ impl Display for TokenBalances {
             .join(", ");
         write!(
             f,
-            "TokenBalances {\n
+            "TokenBalances {{\n
                 account_addr: {}\n,
                 balances: \n{:?},\n
-            }",
+            }}",
             self.account_addr, balances
         )
     }
