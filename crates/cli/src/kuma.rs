@@ -75,6 +75,7 @@ impl Kuma {
         ));
 
         // set up tycho stream collectors
+        // TODO: use the collector builders here
         let slow_collector_handle = make_collector(
             slow_chain.clone(),
             tokens_by_chain[&slow_chain].clone(),
@@ -187,7 +188,7 @@ pub(crate) fn make_collector(
         api_key: tycho_api_key.to_string(),
         add_tvl_threshold,
         remove_tvl_threshold,
-        tokens,
+        token_addrs: tokens,
         chain,
         shutdown_token,
     }

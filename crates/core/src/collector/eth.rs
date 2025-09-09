@@ -39,7 +39,6 @@ pub struct Handle {
 }
 
 impl Handle {
-    #[allow(unused)]
     pub async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self
@@ -52,6 +51,10 @@ impl Handle {
             return Err(e.into());
         }
         Ok(())
+    }
+
+    pub async fn get_latest_block_rx(&self) -> watch::Receiver<EthBlock> {
+        self.latest_block_rx.clone()
     }
 }
 
@@ -122,8 +125,9 @@ impl Worker {
 
         // set up header stream
         let headers = provider.clone().subscribe_blocks().await?.into_stream();
-        let headers_and_blocks = headers
-            .then(|header| process_header(header, provider.clone(), curr_token_balances.clone()));
+        let headers_and_blocks = headers.then(|header| {
+            get_token_balances(header, provider.clone(), curr_token_balances.clone())
+        });
         pin!(headers_and_blocks);
 
         loop {
@@ -152,7 +156,7 @@ impl Worker {
     }
 }
 
-async fn process_header(
+async fn get_token_balances(
     header: Header,
     provider: impl Provider + Clone,
     token_balances: Arc<Mutex<TokenBalances>>,

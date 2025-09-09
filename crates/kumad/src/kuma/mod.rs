@@ -40,24 +40,6 @@ impl Kuma {
 
         let db = database::Handle::from_config(cfg.database, Arc::new(addrs_for_chain.clone()))?;
 
-        // let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
-        //     .into_iter()
-        //     .map(|(chain, addrs)| {
-        //         let handle = collector::Builder {
-        //             chain: chain.clone(),
-        //             tycho_url: chain.tycho_url.clone(),
-        //             api_key: cfg.tycho_api_key.clone(),
-        //             tokens: addrs,
-        //             add_tvl_threshold: cfg.add_tvl_threshold,
-        //             remove_tvl_threshold: cfg.remove_tvl_threshold,
-        //             shutdown_token: shutdown_token.clone(),
-        //         }
-        //         .build()
-        //         .wrap_err("failed to start tycho collector for chain : {chain}")?;
-        //         Ok((chain.clone(), handle))
-        //     })
-        //     .collect::<eyre::Result<HashMap<Chain, collector::Handle>>>()?;
-
         let mut collector_handles = HashMap::new();
         let mut strategy_handles = vec![];
 
@@ -78,7 +60,7 @@ impl Kuma {
                         chain: chain.clone(),
                         tycho_url: chain.tycho_url.clone(),
                         api_key: cfg.tycho_api_key.clone(),
-                        tokens: addrs_for_chain[&chain].clone(),
+                        token_addrs: addrs_for_chain[&chain].clone(),
                         add_tvl_threshold: cfg.add_tvl_threshold,
                         remove_tvl_threshold: cfg.remove_tvl_threshold,
                         shutdown_token: shutdown_token.clone(),

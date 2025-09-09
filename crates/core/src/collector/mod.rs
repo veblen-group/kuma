@@ -1,8 +1,8 @@
 //! This collector multiplexes data from the Ethereum JSON RPC collector and the Tycho simulation stream.
-//! It provides a simplified handle getting blocks, or pair-specific state updates.
+//! It provides a simplified handle for getting blocks, or pair-specific state updates.
 use std::{pin::Pin, sync::Arc};
 
-use alloy::{primitives::Address, rpc::types::Header};
+use alloy::rpc::types::Header;
 use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
 use tokio::{
@@ -18,7 +18,6 @@ use tracing::{error, info, instrument};
 use crate::{
     chain::Chain,
     collector::eth::EthBlock,
-    config::AddressForToken,
     state::{
         balances::TokenBalances,
         block::Block,
@@ -33,16 +32,13 @@ mod eth;
 mod tycho;
 
 pub struct Handle {
-    #[allow(unused)]
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    // TODO: get rid of option
-    block_rx: watch::Receiver<Arc<Option<BlockSim>>>,
+    block_rx: watch::Receiver<Arc<Option<Block>>>,
 }
 
 impl Handle {
-    #[allow(unused)]
     pub async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self
@@ -57,8 +53,7 @@ impl Handle {
         Ok(())
     }
 
-    #[allow(unused)]
-    pub fn get_block_rx(&self) -> watch::Receiver<Arc<Option<BlockSim>>> {
+    pub fn get_block_rx(&self) -> watch::Receiver<Arc<Option<Block>>> {
         self.block_rx.clone()
     }
 
@@ -68,7 +63,7 @@ impl Handle {
     }
 }
 
-// Awaiting the handle deals with the Worker's result
+/// Awaiting the handle deals with the Worker's result
 impl Future for Handle {
     type Output = eyre::Result<()>;
 
@@ -95,21 +90,17 @@ impl Future for Handle {
 
 struct Worker {
     chain: Chain,
-    sim_rx: broadcast::Receiver<BlockSim>,
+    block_sim_rx: broadcast::Receiver<BlockSim>,
     eth_rx: broadcast::Receiver<(Header, TokenBalances)>,
-    // TODO: change to broadcast
     block_tx: watch::Sender<Arc<Option<Block>>>,
     shutdown_token: CancellationToken,
-    account_addr: Address,
-    token_addrs: AddressForToken,
-    ws_url: String,
 }
 
 impl Worker {
     #[instrument(name = "block_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            mut sim_rx,
+            mut block_sim_rx,
             mut eth_rx,
             block_tx,
             shutdown_token,
@@ -158,7 +149,7 @@ impl Worker {
                     }
                 }
 
-                res = sim_rx.recv() => {
+                res = block_sim_rx.recv() => {
                     match res {
                         Ok(block_sim) => {
                             if let Some((header, token_balances)) = curr_eth_block.take() {

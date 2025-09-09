@@ -6,7 +6,7 @@ use std::{
     task::{self, Poll},
 };
 
-use crate::state::{self, block::BlockSim};
+use crate::state::{self, block::Block};
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -68,11 +68,11 @@ pub struct PairState {
 #[derive(Debug)]
 pub struct PairStateStream {
     pair: Pair,
-    block_rx: WatchStream<Arc<Option<BlockSim>>>,
+    block_rx: WatchStream<Arc<Option<Block>>>,
 }
 
 impl PairStateStream {
-    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<BlockSim>>>) -> Self {
+    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
         Self {
             pair,
             block_rx: WatchStream::from_changes(block_rx),
@@ -97,7 +97,7 @@ impl Stream for PairStateStream {
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
-                    let state = block.get_pair_state(&self.pair);
+                    let state = block.sims.get_pair_state(&self.pair);
                     Poll::Ready(Some(state))
                 }
                 // Only start yielding values after the initial block is received

@@ -21,18 +21,17 @@ use crate::{
         self,
         eth::{self, EthBlock},
     },
-    state::tycho::BlockSim,
+    state::{block::Block, tycho::BlockSim},
 };
 
 pub struct Builder {
     pub chain: Chain,
     pub tycho_url: String,
     pub api_key: String,
-    pub tokens: HashMap<Bytes, Token>,
+    pub token_addrs: HashMap<Bytes, Token>,
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
     pub shutdown_token: CancellationToken,
-    // TODO: take in provider
 }
 
 impl Builder {
@@ -43,7 +42,7 @@ impl Builder {
             remove_tvl_threshold,
             chain,
             api_key,
-            tokens,
+            token_addrs,
             shutdown_token,
             ..
         } = self;
@@ -57,22 +56,24 @@ impl Builder {
         let protocol_stream_builder = protocol_stream
             .auth_key(Some(api_key))
             .skip_state_decode_failures(true)
-            .set_tokens(tokens.clone());
+            .set_tokens(token_addrs.clone());
 
         let (eth_tx, eth_rx) = broadcast::channel::<EthBlock>(1);
         let (block_sim_tx, block_sim_rx) = broadcast::channel::<BlockSim>(1);
 
-        let (block_tx, block_rx) = watch::channel::<Arc<Option<BlockSim>>>(Arc::new(None));
+        let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
 
+        // TODO: separate out to their own collectors
         let eth_worker = eth::Worker {
             shutdown_token: shutdown_token.clone(),
-            chain,
+            chain: chain.clone(),
             latest_block_tx: eth_tx,
-            account_addr: todo!(),
-            token_addrs: todo!(),
-            ws_url: todo!(),
+            account_addr: chain.signer().address(),
+            token_addrs: token_addrs.clone(),
+            ws_url: chain.rpc_url.clone(),
         };
 
+        // TODO: separate out to their own collectors
         let tycho_worker = collector::tycho::Worker {
             protocol_stream_builder: Box::pin(protocol_stream_builder),
             chain: chain.clone(),
@@ -81,15 +82,11 @@ impl Builder {
         };
 
         let worker = collector::Worker {
-            // TODO: do i really wanna get rid of these or keep them for reconnect?
-            // uri: Uri::from_str(&url).expect("invalid uri"),
-            // api_key: api_key.clone(),
             chain: chain.clone(),
             block_tx: block_tx,
             shutdown_token: shutdown_token.clone(),
-            account_addr: todo!(),
-            token_addrs: todo!(),
-            ws_url: todo!(),
+            block_sim_rx,
+            eth_rx,
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 

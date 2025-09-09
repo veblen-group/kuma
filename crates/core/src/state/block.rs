@@ -3,9 +3,9 @@ use alloy::rpc::types::Header;
 use crate::state::{balances::TokenBalances, tycho::BlockSim};
 
 pub struct Block {
-    header: Header,
-    token_balances: TokenBalances,
-    sims: BlockSim,
+    pub header: Header,
+    pub token_balances: TokenBalances,
+    pub sims: BlockSim,
 }
 
 impl Block {
