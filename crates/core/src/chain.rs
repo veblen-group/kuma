@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use alloy::primitives::Address;
+use alloy::{primitives::Address, signers::local::PrivateKeySigner};
 use alloy_chains::{self, NamedChain};
 use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,11 @@ impl Chain {
         let permit2_address =
             Address::from_str(permit2_address).wrap_err("failed to parse address")?;
 
+        // TODO: we cant save it in the struct because it is not serializable - why do we need chain to be serde?
+        let _: PrivateKeySigner = private_key
+            .parse()
+            .wrap_err("failed to parse private key from chain")?;
+
         Ok(Self {
             name,
             metadata,
@@ -54,9 +59,14 @@ impl Chain {
         })
     }
 
-    #[allow(unused)]
     pub fn chain_id(&self) -> u64 {
         self.metadata.id()
+    }
+
+    pub fn signer(&self) -> PrivateKeySigner {
+        self.private_key
+            .parse()
+            .expect("private key is already checked in chain constructor")
     }
 
     #[cfg(test)]
