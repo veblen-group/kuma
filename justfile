@@ -50,11 +50,11 @@ docker-build-webapp tag="kuma-webapp:latest":
   cd webapp && docker build -t {{tag}} .
 
 # Start the backend API server with Docker Compose
-docker-kuma-run:
+docker-run:
   docker compose up -d
 
 # Stop the backend API server
-docker-kuma-stop:
+docker-stop:
   docker compose down
 
 # Database commands
