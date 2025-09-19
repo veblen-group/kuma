@@ -22,6 +22,14 @@ init-permit2:
 kumad-start:
   docker compose --profile kumad up -d
 
+kumad-init:
+    @just kumad-start
+    docker compose --profile kumad --profile init up -d
+    docker compose --profile init down
+
+kumad-stop:
+    docker compose --profile kumad down
+
 # Webapp
 ###################
 webapp-dev:
@@ -43,7 +51,7 @@ backend-test endpoint="spot_prices" pair="USDC-WETH" page="1" page_size="10":
 docker-build binary="kumad" tag="kumad" version="latest":
   docker build --build-arg BINARY={{binary}} -t {{tag}}:{{version}} .
 
-docker-build-frontend tag="frontend" version="latest":
+docker-build-webapp tag="webapp" version="latest":
   cd webapp && docker build -t {{tag}}:{{version}} .
 
 docker-build-backend tag="backend" version="latest":
@@ -52,9 +60,9 @@ docker-build-backend tag="backend" version="latest":
 docker-build-all version="latest":
   just docker-build kumad kumad {{version}}
   just docker-build-backend backend {{version}}
-  just docker-build-frontend frontend {{version}}
+  just docker-build-webapp webapp {{version}}
 
-# Start all services including daemon, database, backend, and frontend
+# Start all services including daemon, database, backend, and webapp
 docker-run:
 	docker compose --profile all up -d
 
@@ -81,18 +89,6 @@ db-migrate:
 # Compile-time checks for postgres queries
 db-prepare:
     cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}"
-
-# Docker commands
-##################
-# Build specific binary images
-docker-build-kumad tag="kumad:latest":
-  docker build --build-arg BINARY=kumad -t {{tag}} .
-
-docker-build-backend tag="kuma-backend:latest":
-  docker build --build-arg BINARY=kuma-backend -t {{tag}} .
-
-docker-build-webapp tag="kuma-webapp:latest":
-  cd webapp && docker build -t {{tag}} .
 
 # Linting & formatting
 ##################
