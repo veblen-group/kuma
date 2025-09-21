@@ -20,7 +20,6 @@ RUN cargo build --release --bin $BINARY
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -38,4 +37,6 @@ COPY tokens.*.json /app/
 RUN useradd --create-home --shell /bin/bash kuma
 USER kuma
 
-CMD ["/bin/sh", "-c", "/usr/local/bin/$BINARY"]
+ENV BINARY_NAME=$BINARY
+
+CMD ["/bin/sh", "-c", "/usr/local/bin/${BINARY_NAME}"]
