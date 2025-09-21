@@ -40,22 +40,28 @@ backend-test endpoint="spot_prices" pair="USDC-WETH" page="1" page_size="10":
 ##################th
 
 # Build specific binary images
-docker-build-kumad tag="kumad:latest":
-  docker build --build-arg BINARY=kumad -t {{tag}} .
+docker-build binary="kumad" tag="kumad" version="latest":
+  docker build --build-arg BINARY={{binary}} -t {{tag}}:{{version}} .
 
-docker-build-backend tag="kuma-backend:latest":
-  docker build --build-arg BINARY=kuma-backend -t {{tag}} .
+docker-build-frontend tag="frontend" version="latest":
+  cd webapp && docker build -t {{tag}}:{{version}} .
 
-docker-build-webapp tag="kuma-webapp:latest":
-  cd webapp && docker build -t {{tag}} .
+docker-build-backend tag="backend" version="latest":
+  just docker-build kuma-backend {{tag}} {{version}}
 
-# Start the backend API server with Docker Compose
+docker-build-all version="latest":
+  just docker-build kumad kumad {{version}}
+  just docker-build-backend backend {{version}}
+  just docker-build-frontend frontend {{version}}
+
+# Start all services including daemon, database, backend, and frontend
 docker-run:
-  docker compose up -d
+	docker compose --profile all up -d
 
-# Stop the backend API server
+
+# Stop all services
 docker-stop:
-  docker compose down
+  docker-compose --profile all down
 
 # Database commands
 ###################
