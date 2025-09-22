@@ -18,14 +18,14 @@ init-permit2:
     cargo run -p kuma-cli init-permit2
 
 # kumad
+kumad:
+    cargo run -p kumad
 ####################
 kumad-start:
   docker compose --profile kumad up -d
 
 kumad-init:
-    @just kumad-start
     docker compose --profile kumad --profile init up -d
-    docker compose --profile init down
 
 kumad-stop:
     docker compose --profile kumad down
@@ -80,10 +80,10 @@ db-start:
 db-reset:
     #!/usr/bin/env bash
     docker exec kuma-db psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations" --target-version "001"
 
 # Run database migrations
-db-migrate:
+db-init-test:
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
 
 # Compile-time checks for postgres queries
