@@ -9,7 +9,7 @@ export interface Chain {
   rpc_url: string;
   tycho_url: string;
   permit2_address: string;
-  metadata: any;
+  metadata: unknown;
 }
 export type Pair = [Token, Token];
 
