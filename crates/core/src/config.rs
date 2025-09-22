@@ -6,9 +6,12 @@ use figment::{
 };
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use tracing::{info, warn};
-use tycho_simulation::tycho_common::{self, Bytes, models::token::Token};
+use tycho_simulation::{
+    evm::tycho_models,
+    tycho_common::{self, Bytes, models::token::Token},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -165,6 +168,22 @@ impl Config {
         }
 
         pairs
+    }
+
+    pub fn get_chain_from_name<'a>(
+        name: &str,
+        chains: impl IntoIterator<Item = &'a Chain>,
+    ) -> eyre::Result<Chain> {
+        let chain_name = tycho_models::Chain::from_str(name)
+            .wrap_err_with(|| format!("failed to parse chain name {}", name))?;
+
+        let chain = chains
+            .into_iter()
+            .find(|chain| chain.name == chain_name)
+            .ok_or_else(|| eyre!("Chain not found"))?
+            .clone();
+
+        Ok(chain)
     }
 }
 

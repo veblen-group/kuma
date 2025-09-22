@@ -17,13 +17,13 @@ pub(super) struct Kuma {
     shutdown_token: CancellationToken,
     #[allow(dead_code)]
     collector_handles: HashMap<Chain, collector::Handle>,
-    strategy_handle: strategy::Handle,
+    strategy_handles: Vec<strategy::Handle>,
 }
 
 impl Kuma {
     #[instrument(skip_all)]
     pub(super) fn new(cfg: Config, shutdown_token: CancellationToken) -> eyre::Result<Self> {
-        // 1. extract from config, for each chain:
+        // extract from config, for each chain:
         //  1. token addrs
         //  2. inventory
         let (addrs_for_chain, inventory) = cfg
@@ -40,40 +40,60 @@ impl Kuma {
 
         let db = database::Handle::from_config(cfg.database, Arc::new(addrs_for_chain.clone()))?;
 
-        // 2. set up collectors for each chain
-        let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
-            .into_iter()
-            .map(|(chain, addrs)| {
-                let handle = collector::Builder {
-                    chain: chain.clone(),
-                    tycho_url: chain.tycho_url.clone(),
-                    api_key: cfg.tycho_api_key.clone(),
-                    tokens: addrs,
-                    add_tvl_threshold: cfg.add_tvl_threshold,
-                    remove_tvl_threshold: cfg.remove_tvl_threshold,
-                    shutdown_token: shutdown_token.clone(),
-                }
-                .build()
-                .wrap_err("failed to start tycho collector for chain : {chain}")?;
-                Ok((chain.clone(), handle))
-            })
-            .collect::<eyre::Result<HashMap<Chain, collector::Handle>>>()?;
+        // let collector_handles: HashMap<Chain, collector::Handle> = addrs_for_chain
+        //     .into_iter()
+        //     .map(|(chain, addrs)| {
+        //         let handle = collector::Builder {
+        //             chain: chain.clone(),
+        //             tycho_url: chain.tycho_url.clone(),
+        //             api_key: cfg.tycho_api_key.clone(),
+        //             tokens: addrs,
+        //             add_tvl_threshold: cfg.add_tvl_threshold,
+        //             remove_tvl_threshold: cfg.remove_tvl_threshold,
+        //             shutdown_token: shutdown_token.clone(),
+        //         }
+        //         .build()
+        //         .wrap_err("failed to start tycho collector for chain : {chain}")?;
+        //         Ok((chain.clone(), handle))
+        //     })
+        //     .collect::<eyre::Result<HashMap<Chain, collector::Handle>>>()?;
 
-        // TODO: this should run for each strategy config
-        let strategy_handle = {
-            let StrategyConfig {
-                token_a,
-                token_b,
-                slow_chain,
-                fast_chain,
-            } = &cfg.strategies[0];
+        let mut collector_handles = HashMap::new();
+        let mut strategy_handles = vec![];
+
+        for StrategyConfig {
+            token_a,
+            token_b,
+            slow_chain,
+            fast_chain,
+        } in &cfg.strategies
+        {
+            let slow_chain = Config::get_chain_from_name(&slow_chain, addrs_for_chain.keys())?;
+            let fast_chain = Config::get_chain_from_name(&fast_chain, addrs_for_chain.keys())?;
+
+            // set up collectors for each chain
+            for chain in [&slow_chain, &fast_chain] {
+                collector_handles.entry(chain.clone()).or_insert(
+                    collector::Builder {
+                        chain: chain.clone(),
+                        tycho_url: chain.tycho_url.clone(),
+                        api_key: cfg.tycho_api_key.clone(),
+                        tokens: addrs_for_chain[&chain].clone(),
+                        add_tvl_threshold: cfg.add_tvl_threshold,
+                        remove_tvl_threshold: cfg.remove_tvl_threshold,
+                        shutdown_token: shutdown_token.clone(),
+                    }
+                    .build()
+                    .wrap_err("failed to start tycho collector for chain : {chain}")?,
+                );
+            }
 
             let strategy = kuma_core::strategy::Builder {
                 token_a: token_a.clone(),
                 token_b: token_b.clone(),
-                slow_chain_name: slow_chain.clone(),
-                fast_chain_name: fast_chain.clone(),
-                inventory,
+                slow_chain: slow_chain.clone(),
+                fast_chain: fast_chain.clone(),
+                inventory: inventory.clone(),
                 binary_search_steps: cfg.binary_search_steps,
                 max_slippage_bps: cfg.max_slippage_bps,
                 congestion_risk_discount_bps: cfg.congestion_risk_discount_bps,
@@ -92,25 +112,28 @@ impl Kuma {
                 .average_blocktime_hint()
                 .expect("chain metadata for average block time not found");
 
-            strategy::Builder {
+            let strategy_handle = strategy::Builder {
                 strategy,
                 slow_stream,
                 fast_stream,
                 slow_block_time,
-                db,
+                db: db.clone(),
             }
             .build()
-            .wrap_err("failed to build strategy worker")?
-        };
+            .wrap_err("failed to build strategy worker")?;
+
+            strategy_handles.push(strategy_handle);
+        }
 
         Ok(Self {
             shutdown_token,
             collector_handles,
-            strategy_handle,
+            strategy_handles,
         })
     }
 
     pub(super) async fn run(mut self) -> eyre::Result<()> {
+        // TODO: maybe make a handle trait with Handle::shutdown() and Handle::id() and store all the impl Handles in a vec?
         let collector_futs = self
             .collector_handles
             .iter_mut()
@@ -124,6 +147,15 @@ impl Kuma {
                 })
             })
             .collect::<Vec<_>>();
+
+        let strategy_futs = self.strategy_handles.iter_mut().map(|handle| {
+            Box::pin(async move {
+                match handle.await {
+                    Ok(()) => Ok("strategy task completed".to_owned()),
+                    Err(e) => Err(e),
+                }
+            })
+        });
 
         let reason: eyre::Result<String> = {
             loop {
@@ -141,9 +173,9 @@ impl Kuma {
                     }
 
                     // Handle strategy worker task completion
-                    result = &mut self.strategy_handle => {
+                    (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
                         match result {
-                            Ok(()) => break Ok("strategy worker completed".to_owned()),
+                            Ok(message) => break Ok(message),
                             Err(e) => break Err(e),
                         }
                     }
@@ -155,7 +187,7 @@ impl Kuma {
     }
 
     #[instrument(skip_all)]
-    async fn shutdown(mut self, reason: eyre::Result<String>) {
+    async fn shutdown(self, reason: eyre::Result<String>) {
         const WAIT_BEFORE_ABORT: Duration = Duration::from_secs(25);
 
         // trigger the shutdown token in case it wasn't triggered yet
@@ -170,11 +202,14 @@ impl Kuma {
             Err(reason) => error!(%reason, message),
         };
 
-        // Shutdown strategy worker
-        if let Err(e) = self.strategy_handle.shutdown().await {
-            error!("Failed to shutdown strategy worker: {}", e);
+        // Shutdown strategy workers
+        for mut handle in self.strategy_handles {
+            if let Err(e) = handle.shutdown().await {
+                error!("Failed to shutdown strategy worker: {}", e);
+            }
         }
 
+        // Shutdown collector workers
         for (chain, mut handle) in self.collector_handles {
             if let Err(e) = handle.shutdown().await {
                 error!("Failed to shutdown collector for {}: {}", chain.name, e)

@@ -28,3 +28,4 @@ tracing-subscriber = { workspace = true, features = [
     "tracing",
 ] }
 tycho-common = { workspace = true }
+tycho-simulation = { workspace = true }
