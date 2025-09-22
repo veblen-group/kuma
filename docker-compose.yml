@@ -3,6 +3,8 @@ services:
     image: postgres:15
     profiles:
       - db
+      - kumad
+      - all
     container_name: kuma-db
     environment:
       POSTGRES_DB: api_db
@@ -20,10 +22,33 @@ services:
     networks:
       - kuma-network
 
-  migrations:
+  schema-migration:
     image: postgres:15
     profiles:
-      - db
+      - init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=api_user
+      - PGPASSWORD=password
+      - PGDATABASE=api_db
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      sh -c "
+        psql -f /migrations/001_initial.sql
+      "
+    restart: "no"
+    networks:
+      - kuma-network
+
+  test-migrations:
+    image: postgres:15
+    profiles:
+      - test
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,15 +73,16 @@ services:
 
   kumad:
     image: kumad:latest
-    container_name: kuma-daemon
+    profiles:
+      - kumad
+      - all
+    container_name: kumad
     depends_on:
       postgres:
         condition: service_healthy
-      migrations:
-        condition: service_completed_successfully
     environment:
-      - RUST_LOG=trace
-      - KUMA_DATABASE__HOST=postgres
+      - RUST_LOG=info
+      - KUMA_DATABASE_HOST=postgres
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
       - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
@@ -67,14 +93,15 @@ services:
       - kuma-network
 
   kuma-backend:
-    image: kuma-backend:latest
+    image: backend:latest
     profiles:
-      - backend
+      - webapp
+      - all
     container_name: kuma-api
     depends_on:
       postgres:
         condition: service_healthy
-      migrations:
+      test-migrations:
         condition: service_completed_successfully
     environment:
       - RUST_LOG=info
@@ -87,15 +114,16 @@ services:
     networks:
       - kuma-network
 
-  webapp:
-    image: kuma-webapp:latest
+  frontend:
+    image: frontend:latest
     profiles:
-      - frontend
+      - webapp
+      - all
     container_name: kuma-webapp
     depends_on:
       - kuma-backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://kuma-backend:8080
+      - NEXT_PUBLIC_API_URL=http://backend:8080
     ports:
       - "3000:3000"
     restart: unless-stopped

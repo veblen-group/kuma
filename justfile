@@ -3,12 +3,9 @@ default:
 
 set fallback
 
-dev-webapp:
-    cd webapp && npm run dev
-
 # CLI commands
 ###################
-
+# TODO: use compiled binaries instead of cargo run
 generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
     cargo run -p kuma-cli generate-signals \
     --token-a {{token-a}} --token-b {{token-b}} \
@@ -20,14 +17,26 @@ get-tokens chain="ethereum":
 init-permit2:
     cargo run -p kuma-cli init-permit2
 
-# Bot commands
+# kumad
+####################
+kumad-start:
+  docker compose --profile kumad up -d
 
-kumad:
-    cargo run -p kumad
+kumad-init:
+    @just kumad-start
+    docker compose --profile kumad --profile init up -d
+    docker compose --profile init down
+
+kumad-stop:
+    docker compose --profile kumad down
+
+# Webapp
+###################
+webapp-dev:
+    cd webapp && npm run dev
 
 # Backend API server commands
 ##############################
-
 # Run the API backend server
 backend:
   exec cargo run --bin kuma-backend
@@ -37,36 +46,35 @@ backend-test endpoint="spot_prices" pair="USDC-WETH" page="1" page_size="10":
     curl "http://localhost:8080/{{endpoint}}?pair={{pair}}&page={{page}}&page_size={{page_size}}"
 
 # Docker commands
-##################th
-
+##################
 # Build specific binary images
-docker-build-kumad tag="kumad:latest":
-  docker build --build-arg BINARY=kumad -t {{tag}} .
+docker-build binary="kumad" tag="kumad" version="latest":
+  docker build --build-arg BINARY={{binary}} -t {{tag}}:{{version}} .
 
-docker-build-backend tag="kuma-backend:latest":
-  docker build --build-arg BINARY=kuma-backend -t {{tag}} .
+docker-build-webapp tag="webapp" version="latest":
+  cd webapp && docker build -t {{tag}}:{{version}} .
 
-docker-build-webapp tag="kuma-webapp:latest":
-  cd webapp && docker build -t {{tag}} .
+docker-build-backend tag="backend" version="latest":
+  just docker-build kuma-backend {{tag}} {{version}}
 
-# Start the backend API server with Docker Compose
-docker-kuma-run:
-  docker compose up -d
+docker-build-all version="latest":
+  just docker-build kumad kumad {{version}}
+  just docker-build-backend backend {{version}}
+  just docker-build-webapp webapp {{version}}
 
-# Stop the backend API server
-docker-kuma-stop:
-  docker compose down
+# Start all services including daemon, database, backend, and webapp
+docker-run:
+	docker compose --profile all up -d
 
-# Database commands
-###################
+# Stop all services
+docker-stop:
+  docker-compose --profile all down
 
+# Database
+#####################
 # Start PostgreSQL database with Docker Compose and run migrations
 db-start:
   docker compose --profile db up -d
-
-# Stop PostgreSQL database
-db-stop:
-  docker-compose down
 
 # Reset database (removes all data)
 db-reset:
@@ -82,6 +90,8 @@ db-migrate:
 db-prepare:
     cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}"
 
+# Linting & formatting
+##################
 default_lang := 'all'
 # Format
 #########
