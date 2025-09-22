@@ -4990,6 +4990,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.19",
  "tycho-common 0.82.0",
+ "tycho-simulation",
 ]
 
 [[package]]
