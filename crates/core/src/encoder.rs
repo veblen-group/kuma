@@ -4,104 +4,162 @@ use std::u64;
 use alloy::consensus::EthereumTxEnvelope;
 use alloy::network::EthereumWallet;
 use alloy::primitives::{Address as alloyAddress, Bytes as AlloyBytes, Keccak256};
+use alloy::providers::Provider as _;
 use alloy::providers::ext::AnvilApi;
-use alloy::rpc::types::{TransactionInput, TransactionRequest};
+use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest};
 use alloy::signers::Signature;
 use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
-use color_eyre::eyre::{self, Context as _};
+use color_eyre::eyre::{self, Context as _, Ok};
 use num_bigint::BigUint;
+use serde::{Deserialize, Serialize};
 use tracing::trace;
-use tycho_common::{
-    Bytes,
-    models::{Address, token::Token},
-};
+use tycho_common::Bytes;
 
 use tycho_execution::encoding::errors::EncodingError;
 use tycho_execution::encoding::evm::approvals::permit2::PermitSingle;
 use tycho_execution::encoding::evm::encoder_builders::TychoRouterEncoderBuilder;
 use tycho_execution::encoding::evm::utils::biguint_to_u256;
 use tycho_execution::encoding::models::{
-    self, EncodedSolution, Solution, Swap, Transaction, UserTransferType,
+    self, EncodedSolution, Solution, Swap as TychoSwap, Transaction as TychoTransaction,
+    UserTransferType,
 };
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::chain::Chain;
-use crate::signals::CrossChainSingleHop;
+use crate::strategy::Swap;
+
+pub struct Trade {
+    slow_tx_req: UnsignedTransaction,
+    fast_tx_req: UnsignedTransaction,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SignedTransaction {
+    tx: EthereumTxEnvelope<alloy::consensus::TxEip4844Variant>,
+}
+
+impl Trade {
+    pub(crate) fn new(slow: UnsignedTransaction, fast: UnsignedTransaction) -> Self {
+        Trade {
+            slow_tx_req: slow,
+            fast_tx_req: fast,
+        }
+    }
+
+    pub fn slow_tx(&self) -> &UnsignedTransaction {
+        &self.slow_tx_req
+    }
+
+    pub fn fast_tx(&self) -> &UnsignedTransaction {
+        &self.fast_tx_req
+    }
+
+    // Prepare the trade by creating the transaction requests for both chains
+    pub async fn prepare(&self) -> eyre::Result<(SignedTransaction, SignedTransaction)> {
+        let slow_tx_request = get_tx_request(&self.slow_tx(), &self.slow_tx().chain)
+            .await
+            .wrap_err("Failed to create transaction request for slow chain")?;
+        let fast_tx_request = get_tx_request(self.fast_tx(), &self.fast_tx().chain)
+            .await
+            .wrap_err("Failed to create transaction request for fast chain")?;
+        Ok((slow_tx_request, fast_tx_request))
+    }
+
+    // Execute the trade by sending the transactions to their respective chains
+    pub async fn promote(&self) -> eyre::Result<(TransactionReceipt, TransactionReceipt)> {
+        let slow_tx = execute_tx(self.slow_tx(), &self.slow_tx().chain)
+            .await
+            .wrap_err("Failed to execute slow transaction")?;
+
+        let fast_tx = execute_tx(self.fast_tx(), &self.fast_tx().chain)
+            .await
+            .wrap_err("Failed to execute fast transaction")?;
+
+        Ok((slow_tx, fast_tx))
+    }
+}
+
+pub struct UnsignedTransaction {
+    tx: TransactionRequest,
+    chain: Chain,
+}
+
+impl UnsignedTransaction {
+    pub(crate) fn try_from_solution(solution: &Solution, chain: &Chain) -> eyre::Result<Self> {
+        let encoded_solution = encode_solution(solution.clone(), chain)?;
+        let native_address = Bytes::from(chain.name.native_token().address.as_ref());
+        let tx = encode_tycho_router_call(
+            chain.chain_id(),
+            encoded_solution,
+            solution,
+            native_address,
+            chain.signer().clone(),
+        )?;
+        let tx_request = TransactionRequest::default()
+            .to(alloyAddress::from_slice(&tx.to))
+            .input(TransactionInput {
+                input: Some(AlloyBytes::from(tx.data.clone())),
+                data: None,
+            })
+            .value(biguint_to_u256(&tx.value));
+        Ok(UnsignedTransaction {
+            tx: tx_request,
+            chain: chain.clone(),
+        })
+    }
+}
+
 pub async fn get_tx_request(
-    transaction: &Transaction,
-    signer: &PrivateKeySigner,
-    _chain: &alloy::core::primitives::ChainId,
-    rpc_url: &str,
-) -> eyre::Result<EthereumTxEnvelope<alloy::consensus::TxEip4844Variant>> {
-    let wallet = EthereumWallet::new(signer.clone());
+    transaction: &UnsignedTransaction,
+    chain: &Chain,
+) -> eyre::Result<SignedTransaction> {
+    let wallet = EthereumWallet::new(chain.signer().clone());
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
-        .connect_http(rpc_url.parse().wrap_err("Invalid RPC URL")?);
+        .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);
 
     provider.anvil_set_logging(true).await.ok();
-    let base_request = TransactionRequest::default()
-        .to(alloyAddress::from_slice(&transaction.to))
-        .input(TransactionInput {
-            input: Some(AlloyBytes::from(transaction.data.clone())),
-            data: None,
-        })
-        .value(biguint_to_u256(&transaction.value));
 
     let tx = provider
-        .fill(base_request.clone())
+        .fill(transaction.tx.clone())
         .await
         .wrap_err("failed filling tx")?
         .try_into_envelope()?;
-    Ok(tx)
+    Ok(SignedTransaction { tx })
 }
 
-pub fn try_transactions_from_signal(
-    signal: CrossChainSingleHop,
-    slow_signer: PrivateKeySigner,
-    fast_signer: PrivateKeySigner,
-) -> eyre::Result<(Transaction, Transaction)> {
-    let slow_signer_address = Address::from_str(&slow_signer.address().to_string())
-        .wrap_err("Failed to parse signer address")?;
-    let fast_signer_address = Address::from_str(&fast_signer.address().to_string())
-        .wrap_err("Failed to parse signer address")?;
+pub async fn execute_tx(
+    transaction: &UnsignedTransaction,
+    chain: &Chain,
+) -> eyre::Result<TransactionReceipt> {
+    let wallet = EthereumWallet::new(chain.signer().clone());
+    let provider = alloy::providers::ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);
 
-    let (slow_solution, fast_solution) =
-        try_solutions_from_signal(signal.clone(), slow_signer_address, fast_signer_address)?;
-    let slow_chain = signal.slow_chain.clone();
-    let fast_chain = signal.fast_chain.clone();
+    provider.anvil_set_logging(true).await.ok();
 
-    let encoded_slow_solutions = encode_solution(slow_solution.clone(), &slow_chain.clone())?;
-    let encoded_fast_solution = encode_solution(fast_solution.clone(), &fast_chain.clone())?;
+    let pending_tx = provider
+        .send_transaction(transaction.tx.clone())
+        .await
+        .wrap_err("failed sending transaction")?;
 
-    let slow_native_address = Bytes::from(signal.slow_chain.name.native_token().address.as_ref());
-    let fast_native_address = Bytes::from(signal.fast_chain.name.native_token().address.as_ref());
-
-    let slow_tx = encode_tycho_router_call(
-        signal.slow_chain.chain_id(),
-        encoded_slow_solutions,
-        &slow_solution,
-        slow_native_address,
-        slow_signer.clone(),
-    )?;
-    let fast_tx = encode_tycho_router_call(
-        signal.fast_chain.chain_id(),
-        encoded_fast_solution,
-        &fast_solution,
-        fast_native_address,
-        fast_signer.clone(),
-    )?;
-
-    Ok((slow_tx, fast_tx))
+    let receipt = pending_tx
+        .get_receipt()
+        .await
+        .wrap_err("failed getting receipt")?;
+    trace!("Transaction mined in block {:?}", receipt.block_number);
+    Ok(receipt)
 }
 
-fn encode_tycho_router_call(
+pub(crate) fn encode_tycho_router_call(
     chain_id: u64,
     encoded_solution: EncodedSolution,
     solution: &Solution,
     native_address: Bytes,
     signer: PrivateKeySigner,
-) -> Result<Transaction, EncodingError> {
+) -> eyre::Result<TychoTransaction> {
     let p = encoded_solution.permit.expect("Permit object must be set");
     let permit = PermitSingle::try_from(&p)
         .map_err(|_| EncodingError::InvalidInput("Invalid permit".to_string()))?;
@@ -132,7 +190,7 @@ fn encode_tycho_router_call(
     } else {
         BigUint::ZERO
     };
-    Ok(Transaction {
+    Ok(TychoTransaction {
         to: encoded_solution.interacting_with,
         value,
         data: contract_interaction,
@@ -159,62 +217,19 @@ fn sign_permit(
     })
 }
 
-fn try_solutions_from_signal(
-    signal: CrossChainSingleHop,
-    slow_user_address: Bytes,
-    fast_user_address: Bytes,
-) -> eyre::Result<(Solution, Solution)> {
-    let sell_token_slow = signal.slow_swap_sim.token_in;
-    let buy_token_slow = signal.slow_swap_sim.token_out;
-
-    let sell_token_fast = signal.fast_swap_sim.token_in;
-    let buy_token_fast = signal.fast_swap_sim.token_out;
-
-    let slow_chain_amount_in = signal.slow_swap_sim.amount_in;
-    let slow_chain_min_amount_out = signal.slow_swap_sim.amount_out;
-
-    let slow_protocol_component = signal.slow_protocol_component.unwrap().as_ref().clone();
-    let fast_chain_amount_in = signal.fast_swap_sim.amount_in;
-    let fast_chain_min_amount_out = signal.fast_swap_sim.amount_out;
-
-    let fast_protocol_component = signal.fast_protocol_component.unwrap().as_ref().clone();
-
-    let slow_solution = create_solution(
-        slow_protocol_component,
-        &sell_token_slow,
-        &buy_token_slow,
-        slow_chain_amount_in,
-        slow_chain_min_amount_out,
-        slow_user_address.clone(),
-    );
-
-    let fast_solution = create_solution(
-        fast_protocol_component,
-        &sell_token_fast,
-        &buy_token_fast,
-        fast_chain_amount_in,
-        fast_chain_min_amount_out,
-        fast_user_address.clone(),
-    );
-
-    Ok((slow_solution, fast_solution))
-}
-
-fn create_solution(
+pub(crate) fn create_solution(
     component: ProtocolComponent,
-    sell_token: &Token,
-    buy_token: &Token,
-    amount_in: BigUint,
-    min_amount_out: BigUint,
-    user_address: Bytes,
+    swap: &Swap,
+    signer: PrivateKeySigner,
 ) -> Solution {
+    let signer_address_bytes =
+        tycho_common::models::Address::from_str(signer.address().to_string().as_str())
+            .expect("Invalid signer address");
     // Convert tycho_simulation bytes to tycho_common bytes by converting through hex string
-    let sell_address = Bytes::from(sell_token.address.0.clone());
-    let buy_address = Bytes::from(buy_token.address.0.clone());
-    let simple_swap = Swap::new(
+    let simple_swap = TychoSwap::new(
         component,
-        sell_address.clone(),
-        buy_address.clone(),
+        swap.token_in.address.clone(),
+        swap.token_out.address.clone(),
         // Split defines the fraction of the amount to be swapped. A value of 0 indicates 100% of
         // the amount or the total remaining balance.
         0f64,
@@ -224,13 +239,13 @@ fn create_solution(
     );
 
     Solution {
-        sender: user_address.clone(),
-        receiver: user_address,
-        given_token: sell_address,
-        given_amount: amount_in,
-        checked_token: buy_address,
+        sender: signer_address_bytes.clone(),
+        receiver: signer_address_bytes.clone(),
+        given_token: swap.token_in.address.clone(),
+        given_amount: swap.amount_in.clone(),
+        checked_token: swap.token_out.address.clone(),
         exact_out: false, // it's an exact in solution
-        checked_amount: min_amount_out,
+        checked_amount: swap.amount_out.clone(),
         swaps: vec![simple_swap],
         native_action: None,
     }

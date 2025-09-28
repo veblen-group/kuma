@@ -185,26 +185,6 @@ impl Config {
 
         Ok(chain)
     }
-
-    pub fn build_private_keys_for_chains_id(&self) -> eyre::Result<HashMap<u64, String>> {
-        let chains = self
-            .build_chains()
-            .expect("Failed to parse chains from config");
-        let mut private_keys_for_chain = HashMap::new();
-        for chain in chains {
-            if let Some(existing_key) =
-                private_keys_for_chain.insert(chain.chain_id().clone(), chain.private_key.clone())
-            {
-                if existing_key != chain.private_key {
-                    return Err(eyre!(
-                        "Duplicate chain names with different private keys found"
-                    ));
-                }
-            }
-        }
-
-        Ok(private_keys_for_chain)
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

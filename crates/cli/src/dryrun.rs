@@ -1,13 +1,7 @@
-use core::{
-    chain::Chain,
-    config::Config,
-    encoder::{get_tx_request, try_transactions_from_signal},
-    signals::CrossChainSingleHop,
-};
+use core::{config::Config, encoder::get_tx_request, signals::CrossChainSingleHop};
 use std::{fs, path::PathBuf};
 
-use alloy::signers::local::PrivateKeySigner;
-use color_eyre::eyre::{self, Context as _, ContextCompat};
+use color_eyre::eyre::{self, Context as _};
 use tracing::debug;
 
 #[derive(clap::Args, Debug, Clone)]
@@ -23,39 +17,33 @@ pub(crate) struct DryRun {
 impl DryRun {
     pub(crate) async fn run(&self, config: Config) -> eyre::Result<()> {
         let data = fs::read_to_string(self.input_path.clone())?;
-        let signal: CrossChainSingleHop =
+        let mut signal: CrossChainSingleHop =
             serde_json::from_str(&data).wrap_err("Failed to deserialize signal from input file")?;
+        let chains = config
+            .build_chains()
+            .wrap_err("Failed to build chains from config")?;
 
-        let (slow_signer, fast_signer) = get_signers(
-            &config,
-            signal.slow_chain.clone(),
-            signal.fast_chain.clone(),
-        )?;
+        let slow_signer = chains
+            .iter()
+            .find(|c| c.chain_id() == signal.slow_chain.chain_id())
+            .ok_or_else(|| eyre::eyre!("Slow chain not found in config"))?;
 
-        let unsigned_transactions =
-            try_transactions_from_signal(signal.clone(), slow_signer.clone(), fast_signer.clone())
-                .wrap_err("Failed to create transactions from signal")?;
+        let fast_signer = chains
+            .iter()
+            .find(|c| c.chain_id() == signal.fast_chain.chain_id())
+            .ok_or_else(|| eyre::eyre!("Fast chain not found in config"))?;
 
-        let slow_tx = unsigned_transactions.0;
-        let fast_tx = unsigned_transactions.1;
+        // We need to set the private keys for the chains in the signal when running via cli
+        signal.slow_chain.private_key = slow_signer.private_key.clone();
+        signal.fast_chain.private_key = fast_signer.private_key.clone();
 
-        // TODO: get_tx_request should return a signed transaction without broadcasting.
-        let slow_tx_request = get_tx_request(
-            &slow_tx,
-            &slow_signer,
-            &signal.slow_chain.chain_id(),
-            &signal.slow_chain.rpc_url,
-        )
-        .await
-        .wrap_err("Failed to create transaction request for slow chain")?;
-        let fast_tx_request = get_tx_request(
-            &fast_tx,
-            &fast_signer,
-            &signal.fast_chain.chain_id(),
-            &signal.fast_chain.rpc_url,
-        )
-        .await
-        .wrap_err("Failed to create transaction request for fast chain")?;
+        let trade = signal.try_into_trade()?;
+        let slow_tx_request = get_tx_request(&trade.slow_tx(), &signal.slow_chain)
+            .await
+            .wrap_err("Failed to create transaction request for slow chain")?;
+        let fast_tx_request = get_tx_request(trade.fast_tx(), &signal.fast_chain)
+            .await
+            .wrap_err("Failed to create transaction request for fast chain")?;
 
         let txs = vec![slow_tx_request, fast_tx_request];
         let txs_json =
@@ -70,25 +58,4 @@ impl DryRun {
         debug!("Transactions written to: {}", self.output_path.display());
         Ok(())
     }
-}
-
-fn get_signers(
-    config: &Config,
-    slow_chain: Chain,
-    fast_chain: Chain,
-) -> eyre::Result<(PrivateKeySigner, PrivateKeySigner)> {
-    let private_key_by_chains = config.build_private_keys_for_chains_id()?;
-    let slow_private_key = private_key_by_chains
-        .get(&slow_chain.chain_id())
-        .wrap_err("Failed to get private key for slow chain")?;
-    let fast_private_key = private_key_by_chains
-        .get(&fast_chain.chain_id())
-        .wrap_err("Failed to get private key for fast chain")?;
-    let slow_signer: PrivateKeySigner = slow_private_key
-        .parse()
-        .wrap_err("Failed to parse private key for slow chain")?;
-    let fast_signer: PrivateKeySigner = fast_private_key
-        .parse()
-        .wrap_err("Failed to parse private key for fast chain")?;
-    Ok((slow_signer, fast_signer))
 }

@@ -72,7 +72,7 @@ impl Cli {
                 info!(%signal, "✅ Generated signal");
             }
             Commands::DryRun(cmd) => {
-                cmd.run(config.clone()).await?;
+                cmd.run(config).await?;
             }
             Commands::Execute(_) => {
                 unimplemented!()
