@@ -5,7 +5,7 @@ use tokio::select;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 
-use crate::strategy;
+use crate::{execution, strategy};
 use kuma_core::{
     chain::Chain,
     collector,
@@ -19,6 +19,7 @@ pub(super) struct Kuma {
     eth_handles: HashMap<Chain, collector::eth::Handle>,
     tycho_handles: HashMap<Chain, collector::tycho::Handle>,
     strategy_handles: Vec<strategy::Handle>,
+    trade_execution_handles: Vec<execution::Handle>,
 }
 
 impl Kuma {
@@ -45,6 +46,7 @@ impl Kuma {
         let mut eth_handles = HashMap::new();
         let mut tycho_handles = HashMap::new();
         let mut strategy_handles = vec![];
+        let mut trade_execution_handles = vec![];
 
         for StrategyConfig {
             token_a,
@@ -108,7 +110,16 @@ impl Kuma {
             .build()
             .wrap_err("failed to build strategy worker")?;
 
+            // Create trade execution handle that subscribes to this strategy's signals
+            let trade_execution_handle = execution::Builder {
+                signal_rx: strategy_handle.get_signal_rx(),
+                db: db.clone(),
+            }
+            .build()
+            .wrap_err("failed to build trade execution worker")?;
+
             strategy_handles.push(strategy_handle);
+            trade_execution_handles.push(trade_execution_handle);
         }
 
         Ok(Self {
@@ -117,6 +128,7 @@ impl Kuma {
             eth_handles,
             tycho_handles,
             strategy_handles,
+            trade_execution_handles,
         })
     }
 
@@ -172,38 +184,55 @@ impl Kuma {
             })
         });
 
+        let trade_execution_futs = self.trade_execution_handles.iter_mut().map(|handle| {
+            Box::pin(async move {
+                match handle.await {
+                    Ok(()) => Ok("trade execution task completed".to_owned()),
+                    Err(e) => Err(e),
+                }
+            })
+        });
+
         let reason: eyre::Result<String> = {
             select! {
-                biased;
+            biased;
 
-                () = self.shutdown_token.cancelled() => Ok("received shutdown signal".to_owned()),
+            () = self.shutdown_token.cancelled() => Ok("received shutdown signal".to_owned()),
 
-                // Handle block collector task completion
-                (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
-                    match result {
-                        Ok(message) => Ok(message),
-                        Err(e) => Err(e),
-                    }
+            // Handle block collector task completion
+            (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
+                match result {
+                    Ok(message) => Ok(message),
+                    Err(e) => Err(e),
                 }
+            }
 
-                // Handle eth collector task completion
-                (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
-                    match result {
-                        Ok(message) => Ok(message),
-                        Err(e) => Err(e),
-                    }
+            // Handle eth collector task completion
+            (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
+                match result {
+                    Ok(message) => Ok(message),
+                    Err(e) => Err(e),
                 }
+            }
 
-                // Handle tycho collector task completion
-                (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
-                    match result {
-                        Ok(message) => Ok(message),
-                        Err(e) => Err(e),
-                    }
+            // Handle tycho collector task completion
+            (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
+                match result {
+                    Ok(message) => Ok(message),
+                    Err(e) => Err(e),
                 }
+            }
 
-                // Handle strategy worker task completion
-                (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
+            // Handle strategy worker task completion
+            (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
+                match result {
+                    Ok(message) => Ok(message),
+                    Err(e) => Err(e),
+                }
+            }
+
+                // Handle trade execution task completion
+                (result, _i, _trade_executions) = futures::future::select_all(trade_execution_futs) => {
                     match result {
                         Ok(message) => Ok(message),
                         Err(e) => Err(e),
@@ -246,6 +275,12 @@ impl Kuma {
                     "Failed to shutdown block collector for {}: {}",
                     chain.name, e
                 )
+            }
+        }
+
+        for mut handle in self.trade_execution_handles {
+            if let Err(e) = handle.shutdown().await {
+                error!("Failed to shutdown trade execution worker: {}", e);
             }
         }
 

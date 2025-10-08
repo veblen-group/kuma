@@ -210,7 +210,6 @@ impl Worker {
                                         eyre!("failed to write signal to db: {e:}")
                                     })
                                 }.boxed());
-                                panic!("Signal generated")
                             }
                             Err(e) => {
                                 debug!(
