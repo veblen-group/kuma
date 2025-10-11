@@ -174,16 +174,19 @@ impl Worker {
                         // TODO: fix this to use the curr fast state object
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.block_height);
                         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.strategy.fast_pair);
+
                         let spot_prices = SpotPrices::from_sorted_prices(
                             &fast_sorted_spot_prices,
                             fast_state.block_height,
                             self.strategy.fast_chain.clone(),
                             self.strategy.fast_pair.clone()
                         ).expect("fast chain spot prices should exist");
+
                         let repo = self.db.spot_price_repository();
                         db_writes.push(async move {
                             repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
                         }.boxed());
+
                         match self.strategy.generate_signal(precompute, fast_state, fast_sorted_spot_prices) {
                             Ok(signal) => {
                                 info!(
