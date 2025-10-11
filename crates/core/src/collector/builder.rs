@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context as _, eyre};
-use tokio::sync::{broadcast, watch};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tycho_simulation::{
     evm::{
@@ -19,15 +19,16 @@ use crate::{
     chain::Chain,
     collector::{
         self,
-        eth::{self, EthBlock},
+        eth::{self},
+        tycho,
     },
-    state::{block::Block, tycho::BlockSim},
+    state::block::Block,
 };
 
 pub struct Builder {
     pub chain: Chain,
     pub tycho_url: String,
-    pub api_key: String,
+    pub tycho_api_key: String,
     pub token_addrs: HashMap<Bytes, Token>,
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
@@ -41,12 +42,13 @@ impl Builder {
             add_tvl_threshold,
             remove_tvl_threshold,
             chain,
-            api_key,
+            tycho_api_key,
             token_addrs,
             shutdown_token,
             ..
         } = self;
 
+        // TODO: move this stuff into the tycho builder
         // make protocol stream
         let protocol_stream = ProtocolStreamBuilder::new(&url, chain.name);
         let tvl_filter = ComponentFilter::with_tvl_range(remove_tvl_threshold, add_tvl_threshold);
@@ -54,42 +56,38 @@ impl Builder {
             .wrap_err("failed to set exchanges for {chain.name}.")?;
 
         let protocol_stream_builder = protocol_stream
-            .auth_key(Some(api_key))
+            .auth_key(Some(tycho_api_key))
             .skip_state_decode_failures(true)
             .set_tokens(token_addrs.clone());
 
-        let (eth_tx, eth_rx) = broadcast::channel::<EthBlock>(1);
-        let (block_sim_tx, block_sim_rx) = broadcast::channel::<BlockSim>(1);
-
         let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
 
-        // TODO: separate out to their own collectors
-        let eth_worker = eth::Worker {
-            shutdown_token: shutdown_token.clone(),
+        let eth_worker_handle = eth::Builder {
             chain: chain.clone(),
-            latest_block_tx: eth_tx,
+            shutdown_token: shutdown_token.clone(),
             account_addr: chain.signer().address(),
             token_addrs: token_addrs.clone(),
             ws_url: chain.rpc_url.clone(),
-        };
+        }
+        .build();
 
-        // TODO: separate out to their own collectors
-        let tycho_worker = collector::tycho::Worker {
-            protocol_stream_builder: Box::pin(protocol_stream_builder),
+        let tycho_worker_handle = tycho::Builder {
             chain: chain.clone(),
-            block_sim_tx: block_sim_tx.clone(),
+            protocol_stream_builder: Box::pin(protocol_stream_builder),
             shutdown_token: shutdown_token.clone(),
-        };
+        }
+        .build();
 
         let worker = collector::Worker {
             chain: chain.clone(),
             block_tx: block_tx,
             shutdown_token: shutdown_token.clone(),
-            block_sim_rx,
-            eth_rx,
+            block_sim_rx: tycho_worker_handle.get_block_sim_rx(),
+            eth_rx: eth_worker_handle.get_block_changes_stream(),
         };
         let worker_handle = tokio::task::spawn(async { worker.run().await });
 
+        // TODO: return tycho and eth handles
         Ok(super::Handle {
             chain,
             shutdown_token,
@@ -98,6 +96,7 @@ impl Builder {
         })
     }
 
+    // TODO: move this stuff into the tycho builder
     fn add_exchanges_for_chain(
         chain: &Chain,
         protocol_stream: ProtocolStreamBuilder,

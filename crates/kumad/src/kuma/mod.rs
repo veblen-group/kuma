@@ -56,10 +56,11 @@ impl Kuma {
             // set up collectors for each chain
             for chain in [&slow_chain, &fast_chain] {
                 collector_handles.entry(chain.clone()).or_insert(
+                    // TODO: store eth and tycho handles too
                     collector::Builder {
                         chain: chain.clone(),
                         tycho_url: chain.tycho_url.clone(),
-                        api_key: cfg.tycho_api_key.clone(),
+                        tycho_api_key: cfg.tycho_api_key.clone(),
                         token_addrs: addrs_for_chain[&chain].clone(),
                         add_tvl_threshold: cfg.add_tvl_threshold,
                         remove_tvl_threshold: cfg.remove_tvl_threshold,

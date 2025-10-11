@@ -1,21 +1,55 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
 use std::pin::Pin;
 
-use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use tokio::{select, sync::broadcast};
+use color_eyre::eyre::{self, bail};
+use tokio::sync::watch::error::SendError;
+use tokio::{select, sync::watch};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace};
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
 
 use crate::{chain::Chain, state::tycho::BlockSim};
 
+pub struct Builder {
+    pub chain: Chain,
+    pub protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
+    pub shutdown_token: CancellationToken,
+}
+
+impl Builder {
+    pub fn build(self) -> Handle {
+        let Self {
+            chain,
+            protocol_stream_builder,
+            shutdown_token,
+        } = self;
+
+        let (tx, rx) = watch::channel(None);
+
+        let worker = Worker {
+            chain: chain.clone(),
+            protocol_stream_builder,
+            block_sim_tx: tx,
+            shutdown_token: shutdown_token.clone(),
+        };
+
+        Handle {
+            chain,
+            shutdown_token,
+            worker_handle: Some(tokio::spawn(worker.run())),
+            block_sim_tx: rx,
+        }
+    }
+}
+
 pub struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    block_sim_tx: broadcast::Sender<BlockSim>,
+    block_sim_tx: watch::Receiver<Option<BlockSim>>,
 }
 
 impl Handle {
@@ -35,8 +69,8 @@ impl Handle {
     }
 
     #[allow(unused)]
-    pub fn get_block_sim_rx(&self) -> broadcast::Receiver<BlockSim> {
-        self.block_sim_tx.subscribe()
+    pub fn get_block_sim_rx(&self) -> WatchStream<Option<BlockSim>> {
+        WatchStream::from_changes(self.block_sim_tx.clone())
     }
 }
 
@@ -66,10 +100,10 @@ impl Future for Handle {
 }
 
 pub(super) struct Worker {
-    pub(super) chain: Chain,
-    pub(super) protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
-    pub(super) block_sim_tx: broadcast::Sender<BlockSim>,
-    pub(super) shutdown_token: CancellationToken,
+    chain: Chain,
+    protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
+    block_sim_tx: watch::Sender<Option<BlockSim>>,
+    shutdown_token: CancellationToken,
 }
 
 impl Worker {
@@ -96,8 +130,6 @@ impl Worker {
 
         let mut curr_block_sim: Option<BlockSim> = None;
 
-        // TODO: combine headers, balances with protocol stream
-
         loop {
             select! {
                 () = shutdown_token.cancelled() => {
@@ -118,9 +150,9 @@ impl Worker {
                         block.height = ?block_update.block_number_or_timestamp,
                         "🎁 Received block update"
                     );
-                    let block = {
+                    let block =
                         if let Some(old_block) = curr_block_sim.take() {
-                            let new_block = old_block.apply_update(block_update);
+                            let new_block = old_block.apply_update(block_update).wrap_err("Failed to apply block update")?;
                             trace!(
                                 block.number = new_block.height,
                                 "Applied block update from Tycho Simulation stream."
@@ -133,12 +165,21 @@ impl Worker {
                                 "Received initial block from Tycho Simulation stream."
                             );
                             BlockSim::new(block_update)
+                        };
+                    curr_block_sim = Some(block.clone());
+
+                    match block_sim_tx.send(curr_block_sim.clone()) {
+                        Err(SendError(Some(block_sim))) => {
+                            error!(block_height = %block_sim.height, "Failed to collect block simulation update");
+                            bail!("Failed to collect block simulation update")
                         }
-                    };
-                    if let Err(e) = block_sim_tx.send(block.clone()) {
-                        error!("Failed to send block simulation update: {}", e);
-                    } else {
-                        curr_block_sim = Some(block);
+                        Err(SendError(None)) => {
+                            error!("Channel has no receivers. Failed to collect initial block simulation update");
+                            bail!("Failed to collect initial block simulation update")
+                        }
+                        Ok(_) => {
+                            debug!("Collected block simulation update");
+                        }
                     }
                 }
             }

@@ -3,15 +3,11 @@
 use std::{pin::Pin, sync::Arc};
 
 use alloy::rpc::types::Header;
-use color_eyre::eyre;
 use color_eyre::eyre::WrapErr as _;
-use tokio::{
-    select,
-    sync::{
-        broadcast::{self, error::RecvError},
-        watch,
-    },
-};
+use color_eyre::eyre::{self, eyre};
+use tokio::{select, sync::watch};
+use tokio_stream::StreamExt as _;
+use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
@@ -90,8 +86,8 @@ impl Future for Handle {
 
 struct Worker {
     chain: Chain,
-    block_sim_rx: broadcast::Receiver<BlockSim>,
-    eth_rx: broadcast::Receiver<(Header, TokenBalances)>,
+    block_sim_rx: WatchStream<Option<BlockSim>>,
+    eth_rx: WatchStream<Option<EthBlock>>,
     block_tx: watch::Sender<Arc<Option<Block>>>,
     shutdown_token: CancellationToken,
 }
@@ -117,69 +113,62 @@ impl Worker {
                     break Ok(())
                 }
 
-                res = eth_rx.recv() => {
-                    match res {
-                        Ok((header, token_balances)) => {
-                            if let Some(block_sim) = curr_block_sim.take() {
-                                if header.number == block_sim.height {
-                                    let block = Block::from_components(header, token_balances, block_sim);
-
-                                    if let Err(e) = block_tx.send(Arc::new(Some(block))) {
-                                        // TODO: handle send_res more
-                                        error!(err = %e, "failed to send block after receiving eth block");
-                                    }
-                                } else {
-                                    error!(
-                                        eth_block.height = header.number,
-                                        sim_block.height = block_sim.height,
-                                        "Block heights out of order"
-                                    );
-                                }
-                            } else {
-                                curr_eth_block = Some((header, token_balances));
-                            }
-                        },
-                        Err(RecvError::Lagged(missed_count)) => {
-                            error!(missed_count = missed_count, "Tycho Simulation stream lagged");
-                        },
-                        Err(RecvError::Closed) => {
-                            error!("EthBlock channel closed, shutting down");
-                            break Ok(());
-                        },
+                Some(Some((header, token_balances))) = eth_rx.next() => {
+                     if let Some(block_sim) = curr_block_sim.take() {
+                        let eth_height = header.number;
+                        let tycho_height = block_sim.height;
+                        if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
+                            error!(
+                                error = ?e,
+                                ?eth_height,
+                                ?tycho_height,
+                                "Failed to send block: {}", e);
+                        };
+                        curr_eth_block = None;
+                        curr_block_sim = None;
+                    } else {
+                        curr_eth_block = Some((header, token_balances));
                     }
                 }
 
-                res = block_sim_rx.recv() => {
-                    match res {
-                        Ok(block_sim) => {
-                            if let Some((header, token_balances)) = curr_eth_block.take() {
-                                if header.number == block_sim.height {
-                                    let block = Block::from_components(header, token_balances, block_sim);
-
-                                    let send_res = block_tx.send(Arc::new(Some(block)));
-                                    if let Err(e) = send_res {
-                                        // TODO: handle send_res more
-                                        error!(err = %e, "failed to send block after receiving tycho block");
-                                    }
-                                } else {
-                                    error!(eth_block.height = header.number, sim_block.height = block_sim.height, "Block heights out of order");
-                                }
-                                curr_eth_block = None;
-                                curr_block_sim = None;
-                            } else {
-                                curr_block_sim = Some(block_sim);
-                            }
-                        },
-                        Err(RecvError::Lagged(missed_count)) => {
-                            error!(missed_count = missed_count, "Tycho Simulation stream lagged");
-                        },
-                        Err(RecvError::Closed) => {
-                            error!("Tycho Simulation stream closed, shutting down");
-                            break Ok(())
-                        },
+                Some(Some(block_sim)) = block_sim_rx.next() => {
+                    if let Some((header, token_balances)) = curr_eth_block.take() {
+                        let eth_height = header.number;
+                        let tycho_height = block_sim.height;
+                        if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
+                            error!(
+                                error = ?e,
+                                ?eth_height,
+                                ?tycho_height,
+                                "Failed to send block: {}", e);
+                        };
+                        curr_eth_block = None;
+                        curr_block_sim = None;
+                    } else {
+                        curr_block_sim = Some(block_sim);
                     }
                 }
             }
         }
     }
+}
+
+fn send_block(
+    header: Header,
+    token_balances: TokenBalances,
+    block_sim: BlockSim,
+    block_tx: &watch::Sender<Arc<Option<Block>>>,
+) -> eyre::Result<()> {
+    if header.number == block_sim.height {
+        return Err(eyre!("Block heights out of order"));
+    }
+    let block = Block::from_components(header, token_balances, block_sim);
+
+    if let Err(e) = block_tx.send(Arc::new(Some(block))) {
+        // TODO: handle send_res more
+        return Err(eyre!(
+            "failed to send block after receiving tycho block: {e}"
+        ));
+    }
+    Ok(())
 }

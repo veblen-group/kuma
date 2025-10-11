@@ -17,13 +17,16 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     rpc::types::Header,
 };
-use color_eyre::eyre::WrapErr as _;
 use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{WrapErr as _, bail};
 use tokio::{
     pin, select,
-    sync::{Mutex, broadcast, watch},
+    sync::{
+        Mutex,
+        watch::{self, error::SendError},
+    },
 };
-use tokio_stream::StreamExt;
+use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
@@ -31,11 +34,49 @@ use crate::{chain::Chain, config::AddressForToken, state::balances::TokenBalance
 
 pub type EthBlock = (Header, TokenBalances);
 
+pub struct Builder {
+    pub chain: Chain,
+    pub shutdown_token: CancellationToken,
+    pub account_addr: Address,
+    pub token_addrs: AddressForToken,
+    pub ws_url: String,
+}
+
+impl Builder {
+    pub fn build(self) -> Handle {
+        let Self {
+            chain,
+            shutdown_token,
+            account_addr,
+            token_addrs,
+            ws_url,
+        } = self;
+
+        let (tx, rx) = watch::channel(None);
+
+        let worker = Worker {
+            shutdown_token: shutdown_token.clone(),
+            chain: chain.clone(),
+            block_tx: tx,
+            account_addr,
+            token_addrs,
+            ws_url,
+        };
+
+        Handle {
+            chain,
+            shutdown_token,
+            worker_handle: Some(tokio::spawn(worker.run())),
+            block_rx: rx,
+        }
+    }
+}
+
 pub struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    latest_block_rx: watch::Receiver<EthBlock>,
+    block_rx: watch::Receiver<Option<EthBlock>>,
 }
 
 impl Handle {
@@ -53,8 +94,8 @@ impl Handle {
         Ok(())
     }
 
-    pub async fn get_latest_block_rx(&self) -> watch::Receiver<EthBlock> {
-        self.latest_block_rx.clone()
+    pub fn get_block_changes_stream(&self) -> WatchStream<Option<EthBlock>> {
+        WatchStream::from_changes(self.block_rx.clone())
     }
 }
 
@@ -84,19 +125,19 @@ impl Future for Handle {
 }
 
 pub(super) struct Worker {
-    pub(super) chain: Chain,
-    pub(super) latest_block_tx: broadcast::Sender<EthBlock>,
-    pub(super) shutdown_token: CancellationToken,
-    pub(super) account_addr: Address,
-    pub(super) token_addrs: AddressForToken,
-    pub(super) ws_url: String,
+    chain: Chain,
+    block_tx: watch::Sender<Option<EthBlock>>,
+    shutdown_token: CancellationToken,
+    account_addr: Address,
+    token_addrs: AddressForToken,
+    ws_url: String,
 }
 
 impl Worker {
     #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
-            latest_block_tx,
+            block_tx,
             shutdown_token,
             account_addr,
             token_addrs,
@@ -141,9 +182,18 @@ impl Worker {
                     match res {
                         Ok((header, token_balances)) => {
                             debug!(block_height = ?header.number, "token balances updated");
-                            if let Err(err) = latest_block_tx.send((header, token_balances)) {
-                                error!(%err, "broadcast channel has no receivers, block dropped.");
-                                break Ok(());
+                            match  block_tx.send(Some((header, token_balances))) {
+                                Err(SendError(Some((header, _)))) => {
+                                    error!(block_height = %header.number, "channel has no receivers, block dropped.");
+                                    bail!("Failed to collect block");
+                                }
+                                Err(SendError(None)) => {
+                                    error!("channel has no receivers, failed to collect initial eth block.");
+                                    bail!("Failed to collect initial eth block");
+                                }
+                                Ok(_) => {
+                                    debug!("new eth block successfully collected");
+                                }
                             }
                         }
                         Err(e) => {
@@ -156,6 +206,7 @@ impl Worker {
     }
 }
 
+#[instrument(skip_all, fields(block_height = header.number))]
 async fn get_token_balances(
     header: Header,
     provider: impl Provider + Clone,

@@ -185,7 +185,7 @@ pub(crate) fn make_collector(
 ) -> eyre::Result<collector::Handle> {
     let handle = collector::Builder {
         tycho_url: chain.tycho_url.clone(),
-        api_key: tycho_api_key.to_string(),
+        tycho_api_key: tycho_api_key.to_string(),
         add_tvl_threshold,
         remove_tvl_threshold,
         token_addrs: tokens,

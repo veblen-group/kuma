@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use color_eyre::eyre::{self, OptionExt};
 use tracing::{debug, instrument, trace};
 use tycho_simulation::{
     protocol::models::{ProtocolComponent, Update},
@@ -53,16 +54,16 @@ impl BlockSim {
         }
     }
 
-    /// Consume this `Block` and return a new snapshot with `block_update` applied.
+    /// Consume this `BlockSim` and return a new snapshot with `block_update` applied.
     ///
     /// - Evicts `removed_pairs` from `states`, `metadata`, `modified_pools` and `unmodified_pools`
     /// - Inserts `new_pairs` to `states`, `metadata`, and `modified_pools`.
     /// - Replaces states for `updated_states`, moves their IDs into `modified_pools`.
     ///   - Note: Metadata (i.e. `ProtocolComponent`) are immutable data so they are not modified.
     ///
-    /// The returned `Block` has `block_number = block_update.block_number`.
+    /// The returned `BlockSim` has `block_number = block_update.block_number`.
     ///
-    /// Any `PairState` derived from the old `Block` keeps its own `Arc` handles:
+    /// Any `PairState` derived from the old `BlockSim` keeps its own `Arc` handles:
     /// - `modified_pools` and `unmodified_pools` are cloned, leaving old snapshots unchanged
     /// - old snapshots keep their shared references to states and metadata, so those aren't dropped.
     ///
@@ -72,7 +73,7 @@ impl BlockSim {
     /// - if `removed_pairs` contains an ID not present in the original maps
     /// - if `new_pairs` refers to a state missing from `updated_states`
     #[instrument(skip_all)]
-    pub fn apply_update(self, block_update: Update) -> Self {
+    pub fn apply_update(self, block_update: Update) -> eyre::Result<Self> {
         let Self {
             modified_pools,
             unmodified_pools,
@@ -98,12 +99,12 @@ impl BlockSim {
             let id = state::PoolId(id);
             let _removed_state = states
                 .remove(&id)
-                .expect("BlockUpdate.removed_pairs should only contain existing pairs");
+                .ok_or_eyre("BlockUpdate.removed_pairs should only contain existing pairs")?;
 
             // update metadata map
             let _removed_metadata = metadata
                 .remove(&id)
-                .expect("BlockUpdate.removed_pairs should only contain existing pairs");
+                .ok_or_eyre("BlockUpdate.removed_pairs should only contain existing pairs")?;
 
             // update modified/unmodified maps
             if modified_pools.remove(&id) {
@@ -111,8 +112,7 @@ impl BlockSim {
             } else if unmodified_pools.remove(&id) {
                 trace!(block.number = %height, pair.id = %id, "Removed pair from unmodified pairs");
             } else {
-                // TODO: maybe fail more gracefully from bad block updates, altho this should never happen if tycho_simulation is well written
-                panic!("BlockUpdate.removed_pairs should only contain existing pairs");
+                eyre::bail!("BlockUpdate.removed_pairs should only contain existing pairs");
             }
 
             debug!(block.number = %height, pair.id = %id, "Removed pair");
@@ -153,13 +153,13 @@ impl BlockSim {
             trace!(block.number = %height, pair.id = %pair_id, "Updated pair state");
         }
 
-        Self {
+        Ok(Self {
             height: block_update.block_number_or_timestamp,
             modified_pools: Arc::new(modified_pools),
             unmodified_pools: Arc::new(unmodified_pools),
             metadata,
             states,
-        }
+        })
     }
 
     pub fn get_pair_state(&self, pair: &Pair) -> PairState {
