@@ -185,6 +185,9 @@ impl Worker {
                                     "📡 Generated cross-chain signal"
                                 );
 
+                                let json_signal = serde_json::to_string(&signal).wrap_err("failed to serialize signal to json")?;
+                                info!(%json_signal, "Serialized signal to json");
+
                                 curr_signal = Some(signal.clone());
 
                                 // Save generated signal to db and update it for emission

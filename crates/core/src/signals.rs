@@ -3,11 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
-use color_eyre::eyre::{self, ContextCompat};
+use color_eyre::eyre::{self, Context, ContextCompat, Ok, OptionExt};
 use num_bigint::BigUint;
 
 use crate::{
     chain::Chain,
+    encoder::{Trade, UnsignedTransaction, create_solution},
     state::{self, pair::Pair},
     strategy::Swap,
 };
@@ -32,14 +33,12 @@ impl Display for Direction {
 pub struct CrossChainSingleHop {
     pub slow_chain: Chain,
     pub slow_pair: Pair,
-    #[serde(skip)]
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
     pub slow_pool_id: state::PoolId,
     pub slow_swap_sim: Swap,
     pub slow_height: u64,
     pub fast_chain: Chain,
     pub fast_pair: Pair,
-    #[serde(skip)]
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
     pub fast_pool_id: state::PoolId,
     pub fast_swap_sim: Swap,
@@ -101,6 +100,44 @@ impl CrossChainSingleHop {
             max_slippage_bps,
             congestion_risk_discount_bps,
         })
+    }
+
+    pub fn try_into_trade(&self) -> eyre::Result<Trade> {
+        let Self {
+            slow_chain,
+            slow_protocol_component,
+            slow_swap_sim,
+            fast_chain,
+            fast_protocol_component,
+            fast_swap_sim,
+            ..
+        } = self;
+
+        let slow_solution = {
+            let slow_component = slow_protocol_component
+                .clone()
+                .ok_or_eyre("missing protocol component")?
+                .as_ref()
+                .clone();
+            create_solution(slow_component, &slow_swap_sim, slow_chain.signer().clone())?
+        };
+
+        let fast_solution = {
+            let fast_component = fast_protocol_component
+                .clone()
+                .ok_or_eyre("missing protocol component")?
+                .as_ref()
+                .clone();
+            create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
+        };
+
+        let slow_unsigned_tx = UnsignedTransaction::try_from_solution(&slow_solution, &slow_chain)
+            .wrap_err("Failed to create unsigned transaction from slow solution")?;
+        let fast_unsigned_tx = UnsignedTransaction::try_from_solution(&fast_solution, &fast_chain)
+            .wrap_err("Failed to create unsigned transaction from fast solution")?;
+
+        // add gas prices and sign transactions
+        Ok(Trade::new(slow_unsigned_tx, fast_unsigned_tx))
     }
 }
 

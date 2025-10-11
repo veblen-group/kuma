@@ -2,6 +2,7 @@ pub mod chain;
 pub mod collector;
 pub mod config;
 pub mod database;
+pub mod encoder;
 pub mod signals;
 pub mod spot_prices;
 pub mod state;
