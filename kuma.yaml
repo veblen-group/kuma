@@ -87,7 +87,7 @@ tokens:
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "http://localhost:8545"
+    rpc_url: "https://ethereum-rpc.publicnode.com"
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
@@ -99,7 +99,7 @@ chains:
   #   private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
 
   - name: unichain
-    rpc_url: "http://localhost:8546"
+    rpc_url: "https://mainnet.unichain.org"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"

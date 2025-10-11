@@ -10,7 +10,7 @@ use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest
 use alloy::signers::Signature;
 use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
-use color_eyre::eyre::{self, Context as _, Ok};
+use color_eyre::eyre::{self, Context as _, ContextCompat, Ok};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
@@ -110,6 +110,7 @@ impl UnsignedTransaction {
     }
 }
 
+// used for dry run
 pub async fn get_tx_request(
     transaction: &UnsignedTransaction,
     chain: &Chain,
@@ -129,6 +130,7 @@ pub async fn get_tx_request(
     Ok(SignedTransaction { tx })
 }
 
+// used for execution
 pub async fn execute_tx(
     transaction: &UnsignedTransaction,
     chain: &Chain,
@@ -160,10 +162,12 @@ pub(crate) fn encode_tycho_router_call(
     native_address: Bytes,
     signer: PrivateKeySigner,
 ) -> eyre::Result<TychoTransaction> {
-    let p = encoded_solution.permit.expect("Permit object must be set");
+    let p = encoded_solution
+        .permit
+        .wrap_err("Permit object must be set")?;
     let permit = PermitSingle::try_from(&p)
-        .map_err(|_| EncodingError::InvalidInput("Invalid permit".to_string()))?;
-    trace!("Signing permit2 approval: {:?}", permit);
+        .map_err(|e| EncodingError::InvalidInput(format!("Invalid permit: {e}")))?;
+    trace!("Signing permit2 approval: {permit:?}");
     let signature = sign_permit(chain_id, &p, signer)?;
     let given_amount = biguint_to_u256(&solution.given_amount);
     let min_amount_out = biguint_to_u256(&solution.checked_amount);
@@ -221,10 +225,10 @@ pub(crate) fn create_solution(
     component: ProtocolComponent,
     swap: &Swap,
     signer: PrivateKeySigner,
-) -> Solution {
+) -> eyre::Result<Solution> {
     let signer_address_bytes =
         tycho_common::models::Address::from_str(signer.address().to_string().as_str())
-            .expect("Invalid signer address");
+            .wrap_err("Invalid signer address")?;
     // Convert tycho_simulation bytes to tycho_common bytes by converting through hex string
     let simple_swap = TychoSwap::new(
         component,
@@ -238,7 +242,7 @@ pub(crate) fn create_solution(
         None, // output_amount
     );
 
-    Solution {
+    Ok(Solution {
         sender: signer_address_bytes.clone(),
         receiver: signer_address_bytes.clone(),
         given_token: swap.token_in.address.clone(),
@@ -248,7 +252,7 @@ pub(crate) fn create_solution(
         checked_amount: swap.amount_out.clone(),
         swaps: vec![simple_swap],
         native_action: None,
-    }
+    })
 }
 
 /// Encodes the input data for a function call to the given function selector.

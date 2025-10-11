@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
-use color_eyre::eyre::{self, Context, ContextCompat, Ok};
+use color_eyre::eyre::{self, Context, ContextCompat, Ok, OptionExt};
 use num_bigint::BigUint;
 
 use crate::{
@@ -114,13 +114,21 @@ impl CrossChainSingleHop {
         } = self;
 
         let slow_solution = {
-            let slow_component = slow_protocol_component.clone().unwrap().as_ref().clone();
-            create_solution(slow_component, &slow_swap_sim, slow_chain.signer().clone())
+            let slow_component = slow_protocol_component
+                .clone()
+                .ok_or_eyre("missing protocol component")?
+                .as_ref()
+                .clone();
+            create_solution(slow_component, &slow_swap_sim, slow_chain.signer().clone())?
         };
 
         let fast_solution = {
-            let fast_component = fast_protocol_component.clone().unwrap().as_ref().clone();
-            create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())
+            let fast_component = fast_protocol_component
+                .clone()
+                .ok_or_eyre("missing protocol component")?
+                .as_ref()
+                .clone();
+            create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
         };
 
         let slow_unsigned_tx = UnsignedTransaction::try_from_solution(&slow_solution, &slow_chain)
