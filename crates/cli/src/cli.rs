@@ -6,6 +6,7 @@ use tracing::info;
 
 use crate::{
     dryrun::{self},
+    execute,
     kuma::{self},
     permit, tokens,
 };
@@ -46,7 +47,7 @@ enum Commands {
     DryRun(dryrun::DryRun),
 
     /// Execute arbitrage transaction
-    Execute(StrategyArgs),
+    Execute(execute::Execute),
 
     /// Get all tokens from tycho api
     Tokens(tokens::Tokens),
@@ -74,8 +75,8 @@ impl Cli {
             Commands::DryRun(cmd) => {
                 cmd.run(config).await?;
             }
-            Commands::Execute(_) => {
-                unimplemented!()
+            Commands::Execute(cmd) => {
+                cmd.run(config).await?;
             }
             Commands::Tokens(cmd) => cmd.run(config).await?,
             Commands::SignPermit2(cmd) => cmd.run(config).await?,
