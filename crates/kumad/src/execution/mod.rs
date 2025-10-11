@@ -82,23 +82,20 @@ impl Worker {
 
                 signal = self.signal_rx.recv() => {
                     match signal {
-                        Ok(trade_signal) => {
+                        Ok(signal) => {
                             info!(
-                                %trade_signal,
-                                slow_chain = %trade_signal.slow_chain,
-                                fast_chain = %trade_signal.fast_chain,
-                                slow_height = trade_signal.slow_height,
-                                fast_height = trade_signal.fast_height,
-                                expected_profit_a = %trade_signal.expected_profit.0,
-                                expected_profit_b = %trade_signal.expected_profit.1,
+                                %signal,
+                                slow_chain = %signal.slow_chain,
+                                fast_chain = %signal.fast_chain,
+                                slow_height = signal.slow_height,
+                                fast_height = signal.fast_height,
+                                expected_profit_a = %signal.expected_profit.0,
+                                expected_profit_b = %signal.expected_profit.1,
                                 "💰 Received trade signal - would execute cross-chain arbitrage"
                             );
-                            // Signal -> Trade
-                            // Trade -> try execute on slow chain
-                            // if slow trade fails, cancel fast trade
-                            // Trade -> try execute on fast chain
-                            // If both succeed, record trade in DB
-                            // if slow trade succeeds but fast trade fails, try to unwind slow trade (handling failure cases)
+                            let trade = signal.try_into_trade()?;
+                            let receipts = trade.promote().await?;
+                            info!(?receipts, "✅ Successfully executed cross-chain arbitrage trade");
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
                             warn!(skipped_signals = skipped, "Trade execution lagging behind signal generation");
