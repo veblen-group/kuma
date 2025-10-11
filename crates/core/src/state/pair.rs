@@ -6,6 +6,8 @@ use std::{
     task::{self, Poll},
 };
 
+use super::block::Block;
+use crate::state;
 use futures::{Stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -14,9 +16,6 @@ use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_common::models::token::Token,
     tycho_core::simulation::protocol_sim::ProtocolSim,
 };
-
-use super::block::Block;
-use crate::state;
 
 /// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

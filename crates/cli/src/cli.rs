@@ -1,11 +1,12 @@
-use core::config::Config;
-
 use clap::{Parser, Subcommand, command};
 use color_eyre::eyre::{self, eyre};
+use core::config::Config;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
+    dryrun::{self},
+    execute,
     kuma::{self},
     permit, tokens,
 };
@@ -43,10 +44,10 @@ enum Commands {
     GenerateSignals(StrategyArgs),
 
     /// Perform a dry run (simulated transaction without execution)
-    DryRun(StrategyArgs),
+    DryRun(dryrun::DryRun),
 
     /// Execute arbitrage transaction
-    Execute(StrategyArgs),
+    Execute(execute::Execute),
 
     /// Get all tokens from tycho api
     Tokens(tokens::Tokens),
@@ -63,20 +64,19 @@ impl Cli {
         shutdown_token: CancellationToken,
     ) -> eyre::Result<()> {
         match &self.command {
-            Commands::GenerateSignals(args) | Commands::DryRun(args) => {
+            Commands::GenerateSignals(args) => {
                 let kuma = kuma::Kuma::spawn(config, args.clone(), shutdown_token.clone())
                     .map_err(|e| eyre!("Failed to spawn Kuma: {e:}"))?;
 
                 // Run the command with the Kuma instance
                 let signal = kuma.generate_signal().await?;
                 info!(%signal, "✅ Generated signal");
-
-                if let Commands::DryRun(_) = self.command {
-                    unimplemented!()
-                };
             }
-            Commands::Execute(_) => {
-                unimplemented!()
+            Commands::DryRun(cmd) => {
+                cmd.run(config).await?;
+            }
+            Commands::Execute(cmd) => {
+                cmd.run(config).await?;
             }
             Commands::Tokens(cmd) => cmd.run(config).await?,
             Commands::SignPermit2(cmd) => cmd.run(config).await?,

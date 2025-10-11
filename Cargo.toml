@@ -33,7 +33,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "tracing",
 ] }
 tycho-execution = "0.121.0"
-tycho-simulation = { git = "https://github.com/propeller-heads/tycho-simulation.git", package = "tycho-simulation", tag = "0.152.0", features = [
+tycho-simulation = { git = "https://github.com/veblen-group/tycho-simulation.git", package = "tycho-simulation", branch = "quasystaty1/protocol/deserialize-pc", features = [
     "evm",
 ] }
 tycho-common = "0.82.0"

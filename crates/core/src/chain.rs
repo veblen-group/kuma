@@ -12,13 +12,9 @@ use tycho_simulation::evm::tycho_models;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct Chain {
     pub name: tycho_models::Chain,
-    #[serde(skip)]
     pub metadata: alloy_chains::Chain,
-    #[serde(skip)]
     pub rpc_url: String,
-    #[serde(skip)]
     pub tycho_url: String,
-    #[serde(skip)]
     pub permit2_address: Address,
     #[serde(skip)]
     pub private_key: String,
