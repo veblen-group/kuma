@@ -2,7 +2,7 @@
 
 use std::{pin::Pin, time::Duration};
 
-use color_eyre::eyre::{self, WrapErr as _, eyre};
+use color_eyre::eyre::{self, ContextCompat, WrapErr as _, eyre};
 use futures::{Future, FutureExt as _, stream::FuturesUnordered};
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;
@@ -13,6 +13,7 @@ use kuma_core::{
     database, signals,
     spot_prices::SpotPrices,
     state::pair::PairStateStream,
+    strategy::simulation::make_sorted_spot_prices,
     strategy::{self, Precomputes},
 };
 
@@ -166,19 +167,27 @@ impl Worker {
                     precompute = Some(new_precompute);
                 }
 
-                // TODO: handle for processing fast blocks
-                // 1. update the fast current block
-                // 2. write to db
-                // 3. log a trace
-
                 // Handle timer expiration for signal generation
                 Some(fast_state) = self.fast_stream.next() => {
                     if let Some(precompute) = precompute.as_ref() {
                         // Step 3: Read latest fast chain state and generate signal
                         // TODO: fix this to use the curr fast state object
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.block_height);
+                        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.strategy.fast_pair);
 
-                        match self.strategy.generate_signal(precompute, fast_state) {
+                        let spot_prices = SpotPrices::try_from_sorted_prices(
+                            &fast_sorted_spot_prices,
+                            fast_state.block_height,
+                            self.strategy.fast_chain.clone(),
+                            self.strategy.fast_pair.clone()
+                        ).wrap_err("fast chain spot prices should exist")?;
+
+                        let repo = self.db.spot_price_repository();
+                        db_writes.push(async move {
+                            repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
+                        }.boxed());
+
+                        match self.strategy.generate_signal(precompute, fast_state, fast_sorted_spot_prices) {
                             Ok(signal) => {
                                 info!(
                                     %signal,
