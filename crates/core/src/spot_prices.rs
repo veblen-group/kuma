@@ -1,3 +1,4 @@
+use color_eyre::eyre::{self, eyre};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -31,18 +32,18 @@ impl SpotPrices {
             chain,
         }
     }
-    pub fn from_sorted_prices(
+    pub fn try_from_sorted_prices(
         sorted_spot_prices: &Vec<(PoolId, f64)>,
         block_height: u64,
         chain: Chain,
         pair: Pair,
-    ) -> Option<Self> {
+    ) -> eyre::Result<Self> {
         if sorted_spot_prices.is_empty() {
-            return None;
+            return Err(eyre!("no spot prices provided"));
         }
         let min = sorted_spot_prices[0].clone();
         let max = sorted_spot_prices[sorted_spot_prices.len() - 1].clone();
-        Some(SpotPrices {
+        Ok(SpotPrices {
             pair,
             block_height,
             min_pool_id: min.0,

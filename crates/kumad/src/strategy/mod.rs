@@ -175,12 +175,12 @@ impl Worker {
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.block_height);
                         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.strategy.fast_pair);
 
-                        let spot_prices = SpotPrices::from_sorted_prices(
+                        let spot_prices = SpotPrices::try_from_sorted_prices(
                             &fast_sorted_spot_prices,
                             fast_state.block_height,
                             self.strategy.fast_chain.clone(),
                             self.strategy.fast_pair.clone()
-                        ).expect("fast chain spot prices should exist");
+                        ).wrap_err("fast chain spot prices should exist")?;
 
                         let repo = self.db.spot_price_repository();
                         db_writes.push(async move {
