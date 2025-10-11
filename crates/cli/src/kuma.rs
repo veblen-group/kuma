@@ -163,9 +163,10 @@ impl Kuma {
         let precompute = strategy.precompute(slow_state);
 
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
-
+        let fast_sorted_spot_prices =
+            core::strategy::simulation::make_sorted_spot_prices(&fast_state, &fast_pair);
         // compute arb signal
-        let signal = strategy.generate_signal(&precompute, fast_state)?;
+        let signal = strategy.generate_signal(&precompute, fast_state, fast_sorted_spot_prices)?;
 
         info!(signal = ?signal, "📊 generated signal");
 
