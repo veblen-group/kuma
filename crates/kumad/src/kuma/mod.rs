@@ -47,6 +47,8 @@ impl Kuma {
         let mut tycho_handles = HashMap::new();
         let mut strategy_handles = vec![];
 
+        let mut signal_rxs = vec![];
+
         for StrategyConfig {
             token_a,
             token_b,
@@ -105,8 +107,8 @@ impl Kuma {
                 .average_blocktime_hint()
                 .expect("chain metadata for average block time not found");
 
-            let strategy_handle = strategy::Builder {
-                strategy_config,
+            let (strategy_handle, signal_rx) = strategy::Builder {
+                strategy,
                 slow_stream,
                 fast_stream,
                 slow_block_time,
@@ -116,13 +118,15 @@ impl Kuma {
             .wrap_err("failed to build strategy worker")?;
 
             strategy_handles.push(strategy_handle);
+            signal_rxs.push(signal_rx);
         }
 
         // Create trade execution handle that subscribes to this strategy's signals
         let trade_execution_handle = execution::Builder {
             signal_rxs: strategy_handles
                 .iter()
-                .map(|handle| (handle.strategy_config(), handle.get_signal_rx()))
+                .zip(signal_rxs.into_iter())
+                .map(|(handle, signal_rx)| (handle.strategy_config(), signal_rx))
                 .collect(),
             db: db.clone(),
         }

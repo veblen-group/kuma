@@ -30,11 +30,8 @@ impl SignalRepository {
     }
 
     #[instrument(skip(self, signal))]
-    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<()> {
-        // TODO: should store this as amount_a_usdc, amount_b_usdc so it can be reconstructed later
-        let expected_profit_usdc = signal.expected_profit.total_profit_usdc()?;
-
-        sqlx::query!(
+    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<i64> {
+        let id = sqlx::query!(
             r#"
             INSERT INTO signals (
                 slow_chain, slow_height, slow_pool_id,
@@ -50,6 +47,7 @@ impl SignalRepository {
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
                 $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
             )
+            RETURNING id
             "#,
             &signal.slow_chain.name.to_string(),
             signal.slow_height as i64,
@@ -75,10 +73,11 @@ impl SignalRepository {
             signal.max_slippage_bps as i64,
             signal.congestion_risk_discount_bps as i64,
         )
-        .execute(self.pool.as_ref())
-        .await?;
+        .fetch_one(self.pool.as_ref())
+        .await?
+        .id;
 
-        Ok(())
+        Ok(id)
     }
 
     #[instrument(skip(self))]
@@ -144,6 +143,34 @@ impl SignalRepository {
         rows.into_iter()
             .map(|r| try_signal_from_row(r, &self.tokens_config))
             .collect()
+    }
+
+    pub async fn get_by_id(
+        &self,
+        signal_id: i64,
+    ) -> eyre::Result<Option<signals::CrossChainSingleHop>> {
+        let row = sqlx::query_as!(
+            SignalRow,
+            r#"
+            SELECT
+                slow_chain, slow_height, slow_pool_id,
+                fast_chain, fast_height, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_out_symbol,
+                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
+                fast_swap_token_in_symbol, fast_swap_token_out_symbol,
+                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                max_slippage_bps, congestion_risk_discount_bps
+            FROM signals
+            WHERE id = $1
+            "#,
+            signal_id,
+        )
+        .fetch_optional(&*self.pool)
+        .await?;
+
+        row.map(|r| try_signal_from_row(r, &self.tokens_config))
+            .transpose()
     }
 }
 

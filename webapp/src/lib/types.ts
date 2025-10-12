@@ -59,6 +59,18 @@ export interface PaginationInfo {
   has_previous: boolean;
 }
 
+export interface TradeResult {
+  id?: number;
+  signal_id?: number;
+  slow_token_in_symbol?: string;
+  slow_token_out_symbol?: string;
+  slow_chain: string;
+  slow_tx_hash: string;
+  fast_chain: string;
+  fast_tx_hash: string;
+  realized_profit_str: string;
+}
+
 export interface PaginatedResponse<T> {
   data: T[];
   pagination: PaginationInfo;

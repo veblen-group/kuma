@@ -6,10 +6,11 @@ use color_eyre::eyre::{self, Context, Ok, OptionExt};
 
 use crate::{
     chain::Chain,
-    encoder::{Trade, UnsignedTransaction, create_solution},
+    encoder::{UnsignedTransaction, create_solution},
     spot_prices::SpotPrices,
     state::{self, pair::Pair},
     strategy::Swap,
+    trade::Trade,
 };
 
 pub use profit::bps_discount;
@@ -144,7 +145,7 @@ impl CrossChainSingleHop {
                 .wrap_err("Failed to create unsigned transaction from fast solution")?;
 
         // add gas prices and sign transactions
-        Ok(Trade::new(slow_unsigned_tx, fast_unsigned_tx))
+        Ok(Trade::new(self.clone(), slow_unsigned_tx, fast_unsigned_tx))
     }
 }
 

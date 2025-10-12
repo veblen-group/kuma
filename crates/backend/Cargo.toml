@@ -26,6 +26,9 @@ tower-http = { workspace = true, features = ["cors"] }
 [patch.crates-io]
 svm-rs-builds = "0.8.31"
 
+[patch.crates-io]
+svm-rs-builds = "0.8.31"
+
 [dev-dependencies]
 axum-test = "18.0.0-rc3"
 serde_urlencoded = "0.7"
