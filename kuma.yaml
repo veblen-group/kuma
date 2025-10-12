@@ -34,7 +34,10 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 500
+    inventory:
+      ethereum: 500
+      base: 500
+      unichain: 500
 
   USDC:
     addresses:
@@ -46,7 +49,10 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 1000
+    inventory:
+      ethereum: 1000
+      base: 1000
+      unichain: 1000
 
   WETH:
     addresses:
@@ -58,7 +64,10 @@ tokens:
     gas:
       - 1000
     quality: 100
-    inventory: 1
+    inventory:
+      ethereum: 10
+      base: 10
+      unichain: 10
 
   WBTC:
     addresses:
@@ -70,7 +79,10 @@ tokens:
     gas:
       - 29669
     quality: 100
-    inventory: 1
+    inventory:
+      ethereum: 1
+      base: 1
+      unichain: 1
 
   wstETH:
     addresses:
@@ -82,7 +94,10 @@ tokens:
     gas:
       - 29669
     quality: 100
-    inventory: 1
+    inventory:
+      ethereum: 1
+      base: 1
+      unichain: 1
 
 # Chain configurations
 chains:

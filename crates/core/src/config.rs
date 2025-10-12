@@ -5,8 +5,9 @@ use figment::{
     providers::{Env, Format as _, Yaml},
 };
 use num_bigint::BigUint;
+use num_traits::{FromPrimitive, ops::inv};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, str::FromStr, time::Duration};
+use std::{collections::HashMap, ops::Deref, str::FromStr, time::Duration};
 use tracing::{info, warn};
 use tycho_simulation::{
     evm::tycho_models,
@@ -115,8 +116,14 @@ impl Config {
                     token_config.quality,
                 );
 
+                let inventory = token_config
+                    .inventory
+                    .get(&chain.name)
+                    .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?
+                    .clone();
+
                 let token_inventory =
-                    BigUint::from(token_config.inventory) * 10u128.pow(token.decimals);
+                    BigUint::from((inventory * 10f64.powi(token.decimals as i32)) as u128);
 
                 if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
                     match token_inventories.insert(token.clone(), token_inventory) {
@@ -205,7 +212,7 @@ pub struct TokenConfig {
     pub quality: u32,
 
     /// Existing inventory for this token
-    pub inventory: u64,
+    pub inventory: HashMap<tycho_common::models::Chain, f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
