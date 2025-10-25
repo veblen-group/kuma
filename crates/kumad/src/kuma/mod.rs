@@ -19,7 +19,7 @@ pub(super) struct Kuma {
     eth_handles: HashMap<Chain, collector::eth::Handle>,
     tycho_handles: HashMap<Chain, collector::tycho::Handle>,
     strategy_handles: Vec<strategy::Handle>,
-    trade_execution_handles: Vec<execution::Handle>,
+    trade_execution_handle: execution::Handle,
 }
 
 impl Kuma {
@@ -46,7 +46,6 @@ impl Kuma {
         let mut eth_handles = HashMap::new();
         let mut tycho_handles = HashMap::new();
         let mut strategy_handles = vec![];
-        let mut trade_execution_handles = vec![];
 
         for StrategyConfig {
             token_a,
@@ -110,17 +109,16 @@ impl Kuma {
             .build()
             .wrap_err("failed to build strategy worker")?;
 
-            // Create trade execution handle that subscribes to this strategy's signals
-            let trade_execution_handle = execution::Builder {
-                signal_rx: strategy_handle.get_signal_rx(),
-                db: db.clone(),
-            }
-            .build()
-            .wrap_err("failed to build trade execution worker")?;
-
             strategy_handles.push(strategy_handle);
-            trade_execution_handles.push(trade_execution_handle);
         }
+
+        // Create trade execution handle that subscribes to this strategy's signals
+        let trade_execution_handle = execution::Builder {
+            signal_rxs: strategy_handles.iter().map(|s| s.get_signal_rx()).collect(),
+            db: db.clone(),
+        }
+        .build()
+        .wrap_err("failed to build trade execution worker")?;
 
         Ok(Self {
             shutdown_token,
@@ -128,7 +126,7 @@ impl Kuma {
             eth_handles,
             tycho_handles,
             strategy_handles,
-            trade_execution_handles,
+            trade_execution_handle,
         })
     }
 
@@ -184,14 +182,15 @@ impl Kuma {
             })
         });
 
-        let trade_execution_futs = self.trade_execution_handles.iter_mut().map(|handle| {
+        let mut trade_execution_fut = {
+            let handle = &mut self.trade_execution_handle;
             Box::pin(async move {
                 match handle.await {
                     Ok(()) => Ok("trade execution task completed".to_owned()),
                     Err(e) => Err(e),
                 }
             })
-        });
+        };
 
         let reason: eyre::Result<String> = {
             select! {
@@ -231,13 +230,13 @@ impl Kuma {
                 }
             }
 
-                // Handle trade execution task completion
-                (result, _i, _trade_executions) = futures::future::select_all(trade_execution_futs) => {
-                    match result {
-                        Ok(message) => Ok(message),
-                        Err(e) => Err(e),
-                    }
+            // Handle trade execution task completion
+            result = trade_execution_fut.as_mut() => {
+                match result {
+                    Ok(message) => Ok(message),
+                    Err(e) => Err(e),
                 }
+            }
             }
         };
 
@@ -246,7 +245,7 @@ impl Kuma {
     }
 
     #[instrument(skip_all)]
-    async fn shutdown(self, reason: eyre::Result<String>) {
+    async fn shutdown(mut self, reason: eyre::Result<String>) {
         const WAIT_BEFORE_ABORT: Duration = Duration::from_secs(25);
 
         // trigger the shutdown token in case it wasn't triggered yet
@@ -278,12 +277,10 @@ impl Kuma {
             }
         }
 
-        for mut handle in self.trade_execution_handles {
-            if let Err(e) = handle.shutdown().await {
-                error!("Failed to shutdown trade execution worker: {}", e);
-            }
+        // Shutdown trade execution worker
+        if let Err(e) = self.trade_execution_handle.shutdown().await {
+            error!("Failed to shutdown trade execution worker: {}", e);
         }
-
         // Shutdown eth collector workers
         for (chain, mut handle) in self.eth_handles {
             if let Err(e) = handle.shutdown().await {

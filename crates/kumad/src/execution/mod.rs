@@ -3,7 +3,10 @@
 use std::pin::Pin;
 
 use color_eyre::eyre::{self, WrapErr as _};
-use futures::Future;
+use futures::{
+    Future,
+    stream::{FuturesUnordered, StreamExt},
+};
 use tokio::{select, sync::broadcast};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
@@ -60,7 +63,7 @@ impl Future for Handle {
 }
 
 struct Worker {
-    signal_rx: broadcast::Receiver<signals::CrossChainSingleHop>,
+    signal_rxs: Vec<broadcast::Receiver<signals::CrossChainSingleHop>>,
     shutdown_token: CancellationToken,
     #[allow(dead_code)]
     db: database::Handle,
@@ -68,8 +71,44 @@ struct Worker {
 
 impl Worker {
     #[instrument(name = "trade_execution_worker", skip(self))]
-    pub async fn run(mut self) -> eyre::Result<()> {
-        info!("Starting trade execution worker");
+    pub async fn run(self) -> eyre::Result<()> {
+        info!(
+            "Starting unified trade execution worker for {} strategies",
+            self.signal_rxs.len()
+        );
+
+        // Create a stream of signal receivers that maintain connections
+        let mut signal_stream = FuturesUnordered::new();
+        for (idx, mut rx) in self.signal_rxs.into_iter().enumerate() {
+            let shutdown_token = self.shutdown_token.clone();
+            let fut = async move {
+                loop {
+                    select! {
+                        biased;
+                        
+                        () = shutdown_token.cancelled() => {
+                            return None;
+                        }
+                        
+                        result = rx.recv() => {
+                            match result {
+                                Ok(signal) => return Some((idx, signal)),
+                                Err(broadcast::error::RecvError::Closed) => {
+                                    info!("Strategy {} signal channel closed", idx);
+                                    return None;
+                                }
+                                Err(broadcast::error::RecvError::Lagged(n)) => {
+                                    warn!("Strategy {} signal channel lagged by {} messages", idx, n);
+                                    // Continue the loop to receive the next message
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            signal_stream.push(fut);
+        }
 
         loop {
             select! {
@@ -80,31 +119,49 @@ impl Worker {
                     break Ok(());
                 }
 
-                signal = self.signal_rx.recv() => {
-                    match signal {
-                        Ok(signal) => {
+                Some(result) = signal_stream.next() => {
+                    match result {
+                        Some((strategy_idx, signal)) => {
                             info!(
+                                strategy_idx,
                                 %signal,
-                                slow_chain = %signal.slow_chain,
-                                fast_chain = %signal.fast_chain,
+                                slow_chain = %signal.slow_chain.name,
+                                fast_chain = %signal.fast_chain.name,
                                 slow_height = signal.slow_height,
                                 fast_height = signal.fast_height,
                                 expected_profit_a = %signal.expected_profit.0,
                                 expected_profit_b = %signal.expected_profit.1,
-                                "💰 Received trade signal - would execute cross-chain arbitrage"
+                                "💰 Received trade signal from strategy {} - executing cross-chain arbitrage",
+                                strategy_idx
                             );
-                            let trade = signal.try_into_trade()?;
-                            let receipts = trade.promote().await?;
-                            info!(?receipts, "✅ Successfully executed cross-chain arbitrage trade");
+
+                            // Execute the trade
+                            match signal.try_into_trade() {
+                                Ok(trade) => {
+                                    match trade.promote().await {
+                                        Ok(receipts) => {
+                                            info!(?receipts, strategy_idx, "✅ Successfully executed cross-chain arbitrage trade for strategy {}", strategy_idx);
+                                        }
+                                        Err(e) => {
+                                            error!("Failed to execute trade for strategy {}: {:?}", strategy_idx, e);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to convert signal to trade for strategy {}: {:?}", strategy_idx, e);
+                                }
+                            }
                         }
-                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                            warn!(skipped_signals = skipped, "Trade execution lagging behind signal generation");
-                        }
-                        Err(broadcast::error::RecvError::Closed) => {
-                            info!("Signal channel closed, shutting down trade execution worker");
-                            break Ok(());
+                        None => {
+                            info!("A strategy signal channel closed");
+                            // Channel closed, but other channels may still be active
                         }
                     }
+                }
+
+                else => {
+                    info!("All strategy signal channels closed, shutting down trade execution worker");
+                    break Ok(());
                 }
             }
         }
