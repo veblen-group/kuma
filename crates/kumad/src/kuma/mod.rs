@@ -173,48 +173,49 @@ impl Kuma {
         });
 
         let reason: eyre::Result<String> = {
-            loop {
+            {
                 select! {
                     biased;
 
-                    () = self.shutdown_token.cancelled() => break Ok("received shutdown signal".to_owned()),
+                    () = self.shutdown_token.cancelled() => Ok("received shutdown signal".to_owned()),
 
                     // Handle block collector task completion
                     (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
                         match result {
-                            Ok(message) => break Ok(message),
-                            Err(e) => break Err(e),
+                            Ok(message) => Ok(message),
+                            Err(e) => Err(e),
                         }
                     }
 
                     // Handle eth collector task completion
                     (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
                         match result {
-                            Ok(message) => break Ok(message),
-                            Err(e) => break Err(e),
+                            Ok(message) => Ok(message),
+                            Err(e) => Err(e),
                         }
                     }
 
                     // Handle tycho collector task completion
                     (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
                         match result {
-                            Ok(message) => break Ok(message),
-                            Err(e) => break Err(e),
+                            Ok(message) => Ok(message),
+                            Err(e) => Err(e),
                         }
                     }
 
                     // Handle strategy worker task completion
                     (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
                         match result {
-                            Ok(message) => break Ok(message),
-                            Err(e) => break Err(e),
+                            Ok(message) => Ok(message),
+                            Err(e) => Err(e),
                         }
                     }
                 }
             }
         };
 
-        Ok(self.shutdown(reason).await)
+        self.shutdown(reason).await;
+        Ok(())
     }
 
     #[instrument(skip_all)]
