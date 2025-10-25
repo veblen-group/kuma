@@ -112,14 +112,14 @@ impl Future for Handle {
         let task = self
             .worker_handle
             .as_mut()
-            .expect("collector handle must not be polled after shutdown");
+            .expect("eth collector handle must not be polled after shutdown");
 
         task.poll_unpin(cx).map(|result| match result {
             Ok(worker_res) => match worker_res {
                 Ok(()) => Ok(()),
-                Err(e) => Err(e).wrap_err("collector task returned with err"),
+                Err(e) => Err(e),
             },
-            Err(e) => Err(e).wrap_err("collector task panicked"),
+            Err(e) => Err(e).wrap_err("eth collector task panicked"),
         })
     }
 }
@@ -134,7 +134,7 @@ pub(super) struct Worker {
 }
 
 impl Worker {
-    #[instrument(name = "tycho_stream_collector", skip(self), fields(chain.name = %self.chain.name))]
+    #[instrument(name = "eth_collector", skip(self), fields(chain.name = %self.chain.name))]
     pub async fn run(self) -> eyre::Result<()> {
         let Self {
             block_tx,
@@ -146,7 +146,10 @@ impl Worker {
         } = self;
 
         let ws = WsConnect::new(ws_url);
-        let provider = ProviderBuilder::new().connect_ws(ws).await?;
+        let provider = ProviderBuilder::new()
+            .connect_ws(ws)
+            .await
+            .wrap_err("failed to connect to eth provider websocket")?;
 
         let addrs = token_addrs
             .keys()
@@ -165,11 +168,18 @@ impl Worker {
         debug!(?curr_token_balances, "Initialized token balances");
 
         // set up header stream
-        let headers = provider.clone().subscribe_blocks().await?.into_stream();
+        let headers = provider
+            .clone()
+            .subscribe_blocks()
+            .await
+            .wrap_err("failed to subscribe to eth blocks")?
+            .into_stream();
         let headers_and_blocks = headers.then(|header| {
             get_token_balances(header, provider.clone(), curr_token_balances.clone())
         });
         pin!(headers_and_blocks);
+
+        info!("Initialized Eth stream");
 
         loop {
             select! {

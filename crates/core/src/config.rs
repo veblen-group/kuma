@@ -76,12 +76,20 @@ impl Config {
                 |ChainConfig {
                      name,
                      rpc_url,
+                     rpc_ws_url,
                      tycho_url,
                      permit2_address,
                      private_key,
                  }| {
-                    Chain::new(name, rpc_url, tycho_url, permit2_address, private_key)
-                        .wrap_err("failed to parse chain info")
+                    Chain::new(
+                        name,
+                        rpc_url,
+                        rpc_ws_url,
+                        tycho_url,
+                        permit2_address,
+                        private_key,
+                    )
+                    .wrap_err("failed to parse chain info")
                 },
             )
             .collect::<eyre::Result<Vec<Chain>>>()
@@ -222,6 +230,9 @@ pub struct ChainConfig {
 
     /// RPC endpoint URL
     pub rpc_url: String,
+
+    /// RPC endpoint URL for WebSocket
+    pub rpc_ws_url: String,
 
     /// RPC endpoint URL for Tycho Indexer
     pub tycho_url: String,

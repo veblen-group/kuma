@@ -77,9 +77,9 @@ impl Future for Handle {
         task.poll_unpin(cx).map(|result| match result {
             Ok(worker_res) => match worker_res {
                 Ok(()) => Ok(()),
-                Err(e) => Err(e).wrap_err("collector task returned with err"),
+                Err(e) => Err(e),
             },
-            Err(e) => Err(e).wrap_err("collector task panicked"),
+            Err(e) => Err(e).wrap_err("block collector task panicked"),
         })
     }
 }

@@ -47,7 +47,7 @@ impl Builder {
             shutdown_token: shutdown_token.clone(),
             account_addr: chain.signer().address(),
             token_addrs: token_addrs.clone(),
-            ws_url: chain.rpc_url.clone(),
+            ws_url: chain.rpc_ws_url.clone(),
         }
         .build();
 

@@ -128,7 +128,7 @@ impl Kuma {
                 let chain = chain.clone();
                 Box::pin(async move {
                     match handle.await {
-                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Ok(()) => Ok(format!("{} block collector task completed", chain)),
                         Err(e) => Err(e),
                     }
                 })
@@ -142,7 +142,7 @@ impl Kuma {
                 let chain = chain.clone();
                 Box::pin(async move {
                     match handle.await {
-                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Ok(()) => Ok(format!("{} eth collector task completed", chain)),
                         Err(e) => Err(e),
                     }
                 })
@@ -156,7 +156,7 @@ impl Kuma {
                 let chain = chain.clone();
                 Box::pin(async move {
                     match handle.await {
-                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Ok(()) => Ok(format!("{} tycho collector task completed", chain)),
                         Err(e) => Err(e),
                     }
                 })
