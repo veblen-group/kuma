@@ -2,7 +2,7 @@
 
 use std::{pin::Pin, time::Duration};
 
-use color_eyre::eyre::{self, ContextCompat, WrapErr as _, eyre};
+use color_eyre::eyre::{self, WrapErr as _, eyre};
 use futures::{Future, FutureExt as _, stream::FuturesUnordered};
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;

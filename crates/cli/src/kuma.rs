@@ -16,14 +16,24 @@ use crate::cli::StrategyArgs;
 pub(crate) struct Kuma {
     #[allow(unused)]
     all_tokens: HashMap<Chain, HashMap<tycho_common::Bytes, Token>>,
+
+    strategy: CrossChainSingleHop,
+
     slow_pair: Pair,
     slow_chain: Chain,
+    slow_block_handle: collector::Handle,
+    #[allow(unused)]
+    slow_eth_handle: collector::eth::Handle,
+    #[allow(unused)]
+    slow_tycho_handle: collector::tycho::Handle,
+
     fast_pair: Pair,
     fast_chain: Chain,
-
-    slow_collector_handle: collector::Handle,
-    fast_collector_handle: collector::Handle,
-    strategy: CrossChainSingleHop,
+    fast_block_handle: collector::Handle,
+    #[allow(unused)]
+    fast_eth_handle: collector::eth::Handle,
+    #[allow(unused)]
+    fast_tycho_handle: collector::tycho::Handle,
 }
 
 impl Kuma {
@@ -75,26 +85,29 @@ impl Kuma {
         ));
 
         // set up tycho stream collectors
-        // TODO: use the collector builders here
-        let slow_collector_handle = make_collector(
-            slow_chain.clone(),
-            tokens_by_chain[&slow_chain].clone(),
-            &tycho_api_key,
+        let (slow_block_handle, slow_eth_handle, slow_tycho_handle) = collector::Builder {
+            tycho_url: slow_chain.tycho_url.clone(),
+            tycho_api_key: tycho_api_key.to_string(),
             add_tvl_threshold,
             remove_tvl_threshold,
-            shutdown_token.clone(),
-        )
-        .wrap_err("failed to start chain a collector")?;
+            token_addrs: tokens_by_chain[&slow_chain].clone(),
+            chain: slow_chain.clone(),
+            shutdown_token: shutdown_token.clone(),
+        }
+        .build()
+        .wrap_err("failed to start tycho collector for chain : {slow_chain}")?;
 
-        let fast_collector_handle = make_collector(
-            fast_chain.clone(),
-            tokens_by_chain[&fast_chain].clone(),
-            &tycho_api_key,
+        let (fast_block_handle, fast_eth_handle, fast_tycho_handle) = collector::Builder {
+            tycho_url: fast_chain.tycho_url.clone(),
+            tycho_api_key: tycho_api_key.to_string(),
             add_tvl_threshold,
             remove_tvl_threshold,
-            shutdown_token.clone(),
-        )
-        .wrap_err("failed to start chain a collector")?;
+            token_addrs: tokens_by_chain[&fast_chain].clone(),
+            chain: fast_chain.clone(),
+            shutdown_token: shutdown_token.clone(),
+        }
+        .build()
+        .wrap_err("failed to start tycho collector for chain : {fast_chain}")?;
 
         // initialize single hop strategy
         let slow_inventory = (
@@ -124,8 +137,12 @@ impl Kuma {
             slow_pair: slow_pair.clone(),
             fast_chain,
             fast_pair: fast_pair.clone(),
-            slow_collector_handle,
-            fast_collector_handle,
+            slow_block_handle,
+            slow_eth_handle,
+            slow_tycho_handle,
+            fast_block_handle,
+            fast_eth_handle,
+            fast_tycho_handle,
             strategy,
         })
     }
@@ -137,16 +154,16 @@ impl Kuma {
             slow_pair,
             fast_chain,
             fast_pair,
-            slow_collector_handle,
-            fast_collector_handle,
+            slow_block_handle,
+            fast_block_handle,
             strategy,
             ..
         } = self;
 
         info!(command = "generating signal");
 
-        let mut slow_chain_states = slow_collector_handle.get_pair_state_stream(&slow_pair);
-        let mut fast_chain_states = fast_collector_handle.get_pair_state_stream(&fast_pair);
+        let mut slow_chain_states = slow_block_handle.get_pair_state_stream(&slow_pair);
+        let mut fast_chain_states = fast_block_handle.get_pair_state_stream(&fast_pair);
         // read state from stream
         let slow_state = slow_chain_states
             .next()
@@ -173,28 +190,6 @@ impl Kuma {
 
         Ok(signal)
     }
-}
-
-pub(crate) fn make_collector(
-    chain: Chain,
-    tokens: HashMap<tycho_common::Bytes, Token>,
-    tycho_api_key: &str,
-    add_tvl_threshold: f64,
-    remove_tvl_threshold: f64,
-    shutdown_token: CancellationToken,
-) -> eyre::Result<collector::Handle> {
-    let handle = collector::Builder {
-        tycho_url: chain.tycho_url.clone(),
-        tycho_api_key: tycho_api_key.to_string(),
-        add_tvl_threshold,
-        remove_tvl_threshold,
-        token_addrs: tokens,
-        chain,
-        shutdown_token,
-    }
-    .build();
-
-    handle.wrap_err("failed to start tycho collector for chain : {chain}")
 }
 
 pub(crate) fn get_chains_from_names(

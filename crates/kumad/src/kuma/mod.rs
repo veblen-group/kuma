@@ -15,8 +15,9 @@ use kuma_core::{
 
 pub(super) struct Kuma {
     shutdown_token: CancellationToken,
-    #[allow(dead_code)]
-    collector_handles: HashMap<Chain, collector::Handle>,
+    block_handles: HashMap<Chain, collector::Handle>,
+    eth_handles: HashMap<Chain, collector::eth::Handle>,
+    tycho_handles: HashMap<Chain, collector::tycho::Handle>,
     strategy_handles: Vec<strategy::Handle>,
 }
 
@@ -40,7 +41,9 @@ impl Kuma {
 
         let db = database::Handle::from_config(cfg.database, Arc::new(addrs_for_chain.clone()))?;
 
-        let mut collector_handles = HashMap::new();
+        let mut block_handles = HashMap::new();
+        let mut eth_handles = HashMap::new();
+        let mut tycho_handles = HashMap::new();
         let mut strategy_handles = vec![];
 
         for StrategyConfig {
@@ -55,20 +58,20 @@ impl Kuma {
 
             // set up collectors for each chain
             for chain in [&slow_chain, &fast_chain] {
-                collector_handles.entry(chain.clone()).or_insert(
-                    // TODO: store eth and tycho handles too
-                    collector::Builder {
-                        chain: chain.clone(),
-                        tycho_url: chain.tycho_url.clone(),
-                        tycho_api_key: cfg.tycho_api_key.clone(),
-                        token_addrs: addrs_for_chain[&chain].clone(),
-                        add_tvl_threshold: cfg.add_tvl_threshold,
-                        remove_tvl_threshold: cfg.remove_tvl_threshold,
-                        shutdown_token: shutdown_token.clone(),
-                    }
-                    .build()
-                    .wrap_err("failed to start tycho collector for chain : {chain}")?,
-                );
+                let (block_handle, eth_handle, tycho_handle) = collector::Builder {
+                    chain: chain.clone(),
+                    tycho_url: chain.tycho_url.clone(),
+                    tycho_api_key: cfg.tycho_api_key.clone(),
+                    token_addrs: addrs_for_chain[&chain].clone(),
+                    add_tvl_threshold: cfg.add_tvl_threshold,
+                    remove_tvl_threshold: cfg.remove_tvl_threshold,
+                    shutdown_token: shutdown_token.clone(),
+                }
+                .build()
+                .wrap_err("failed to start collectors for chain : {chain}")?;
+                block_handles.entry(chain.clone()).or_insert(block_handle);
+                eth_handles.entry(chain.clone()).or_insert(eth_handle);
+                tycho_handles.entry(chain.clone()).or_insert(tycho_handle);
             }
 
             let strategy = kuma_core::strategy::Builder {
@@ -85,9 +88,9 @@ impl Kuma {
             .wrap_err("failed to build strategy")?;
 
             let slow_stream =
-                collector_handles[&strategy.slow_chain].get_pair_state_stream(&strategy.slow_pair);
+                block_handles[&strategy.slow_chain].get_pair_state_stream(&strategy.slow_pair);
             let fast_stream =
-                collector_handles[&strategy.fast_chain].get_pair_state_stream(&strategy.fast_pair);
+                block_handles[&strategy.fast_chain].get_pair_state_stream(&strategy.fast_pair);
 
             let slow_block_time = strategy
                 .slow_chain
@@ -110,15 +113,44 @@ impl Kuma {
 
         Ok(Self {
             shutdown_token,
-            collector_handles,
+            block_handles,
+            eth_handles,
+            tycho_handles,
             strategy_handles,
         })
     }
 
     pub(super) async fn run(mut self) -> eyre::Result<()> {
-        // TODO: maybe make a handle trait with Handle::shutdown() and Handle::id() and store all the impl Handles in a vec?
-        let collector_futs = self
-            .collector_handles
+        let block_futs = self
+            .block_handles
+            .iter_mut()
+            .map(|(chain, handle)| {
+                let chain = chain.clone();
+                Box::pin(async move {
+                    match handle.await {
+                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Err(e) => Err(e),
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let eth_futs = self
+            .eth_handles
+            .iter_mut()
+            .map(|(chain, handle)| {
+                let chain = chain.clone();
+                Box::pin(async move {
+                    match handle.await {
+                        Ok(()) => Ok(format!("{} collector task completed", chain)),
+                        Err(e) => Err(e),
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let tycho_futs = self
+            .tycho_handles
             .iter_mut()
             .map(|(chain, handle)| {
                 let chain = chain.clone();
@@ -147,8 +179,24 @@ impl Kuma {
 
                     () = self.shutdown_token.cancelled() => break Ok("received shutdown signal".to_owned()),
 
-                    // Handle collector task completion
-                    (result, _i, _collectors) = futures::future::select_all(collector_futs) => {
+                    // Handle block collector task completion
+                    (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
+                        match result {
+                            Ok(message) => break Ok(message),
+                            Err(e) => break Err(e),
+                        }
+                    }
+
+                    // Handle eth collector task completion
+                    (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
+                        match result {
+                            Ok(message) => break Ok(message),
+                            Err(e) => break Err(e),
+                        }
+                    }
+
+                    // Handle tycho collector task completion
+                    (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
                         match result {
                             Ok(message) => break Ok(message),
                             Err(e) => break Err(e),
@@ -192,10 +240,30 @@ impl Kuma {
             }
         }
 
-        // Shutdown collector workers
-        for (chain, mut handle) in self.collector_handles {
+        // Shutdown block collector workers
+        for (chain, mut handle) in self.block_handles {
             if let Err(e) = handle.shutdown().await {
-                error!("Failed to shutdown collector for {}: {}", chain.name, e)
+                error!(
+                    "Failed to shutdown block collector for {}: {}",
+                    chain.name, e
+                )
+            }
+        }
+
+        // Shutdown eth collector workers
+        for (chain, mut handle) in self.eth_handles {
+            if let Err(e) = handle.shutdown().await {
+                error!("Failed to shutdown eth collector for {}: {}", chain.name, e)
+            }
+        }
+
+        // Shutdown tycho collector workers
+        for (chain, mut handle) in self.tycho_handles {
+            if let Err(e) = handle.shutdown().await {
+                error!(
+                    "Failed to shutdown tycho collector for {}: {}",
+                    chain.name, e
+                )
             }
         }
     }

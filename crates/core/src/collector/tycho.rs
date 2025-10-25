@@ -1,46 +1,92 @@
 //! Module for interacting with Tycho Simulation's ProtocolStream
+use std::collections::HashMap;
 use std::pin::Pin;
 
-use color_eyre::eyre::WrapErr as _;
-use color_eyre::eyre::{self, bail};
+use color_eyre::eyre::{self, WrapErr as _, bail, eyre};
 use tokio::sync::watch::error::SendError;
 use tokio::{select, sync::watch};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace};
+use tycho_common::Bytes;
+use tycho_common::models::token::Token;
+use tycho_simulation::evm::protocol::pancakeswap_v2::state::PancakeswapV2State;
+use tycho_simulation::evm::protocol::uniswap_v2::state::UniswapV2State;
+use tycho_simulation::evm::protocol::uniswap_v3::state::UniswapV3State;
 use tycho_simulation::evm::stream::ProtocolStreamBuilder;
+use tycho_simulation::tycho_client::feed::component_tracker::ComponentFilter;
 
 use crate::{chain::Chain, state::tycho::BlockSim};
 
 pub struct Builder {
     pub chain: Chain,
-    pub protocol_stream_builder: Pin<Box<dyn Future<Output = ProtocolStreamBuilder> + Send>>,
+    pub tycho_url: String,
+    pub tycho_api_key: String,
+    pub token_addrs: HashMap<Bytes, Token>,
+    pub add_tvl_threshold: f64,
+    pub remove_tvl_threshold: f64,
     pub shutdown_token: CancellationToken,
 }
 
 impl Builder {
-    pub fn build(self) -> Handle {
+    pub fn build(self) -> eyre::Result<Handle> {
         let Self {
             chain,
-            protocol_stream_builder,
             shutdown_token,
+            tycho_url,
+            tycho_api_key,
+            token_addrs,
+            add_tvl_threshold,
+            remove_tvl_threshold,
         } = self;
 
+        // make protocol stream
+        let protocol_stream = ProtocolStreamBuilder::new(&tycho_url, chain.name);
+        let tvl_filter = ComponentFilter::with_tvl_range(remove_tvl_threshold, add_tvl_threshold);
+        let protocol_stream = Self::add_exchanges_for_chain(&chain, protocol_stream, tvl_filter)
+            .wrap_err("failed to set exchanges for {chain.name}.")?;
+
+        let protocol_stream_builder = protocol_stream
+            .auth_key(Some(tycho_api_key))
+            .skip_state_decode_failures(true)
+            .set_tokens(token_addrs.clone());
         let (tx, rx) = watch::channel(None);
 
         let worker = Worker {
             chain: chain.clone(),
-            protocol_stream_builder,
+            protocol_stream_builder: Box::pin(protocol_stream_builder),
             block_sim_tx: tx,
             shutdown_token: shutdown_token.clone(),
         };
 
-        Handle {
+        Ok(Handle {
             chain,
             shutdown_token,
             worker_handle: Some(tokio::spawn(worker.run())),
             block_sim_tx: rx,
+        })
+    }
+
+    fn add_exchanges_for_chain(
+        chain: &Chain,
+        protocol_stream: ProtocolStreamBuilder,
+        tvl_filter: ComponentFilter,
+    ) -> eyre::Result<ProtocolStreamBuilder> {
+        match chain.name {
+            tycho_common::models::Chain::Ethereum => Ok(protocol_stream
+                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
+                .exchange::<UniswapV2State>("sushiswap_v2", tvl_filter.clone(), None)
+                .exchange::<PancakeswapV2State>("pancakeswap_v2", tvl_filter.clone(), None)
+                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)
+                .exchange::<UniswapV3State>("pancakeswap_v3", tvl_filter.clone(), None)),
+            tycho_common::models::Chain::Base => Ok(protocol_stream
+                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
+                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
+            tycho_common::models::Chain::Unichain => Ok(protocol_stream
+                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
+                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
+            _ => Err(eyre!("unsupported chain variant")),
         }
     }
 }

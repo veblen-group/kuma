@@ -24,13 +24,13 @@ use crate::{
 
 pub use builder::Builder;
 mod builder;
-mod eth;
-mod tycho;
+pub mod eth;
+pub mod tycho;
 
 pub struct Handle {
     chain: Chain,
     shutdown_token: CancellationToken,
-    worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
+    task_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
     block_rx: watch::Receiver<Arc<Option<Block>>>,
 }
 
@@ -38,7 +38,7 @@ impl Handle {
     pub async fn shutdown(&mut self) -> eyre::Result<()> {
         self.shutdown_token.cancel();
         if let Err(e) = self
-            .worker_handle
+            .task_handle
             .take()
             .expect("shutdown must not be called twice")
             .await
@@ -70,7 +70,7 @@ impl Future for Handle {
         use futures::future::FutureExt as _;
 
         let task = self
-            .worker_handle
+            .task_handle
             .as_mut()
             .expect("collector handle must not be polled after shutdown");
 
