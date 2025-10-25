@@ -28,7 +28,7 @@ use tokio::{
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::{chain::Chain, config::AddressForToken, state::balances::TokenBalances};
 
@@ -233,6 +233,6 @@ async fn get_token_balances(
             )
         })?;
 
-    debug!(block_height = %header.number, "Received header");
+    trace!(block_height = %header.number, "Received header");
     Ok((header, token_balances_guard.clone()))
 }

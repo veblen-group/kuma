@@ -9,7 +9,7 @@ use tokio::{select, sync::watch};
 use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument, trace};
 
 use crate::{
     chain::Chain,
@@ -118,11 +118,13 @@ impl Worker {
                         let eth_height = header.number;
                         let tycho_height = block_sim.height;
                         if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
-                            error!(
+                            trace!(
                                 error = ?e,
                                 ?eth_height,
                                 ?tycho_height,
                                 "Failed to send block: {}", e);
+                        } else {
+                            debug!(block.height  = eth_height, "Collected new block");
                         };
                         curr_eth_block = None;
                         curr_block_sim = None;
@@ -136,11 +138,13 @@ impl Worker {
                         let eth_height = header.number;
                         let tycho_height = block_sim.height;
                         if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
-                            error!(
+                            trace!(
                                 error = ?e,
                                 ?eth_height,
                                 ?tycho_height,
-                                "Failed to send block: {}", e);
+                                "Failed to send newly collected block to channel: {}", e);
+                        } else {
+                            debug!(block.height = eth_height, "Collected new block");
                         };
                         curr_eth_block = None;
                         curr_block_sim = None;
@@ -159,7 +163,7 @@ fn send_block(
     block_sim: BlockSim,
     block_tx: &watch::Sender<Arc<Option<Block>>>,
 ) -> eyre::Result<()> {
-    if header.number == block_sim.height {
+    if header.number != block_sim.height {
         return Err(eyre!("Block heights out of order"));
     }
     let block = Block::from_components(header, token_balances, block_sim);
