@@ -101,8 +101,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      test-migrations:
-        condition: service_completed_successfully
     environment:
       - RUST_LOG=info
       - KUMA_DATABASE__HOST=postgres
