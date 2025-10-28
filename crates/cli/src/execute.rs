@@ -34,8 +34,8 @@ impl Execute {
         signal.slow_chain.private_key = slow_signer.private_key.clone();
         signal.fast_chain.private_key = fast_signer.private_key.clone();
 
-        let trade = signal.try_into_trade()?;
-        let result = trade.promote().await?;
+        let trade = signal.try_promote()?;
+        let result = trade.run().await?;
         info!("Execution result: {:?}", debug(&result));
         Ok(())
     }

@@ -88,7 +88,7 @@ impl Worker {
             });
         }
 
-        let mut curr_trade = Fuse::terminated();
+        let curr_trade = Fuse::terminated();
         pin_mut!(curr_trade);
         let mut curr_strategy = None;
 
@@ -133,14 +133,13 @@ impl Worker {
                         "💰 Received trade signal. executing cross-chain arbitrage",
                     );
 
-                    // TODO: rename this to .try_promote()
-                    let Ok(trade) = signal.try_into_trade() else {
+                    let Ok(trade) = signal.try_promote() else {
                         // TODO: maybe actually log the error this returns?
                         error!("Failed to convert signal into trade");
                         continue;
                     };
 
-                    curr_trade.set(trade.promote().fuse());
+                    curr_trade.set(trade.run().fuse());
                     curr_strategy = Some(strategy);
 
                 }

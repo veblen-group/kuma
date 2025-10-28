@@ -67,7 +67,7 @@ impl Trade {
     }
 
     // Execute the trade by sending the transactions to their respective chains
-    pub async fn promote(self) -> eyre::Result<(TransactionReceipt, TransactionReceipt)> {
+    pub async fn run(self) -> eyre::Result<(TransactionReceipt, TransactionReceipt)> {
         let slow_tx = execute_tx(self.slow_tx(), &self.slow_tx().chain)
             .await
             .wrap_err("Failed to execute slow transaction")?;
