@@ -32,7 +32,7 @@ impl Builder {
         let shutdown_token = CancellationToken::new();
 
         let worker = Worker {
-            strategy,
+            strategy: strategy.clone(),
             slow_stream,
             fast_stream,
             signal_tx,
@@ -44,6 +44,7 @@ impl Builder {
         let worker_handle = tokio::task::spawn(async move { worker.run().await });
 
         Ok(Handle {
+            strategy: strategy.clone(),
             shutdown_token,
             worker_handle: Some(worker_handle),
             signal_rx,

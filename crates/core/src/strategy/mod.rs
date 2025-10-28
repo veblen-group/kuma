@@ -25,7 +25,7 @@ pub use simulation::Swap;
 
 // Implementation of the arbitrage strategy
 // TODO: should this and precompute be different types or should this just populate
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrossChainSingleHop {
     // TODO: make a (chain, pair, inventory) tuple?
     pub slow_pair: Pair,
@@ -346,6 +346,14 @@ impl CrossChainSingleHop {
                     "‼️ failed to make signal");
             err
         })
+    }
+
+    pub fn token_a_symbol(&self) -> &str {
+        &self.slow_pair.token_a().symbol
+    }
+
+    pub fn token_b_symbol(&self) -> &str {
+        &self.slow_pair.token_b().symbol
     }
 }
 

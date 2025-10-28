@@ -1,13 +1,16 @@
+use std::collections::HashMap;
+
 use color_eyre::eyre::{self};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
-use kuma_core::{database, signals};
+use kuma_core::{database, signals, strategy};
 
 use super::{Handle, Worker};
 
 pub struct Builder {
-    pub signal_rxs: Vec<broadcast::Receiver<signals::CrossChainSingleHop>>,
+    pub signal_rxs:
+        HashMap<strategy::CrossChainSingleHop, broadcast::Receiver<signals::CrossChainSingleHop>>,
     pub db: database::Handle,
 }
 

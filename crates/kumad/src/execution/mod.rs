@@ -1,6 +1,6 @@
 //! Trade execution module for executing cross-chain arbitrage trades
 
-use std::pin::Pin;
+use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre::{self, WrapErr as _};
 use futures::{
@@ -9,9 +9,9 @@ use futures::{
 };
 use tokio::{select, sync::broadcast};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, instrument};
 
-use kuma_core::{database, signals};
+use kuma_core::{database, signals, strategy};
 
 pub use builder::Builder;
 mod builder;
@@ -63,7 +63,8 @@ impl Future for Handle {
 }
 
 struct Worker {
-    signal_rxs: Vec<broadcast::Receiver<signals::CrossChainSingleHop>>,
+    signal_rxs:
+        HashMap<strategy::CrossChainSingleHop, broadcast::Receiver<signals::CrossChainSingleHop>>,
     shutdown_token: CancellationToken,
     #[allow(dead_code)]
     db: database::Handle,
@@ -76,11 +77,11 @@ impl Worker {
 
         // Create a stream of signal receivers that maintain connections
         let mut signal_stream = FuturesUnordered::new();
-        for (idx, mut rx) in self.signal_rxs.into_iter().enumerate() {
+        for (strategy, mut rx) in self.signal_rxs.into_iter() {
             signal_stream.push(async move {
                 rx.recv()
                     .await
-                    .map(|signal| (idx, signal))
+                    .map(|signal| (strategy, signal))
                     .wrap_err("Failed to receive signal")
             });
         }
@@ -95,43 +96,39 @@ impl Worker {
                 }
 
                 Some(result) = signal_stream.next() => {
-                    match result {
-                        Some((strategy_idx, signal)) => {
-                            info!(
-                                strategy_idx,
-                                %signal,
-                                slow_chain = %signal.slow_chain.name,
-                                fast_chain = %signal.fast_chain.name,
-                                slow_height = signal.slow_height,
-                                fast_height = signal.fast_height,
-                                expected_profit_a = %signal.expected_profit.0,
-                                expected_profit_b = %signal.expected_profit.1,
-                                "💰 Received trade signal from strategy {} - executing cross-chain arbitrage",
-                                strategy_idx
-                            );
+                    let Ok((strategy, signal)) = result else {
+                        error!("Failed to receive signal from channel");
+                        continue;
+                    };
 
-                            // Execute the trade
-                            match signal.try_into_trade() {
-                                Ok(trade) => {
-                                    match trade.promote().await {
-                                        Ok(receipts) => {
-                                            info!(?receipts, strategy_idx, "✅ Successfully executed cross-chain arbitrage trade for strategy {}", strategy_idx);
-                                        }
-                                        Err(e) => {
-                                            error!("Failed to execute trade for strategy {}: {:?}", strategy_idx, e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    error!("Failed to convert signal to trade for strategy {}: {:?}", strategy_idx, e);
-                                }
-                            }
-                        }
-                        None => {
-                            info!("A strategy signal channel closed");
-                            // Channel closed, but other channels may still be active
-                        }
-                    }
+                    info!(
+                        // TODO: display funcs for signal and strategy
+                        strategy.token_a = %strategy.token_a_symbol(),
+                        strategy.token_b = %strategy.token_b_symbol(),
+                        strategy.slow_chain = %signal.slow_chain.name,
+                        strategy.fast_chain = %signal.fast_chain.name,
+                        signal.slow_height = signal.slow_height,
+                        signal.fast_height = signal.fast_height,
+                        signal.expected_profit = %signal.expected_profit.0,
+                        signal.expected_profit_b = %signal.expected_profit.1,
+                        "💰 Received trade signal. executing cross-chain arbitrage",
+                    );
+
+                    // TODO: rename this to .try_promote()
+                    let Ok(trade) = signal.try_into_trade() else {
+                        error!("Failed to convert signal into trade");
+                        continue;
+                    };
+
+                    // TODO: fused future
+                    // TODO: rename this to .run()
+                    let Ok(receipts) = trade.promote().await else {
+                        error!("Failed to promote trade");
+                        continue;
+                    };
+
+                    // TODO: pretty print these
+                    info!(?receipts, ?strategy, "✅ Successfully executed cross-chain arbitrage trade for strategy");
                 }
 
                 else => {

@@ -114,7 +114,10 @@ impl Kuma {
 
         // Create trade execution handle that subscribes to this strategy's signals
         let trade_execution_handle = execution::Builder {
-            signal_rxs: strategy_handles.iter().map(|s| s.get_signal_rx()).collect(),
+            signal_rxs: strategy_handles
+                .iter()
+                .map(|handle| (handle.strategy_config(), handle.get_signal_rx()))
+                .collect(),
             db: db.clone(),
         }
         .build()
