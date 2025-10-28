@@ -4,12 +4,14 @@ use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre::{self, WrapErr as _};
 use futures::{
-    Future,
+    Future, FutureExt,
+    future::{Fuse, FusedFuture as _},
+    pin_mut,
     stream::{FuturesUnordered, StreamExt},
 };
 use tokio::{select, sync::broadcast};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use kuma_core::{database, signals, strategy};
 
@@ -86,6 +88,10 @@ impl Worker {
             });
         }
 
+        let mut curr_trade = Fuse::terminated();
+        pin_mut!(curr_trade);
+        let mut curr_strategy = None;
+
         loop {
             select! {
                 biased;
@@ -95,8 +101,21 @@ impl Worker {
                     break Ok(());
                 }
 
-                Some(result) = signal_stream.next() => {
+                trade_result = &mut curr_trade, if !curr_trade.is_terminated() => {
+                    debug!("Trade execution worker received trade result");
+
+                    let Ok((slow_receipt, fast_receipt)) = trade_result else {
+                        error!("Failed to receive trade result");
+                        continue;
+                    };
+
+                    // TODO: clean up this log
+                    info!(?slow_receipt, ?fast_receipt, ?curr_strategy, "✅ Successfully executed cross-chain arbitrage trade for strategy");
+                }
+
+                Some(result) = signal_stream.next(), if curr_trade.is_terminated() => {
                     let Ok((strategy, signal)) = result else {
+                        // TODO: maybe actually log the error this returns?
                         error!("Failed to receive signal from channel");
                         continue;
                     };
@@ -116,19 +135,14 @@ impl Worker {
 
                     // TODO: rename this to .try_promote()
                     let Ok(trade) = signal.try_into_trade() else {
+                        // TODO: maybe actually log the error this returns?
                         error!("Failed to convert signal into trade");
                         continue;
                     };
 
-                    // TODO: fused future
-                    // TODO: rename this to .run()
-                    let Ok(receipts) = trade.promote().await else {
-                        error!("Failed to promote trade");
-                        continue;
-                    };
+                    curr_trade.set(trade.promote().fuse());
+                    curr_strategy = Some(strategy);
 
-                    // TODO: pretty print these
-                    info!(?receipts, ?strategy, "✅ Successfully executed cross-chain arbitrage trade for strategy");
                 }
 
                 else => {
