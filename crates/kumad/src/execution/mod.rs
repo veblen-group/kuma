@@ -101,23 +101,30 @@ impl Worker {
                     break Ok(());
                 }
 
+                // Prioritize handling in-flight trade results to free up for next signal
                 trade_result = &mut curr_trade, if !curr_trade.is_terminated() => {
                     debug!("Trade execution worker received trade result");
 
-                    let Ok((slow_receipt, fast_receipt)) = trade_result else {
-                        error!("Failed to receive trade result");
-                        continue;
+                    let(slow_receipt, fast_receipt) = match trade_result {
+                        Ok(receipts) => receipts,
+                        Err(err) => {
+                            error!(%err, "Failed to receive trade result");
+                            continue;
+                        }
                     };
 
                     // TODO: clean up this log
                     info!(?slow_receipt, ?fast_receipt, ?curr_strategy, "✅ Successfully executed cross-chain arbitrage trade for strategy");
                 }
 
+                // If no running trade, process next generated signal
                 Some(result) = signal_stream.next(), if curr_trade.is_terminated() => {
-                    let Ok((strategy, signal)) = result else {
-                        // TODO: maybe actually log the error this returns?
-                        error!("Failed to receive signal from channel");
-                        continue;
+                    let (strategy, signal) = match result {
+                        Ok((strategy, signal)) => (strategy, signal),
+                        Err(err) => {
+                            error!(%err, "Failed to receive signal from channel");
+                            continue;
+                        }
                     };
 
                     info!(
@@ -133,10 +140,12 @@ impl Worker {
                         "💰 Received trade signal. executing cross-chain arbitrage",
                     );
 
-                    let Ok(trade) = signal.try_promote() else {
-                        // TODO: maybe actually log the error this returns?
-                        error!("Failed to convert signal into trade");
-                        continue;
+                    let trade = match signal.try_promote() {
+                        Ok(trade) => trade,
+                        Err(err) => {
+                            error!(%err, "Failed to convert signal into trade");
+                            continue;
+                        }
                     };
 
                     curr_trade.set(trade.run().fuse());
