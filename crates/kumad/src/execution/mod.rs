@@ -72,42 +72,17 @@ struct Worker {
 impl Worker {
     #[instrument(name = "trade_execution_worker", skip(self))]
     pub async fn run(self) -> eyre::Result<()> {
-        info!(
-            "Starting unified trade execution worker for {} strategies",
-            self.signal_rxs.len()
-        );
+        info!("Starting trade execution system",);
 
         // Create a stream of signal receivers that maintain connections
         let mut signal_stream = FuturesUnordered::new();
         for (idx, mut rx) in self.signal_rxs.into_iter().enumerate() {
-            let shutdown_token = self.shutdown_token.clone();
-            let fut = async move {
-                loop {
-                    select! {
-                        biased;
-                        
-                        () = shutdown_token.cancelled() => {
-                            return None;
-                        }
-                        
-                        result = rx.recv() => {
-                            match result {
-                                Ok(signal) => return Some((idx, signal)),
-                                Err(broadcast::error::RecvError::Closed) => {
-                                    info!("Strategy {} signal channel closed", idx);
-                                    return None;
-                                }
-                                Err(broadcast::error::RecvError::Lagged(n)) => {
-                                    warn!("Strategy {} signal channel lagged by {} messages", idx, n);
-                                    // Continue the loop to receive the next message
-                                    continue;
-                                }
-                            }
-                        }
-                    }
-                }
-            };
-            signal_stream.push(fut);
+            signal_stream.push(async move {
+                rx.recv()
+                    .await
+                    .map(|signal| (idx, signal))
+                    .wrap_err("Failed to receive signal")
+            });
         }
 
         loop {
