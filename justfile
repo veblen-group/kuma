@@ -76,6 +76,10 @@ docker-stop:
 db-start:
   docker compose --profile db up -d
 
+# Stop PostgreSQL database with Docker Compose
+db-stop:
+  docker compose --profile db down
+
 # Reset database (removes all data)
 db-reset:
     #!/usr/bin/env bash
@@ -83,7 +87,7 @@ db-reset:
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations" --target-version "001"
 
 # Run database migrations
-db-init-test:
+db-migrate-test:
     sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
 
 # Compile-time checks for postgres queries
