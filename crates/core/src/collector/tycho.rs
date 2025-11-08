@@ -194,7 +194,7 @@ impl Worker {
 
                     debug!(
                         block.height = ?block_update.block_number_or_timestamp,
-                        "🎁 Received block update"
+                        "Received block simulation from Tycho stream"
                     );
                     let block =
                         if let Some(old_block) = curr_block_sim.take() {

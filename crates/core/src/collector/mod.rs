@@ -124,7 +124,7 @@ impl Worker {
                                 ?tycho_height,
                                 "Failed to send block: {}", e);
                         } else {
-                            debug!(block.height  = eth_height, "Collected new block");
+                            info!(block.height  = eth_height, "🎁 Collected new block");
                         };
                         curr_eth_block = None;
                         curr_block_sim = None;
