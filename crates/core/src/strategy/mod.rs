@@ -14,7 +14,6 @@ use crate::{
         self, PoolId,
         pair::{Pair, PairState},
     },
-    strategy::simulation::make_sorted_spot_prices,
 };
 
 mod builder;
@@ -406,7 +405,7 @@ mod tests {
         chain::Chain,
         signals::{calculate_expected_profits, calculate_surplus},
         state::{self, pair::PairState},
-        strategy::{self, CrossChainSingleHop},
+        strategy::{self, CrossChainSingleHop, simulation::make_sorted_spot_prices},
     };
     use sqlx::types::chrono::NaiveDateTime;
     use std::{

@@ -18,9 +18,10 @@ init-permit2:
     cargo run -p kuma-cli init-permit2
 
 # kumad
+####################
 kumad:
     cargo run -p kumad
-####################
+
 kumad-start:
   docker compose --profile kumad up -d
 
