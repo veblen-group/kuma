@@ -5,9 +5,8 @@ use figment::{
     providers::{Env, Format as _, Yaml},
 };
 use num_bigint::BigUint;
-use num_traits::{FromPrimitive, ops::inv};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ops::Deref, str::FromStr, time::Duration};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use tracing::{info, warn};
 use tycho_simulation::{
     evm::tycho_models,

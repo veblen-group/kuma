@@ -102,22 +102,22 @@ tokens:
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "https://ethereum-rpc.publicnode.com"
-    rpc_ws_url: "wss://ethereum-rpc.publicnode.com"
+    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
 
   - name: base
-    rpc_url: "https://mainnet.base.org"
-    rpc_ws_url: "wss://base-rpc.publicnode.com"
+    rpc_url: "https://base-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
 
   - name: unichain
-    rpc_url: "https://mainnet.unichain.org"
-    rpc_ws_url: "wss://unichain-rpc.publicnode.com"
+    rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
     private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
@@ -133,4 +133,4 @@ add_tvl_threshold: 5.0
 remove_tvl_threshold: 1.0
 
 # tycho simulation
-tycho_api_key: "sampletoken"
+tycho_api_key: "a80dcbce-1c32-4711-8f92-f95123526c02"

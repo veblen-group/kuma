@@ -30,7 +30,8 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
                 .expect("well-formed tracing directive"),
         );
 
-    let fmt_layer = fmt::layer().with_file(true).with_line_number(true);
+    let verbose = false;
+    let fmt_layer = fmt::layer().with_file(verbose).with_line_number(verbose);
 
     tracing_subscriber::Registry::default()
         .with(filter)
