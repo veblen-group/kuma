@@ -1,97 +1,85 @@
 use std::{collections::HashMap, sync::Arc};
 
-use color_eyre::eyre::{self, Context as _, eyre};
+use color_eyre::eyre::{self, Context as _};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tycho_simulation::{
-    evm::{
-        protocol::{
-            pancakeswap_v2::state::PancakeswapV2State, uniswap_v2::state::UniswapV2State,
-            uniswap_v3::state::UniswapV3State,
-        },
-        stream::ProtocolStreamBuilder,
-    },
-    tycho_client::feed::component_tracker::ComponentFilter,
-    tycho_common::{self, Bytes, models::token::Token},
-};
+use tycho_simulation::tycho_common::{Bytes, models::token::Token};
 
-use super::Worker;
-use crate::{chain::Chain, state::block::Block};
+use crate::{
+    chain::Chain,
+    collector::{
+        self,
+        eth::{self},
+        tycho,
+    },
+    state::block::Block,
+};
 
 pub struct Builder {
     pub chain: Chain,
     pub tycho_url: String,
-    pub api_key: String,
-    pub tokens: HashMap<Bytes, Token>,
+    pub tycho_api_key: String,
+    pub token_addrs: HashMap<Bytes, Token>,
     pub add_tvl_threshold: f64,
     pub remove_tvl_threshold: f64,
     pub shutdown_token: CancellationToken,
 }
 
 impl Builder {
-    pub fn build(self) -> eyre::Result<super::Handle> {
+    pub fn build(self) -> eyre::Result<(super::Handle, eth::Handle, tycho::Handle)> {
         let Self {
-            tycho_url: url,
+            tycho_url,
             add_tvl_threshold,
             remove_tvl_threshold,
             chain,
-            api_key,
-            tokens,
+            tycho_api_key,
+            token_addrs,
             shutdown_token,
             ..
         } = self;
 
-        // make protocol stream
-        let protocol_stream = ProtocolStreamBuilder::new(&url, chain.name);
-        let tvl_filter = ComponentFilter::with_tvl_range(remove_tvl_threshold, add_tvl_threshold);
-        let protocol_stream = Self::add_exchanges_for_chain(&chain, protocol_stream, tvl_filter)
-            .wrap_err("failed to set exchanges for {chain.name}.")?;
-
-        let protocol_stream_builder = protocol_stream
-            .auth_key(Some(api_key))
-            .skip_state_decode_failures(true)
-            .set_tokens(tokens.clone());
+        // TODO: move this stuff into the tycho builder
 
         let (block_tx, block_rx) = watch::channel::<Arc<Option<Block>>>(Arc::new(None));
 
-        let worker = Worker {
-            // TODO: do i really wanna get rid of these or keep them for reconnect?
-            // uri: Uri::from_str(&url).expect("invalid uri"),
-            // api_key: api_key.clone(),
-            protocol_stream_builder: Box::pin(protocol_stream_builder),
+        let eth_worker_handle = eth::Builder {
             chain: chain.clone(),
-            block_tx,
             shutdown_token: shutdown_token.clone(),
-        };
-        let worker_handle = tokio::task::spawn(async { worker.run().await });
+            account_addr: chain.signer().address(),
+            token_addrs: token_addrs.clone(),
+            ws_url: chain.rpc_ws_url.clone(),
+        }
+        .build();
 
-        Ok(super::Handle {
+        let tycho_worker_handle = tycho::Builder {
+            chain: chain.clone(),
+            tycho_url,
+            add_tvl_threshold,
+            remove_tvl_threshold,
+            tycho_api_key,
+            token_addrs,
+            shutdown_token: shutdown_token.clone(),
+        }
+        .build()
+        .wrap_err("failed to build tycho collector worker")?;
+
+        let worker = collector::Worker {
+            chain: chain.clone(),
+            block_tx: block_tx,
+            shutdown_token: shutdown_token.clone(),
+            block_sim_rx: tycho_worker_handle.get_block_sim_rx(),
+            eth_rx: eth_worker_handle.get_block_changes_stream(),
+        };
+        let worker_task = tokio::task::spawn(async { worker.run().await });
+
+        // TODO: return tycho and eth handles
+        let block_worker_handle = super::Handle {
             chain,
             shutdown_token,
-            worker_handle: Some(worker_handle),
+            task_handle: Some(worker_task),
             block_rx,
-        })
-    }
+        };
 
-    fn add_exchanges_for_chain(
-        chain: &Chain,
-        protocol_stream: ProtocolStreamBuilder,
-        tvl_filter: ComponentFilter,
-    ) -> eyre::Result<ProtocolStreamBuilder> {
-        match chain.name {
-            tycho_common::models::Chain::Ethereum => Ok(protocol_stream
-                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
-                .exchange::<UniswapV2State>("sushiswap_v2", tvl_filter.clone(), None)
-                .exchange::<PancakeswapV2State>("pancakeswap_v2", tvl_filter.clone(), None)
-                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)
-                .exchange::<UniswapV3State>("pancakeswap_v3", tvl_filter.clone(), None)),
-            tycho_common::models::Chain::Base => Ok(protocol_stream
-                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
-                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
-            tycho_common::models::Chain::Unichain => Ok(protocol_stream
-                .exchange::<UniswapV2State>("uniswap_v2", tvl_filter.clone(), None)
-                .exchange::<UniswapV3State>("uniswap_v3", tvl_filter.clone(), None)),
-            _ => Err(eyre!("unsupported chain variant")),
-        }
+        Ok((block_worker_handle, eth_worker_handle, tycho_worker_handle))
     }
 }

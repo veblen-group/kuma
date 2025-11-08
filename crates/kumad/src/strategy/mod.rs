@@ -2,7 +2,7 @@
 
 use std::{pin::Pin, time::Duration};
 
-use color_eyre::eyre::{self, ContextCompat, WrapErr as _, eyre};
+use color_eyre::eyre::{self, WrapErr as _, eyre};
 use futures::{Future, FutureExt as _, stream::FuturesUnordered};
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;
@@ -85,7 +85,11 @@ struct Worker {
 }
 
 impl Worker {
-    #[instrument(name = "strategy_worker", skip(self))]
+    #[instrument(name = "strategy_worker", skip(self), fields(
+        slow_chain = self.strategy.slow_chain.name.to_string(),
+        fast_chain = self.strategy.fast_chain.name.to_string(),
+        token_a = self.strategy.slow_pair.token_a().symbol,
+        token_b = self.strategy.slow_pair.token_b().symbol))]
     pub async fn run(mut self) -> eyre::Result<()> {
         info!("Starting strategy worker");
 

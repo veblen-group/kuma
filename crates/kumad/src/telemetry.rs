@@ -9,11 +9,29 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
     // use the passed log level or default to RUST_LOG value
     let filter = EnvFilter::from_default_env()
         .add_directive("h2=warn".parse().expect("well-formed"))
-        .add_directive("hyper_util=warn".parse().expect("well-formed"))
-        .add_directive("tycho_client=warn".parse().expect("well-formed"))
-        .add_directive("tycho_simulation=warn".parse().expect("well-formed"));
+        .add_directive(
+            "hyper_util=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "tycho_client=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "tycho_simulation=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "alloy_rpc_client=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        );
 
-    let fmt_layer = fmt::layer().with_file(true).with_line_number(true);
+    let verbose = false;
+    let fmt_layer = fmt::layer().with_file(verbose).with_line_number(verbose);
 
     tracing_subscriber::Registry::default()
         .with(filter)
