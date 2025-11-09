@@ -7,7 +7,7 @@ use futures::{Future, FutureExt as _, stream::FuturesUnordered};
 use tokio::{select, sync::broadcast, time::Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, instrument};
 
 use kuma_core::{
     database, signals,
@@ -143,8 +143,8 @@ impl Worker {
                     submission_deadline = Some(Instant::now() + submission_delay);
 
                     debug!(
-                        ?submission_deadline,
-                        "⏳ Started timer for next signal generation"
+                        block.height = slow_state.block_height,
+                        "⏱️ Slow block received. Started timer for next signal generation."
                     );
 
                     // Generate precomputes
@@ -222,7 +222,7 @@ impl Worker {
                             }
                         }
                     } else {
-                        trace!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
+                        debug!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
                     }
                 }
 

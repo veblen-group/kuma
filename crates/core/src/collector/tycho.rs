@@ -192,7 +192,7 @@ impl Worker {
                         }
                     };
 
-                    debug!(
+                    trace!(
                         block.height = ?block_update.block_number_or_timestamp,
                         "Received block simulation from Tycho stream"
                     );
@@ -206,9 +206,9 @@ impl Worker {
 
                             new_block
                         } else {
-                            trace!(
+                            debug!(
                                 block.number = block_update.block_number_or_timestamp,
-                                "Received initial block from Tycho Simulation stream."
+                                "Processed initial block from Tycho Simulation stream successfully."
                             );
                             BlockSim::new(block_update)
                         };
@@ -224,7 +224,7 @@ impl Worker {
                             bail!("Failed to collect initial block simulation update")
                         }
                         Ok(_) => {
-                            debug!("Collected block simulation update");
+                            debug!("Collected new tycho block simulation update");
                         }
                     }
                 }

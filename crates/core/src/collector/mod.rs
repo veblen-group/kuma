@@ -9,7 +9,7 @@ use tokio::{select, sync::watch};
 use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{error, info, instrument};
 
 use crate::{
     chain::Chain,
@@ -117,13 +117,13 @@ impl Worker {
                      if let Some(block_sim) = curr_block_sim.take() {
                         let eth_height = header.number;
                         let tycho_height = block_sim.height;
-                        if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
-                            trace!(
-                                error = ?e,
+                        if let Err(error) = send_block(header, token_balances, block_sim, &block_tx) {
+                            error!(
+                                %error,
                                 ?eth_height,
                                 ?tycho_height,
                                 "Failed to send block");
-                            bail!(e)
+                            bail!(error)
                         } else {
                             info!(block.height  = eth_height, "🎁 Collected new block");
                         };
@@ -138,15 +138,15 @@ impl Worker {
                     if let Some((header, token_balances)) = curr_eth_block.take() {
                         let eth_height = header.number;
                         let tycho_height = block_sim.height;
-                        if let Err(e) = send_block(header, token_balances, block_sim, &block_tx) {
-                            trace!(
-                                error = ?e,
+                        if let Err(error) = send_block(header, token_balances, block_sim, &block_tx) {
+                            error!(
+                                %error,
                                 ?eth_height,
                                 ?tycho_height,
                                 "Failed to send block");
-                            bail!(e)
+                            bail!(error)
                         } else {
-                            debug!(block.height = eth_height, "Collected new block");
+                            info!(block.height = eth_height, "🎁 Collected new block");
                         };
                         curr_eth_block = None;
                         curr_block_sim = None;

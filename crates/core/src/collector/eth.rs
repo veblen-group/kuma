@@ -192,7 +192,6 @@ impl Worker {
                 Some(res) = headers_and_blocks.next() => {
                     match res {
                         Ok((header, token_balances)) => {
-                            trace!(block.height = header.number, "Token balances updated");
                             match  block_tx.send(Some((header, token_balances))) {
                                 Err(SendError(Some((header, _)))) => {
                                     error!(block_height = %header.number, "Channel has no receivers, block dropped.");
@@ -203,7 +202,7 @@ impl Worker {
                                     bail!("Failed to collect initial eth block");
                                 }
                                 Ok(_) => {
-                                    debug!("New Eth block successfully collected");
+                                    debug!("Collected new Eth block info");
                                 }
                             }
                         }
@@ -234,6 +233,7 @@ async fn get_token_balances(
             )
         })?;
 
-    trace!(block_height = %header.number, "Received header");
+    trace!(block.height = header.number, "Token balances updated");
+
     Ok((header, token_balances_guard.clone()))
 }
