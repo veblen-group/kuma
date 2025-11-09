@@ -14,6 +14,8 @@ use tracing::{error, info, instrument, warn};
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    color_eyre::install().expect("failed to install color_eyre");
+
     // set up config
     let cfg: Config = match Config::load() {
         Err(err) => {

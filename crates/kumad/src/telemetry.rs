@@ -1,6 +1,7 @@
 use std::{env, sync::OnceLock};
 
 use tracing::{Subscriber, level_filters::LevelFilter};
+use tracing_error::ErrorLayer;
 use tracing_subscriber::{EnvFilter, Layer, filter::FilterExt, fmt, layer::SubscriberExt as _};
 
 static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
@@ -60,15 +61,17 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
 
     let verbose = is_verbose.then_some(
         fmt::layer()
-            .with_file(true)
-            .with_line_number(true)
+            // .with_file(true)
+            // .with_line_number(true)
             .with_level(true)
             .with_writer(std::io::stderr)
+            // .compact()
             .with_filter(LevelFilter::TRACE.and(LevelFilter::INFO.not())),
     );
 
     tracing_subscriber::Registry::default()
         .with(filter)
+        .with(ErrorLayer::default())
         .with(verbose)
         .with(concise)
 }

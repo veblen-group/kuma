@@ -49,7 +49,7 @@ if ! tmux new-session -d -s "$SESSION_NAME" "less -R +F --mouse \"${OUT_FILE}\""
     exit 1
 fi
 
-# Split vertically, 50% height, for stderr on bottom
+# Split vertically, for stderr on bottom
 if ! tmux split-window -v -p 100 -t "${SESSION_NAME}:0.0" "less -R +F --mouse \"${ERR_FILE}\""; then
     echo "Error: Failed to split window for stderr"
     tmux kill-session -t "$SESSION_NAME"

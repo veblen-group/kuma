@@ -28,6 +28,7 @@ tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
 tokio-tungstenite = "0.27.0"
 tracing = "0.1.41"
+tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = [
     "env-filter",
     "once_cell",

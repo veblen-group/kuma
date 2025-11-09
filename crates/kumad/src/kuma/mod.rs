@@ -173,42 +173,40 @@ impl Kuma {
         });
 
         let reason: eyre::Result<String> = {
-            {
-                select! {
-                    biased;
+            select! {
+                biased;
 
-                    () = self.shutdown_token.cancelled() => Ok("received shutdown signal".to_owned()),
+                () = self.shutdown_token.cancelled() => Ok("received shutdown signal".to_owned()),
 
-                    // Handle block collector task completion
-                    (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
-                        match result {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(e),
-                        }
+                // Handle block collector task completion
+                (result, _i, _block_collectors) = futures::future::select_all(block_futs) => {
+                    match result {
+                        Ok(message) => Ok(message),
+                        Err(e) => Err(e),
                     }
+                }
 
-                    // Handle eth collector task completion
-                    (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
-                        match result {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(e),
-                        }
+                // Handle eth collector task completion
+                (result, _i, _eth_collectors) = futures::future::select_all(eth_futs) => {
+                    match result {
+                        Ok(message) => Ok(message),
+                        Err(e) => Err(e),
                     }
+                }
 
-                    // Handle tycho collector task completion
-                    (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
-                        match result {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(e),
-                        }
+                // Handle tycho collector task completion
+                (result, _i, _tycho_collectors) = futures::future::select_all(tycho_futs) => {
+                    match result {
+                        Ok(message) => Ok(message),
+                        Err(e) => Err(e),
                     }
+                }
 
-                    // Handle strategy worker task completion
-                    (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
-                        match result {
-                            Ok(message) => Ok(message),
-                            Err(e) => Err(e),
-                        }
+                // Handle strategy worker task completion
+                (result, _i, _strategies) = futures::future::select_all(strategy_futs) => {
+                    match result {
+                        Ok(message) => Ok(message),
+                        Err(e) => Err(e),
                     }
                 }
             }

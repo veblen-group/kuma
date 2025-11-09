@@ -3,8 +3,8 @@
 use std::{pin::Pin, sync::Arc};
 
 use alloy::rpc::types::Header;
-use color_eyre::eyre::WrapErr as _;
 use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{WrapErr as _, bail};
 use tokio::{select, sync::watch};
 use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::WatchStream;
@@ -122,7 +122,8 @@ impl Worker {
                                 error = ?e,
                                 ?eth_height,
                                 ?tycho_height,
-                                "Failed to send block: {}", e);
+                                "Failed to send block");
+                            bail!(e)
                         } else {
                             info!(block.height  = eth_height, "🎁 Collected new block");
                         };
@@ -142,7 +143,8 @@ impl Worker {
                                 error = ?e,
                                 ?eth_height,
                                 ?tycho_height,
-                                "Failed to send newly collected block to channel: {}", e);
+                                "Failed to send block");
+                            bail!(e)
                         } else {
                             debug!(block.height = eth_height, "Collected new block");
                         };

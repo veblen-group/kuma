@@ -144,7 +144,7 @@ impl Worker {
 
                     debug!(
                         ?submission_deadline,
-                        "⏰ Started timer for next signal generation"
+                        "⏳ Started timer for next signal generation"
                     );
 
                     // Generate precomputes
