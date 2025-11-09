@@ -23,7 +23,7 @@ kumad:
     cargo run -p kumad
 
 kumad-split:
-    KUMA_SPLIT_VIEW=1 ./run_split.sh
+    ./run_split.sh
 
 kumad-start:
   docker compose --profile kumad up -d

@@ -2,49 +2,27 @@ use std::{env, ops::Not, sync::OnceLock};
 
 use tracing::{Subscriber, level_filters::LevelFilter};
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{EnvFilter, Layer, filter::filter_fn, fmt, layer::SubscriberExt as _};
+use tracing_subscriber::{
+    EnvFilter, Layer,
+    filter::{Targets, filter_fn},
+    fmt,
+    layer::SubscriberExt as _,
+};
 
 static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 
 pub fn get_subscriber() -> impl Subscriber + Send + Sync {
     // use the passed log level or default to RUST_LOG value
-    let directives = EnvFilter::from_default_env()
-        .add_directive("h2=warn".parse().expect("well-formed"))
-        .add_directive(
-            "hyper_util=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "tycho_client=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "tycho_simulation=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "alloy_rpc_client=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "alloy_pubsub=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "alloy_transport_ws=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        )
-        .add_directive(
-            "alloy_json_rpc=warn"
-                .parse()
-                .expect("well-formed tracing directive"),
-        );
+    let directives = Targets::new()
+        .with_default(LevelFilter::TRACE)
+        .with_target("h2", LevelFilter::WARN)
+        .with_target("hyper_util", LevelFilter::WARN)
+        .with_target("tycho_client", LevelFilter::WARN)
+        .with_target("tycho_simulation", LevelFilter::WARN)
+        .with_target("alloy_rpc_client", LevelFilter::WARN)
+        .with_target("alloy_pubsub", LevelFilter::WARN)
+        .with_target("alloy_transport_ws", LevelFilter::WARN)
+        .with_target("alloy_json_rpc", LevelFilter::WARN);
 
     let is_split_view = env::var("KUMA_SPLIT_VIEW")
         .map(|val| val == "1" || val.to_lowercase() == "true")

@@ -35,11 +35,11 @@ echo ""
 echo "Starting cargo run..."
 
 # 5. Start cargo run in the background, redirecting output to files
-cargo run -p kumad $CARGO_ARGS > "$OUT_FILE" 2> "$ERR_FILE" &
+KUMA_SPLIT_VIEW=1 cargo run -p kumad $CARGO_ARGS > "$OUT_FILE" 2> "$ERR_FILE" &
 CARGO_PID=$!
 
 # Give cargo a moment to start and create some output
-sleep 0.5
+sleep 1
 
 # 6. Create the tmux layout
 # Create a new session with stdout viewer on top
