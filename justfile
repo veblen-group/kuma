@@ -22,6 +22,9 @@ init-permit2:
 kumad:
     cargo run -p kumad
 
+kumad-split:
+    ./run_split.sh
+
 kumad-start:
   docker compose --profile kumad up -d
 
