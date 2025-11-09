@@ -175,6 +175,7 @@ impl Worker {
             .wrap_err("failed to subscribe to eth blocks")?
             .into_stream();
         let headers_and_blocks = headers.then(|header| {
+            trace!(block.height = header.number, "Received new header");
             get_token_balances(header, provider.clone(), curr_token_balances.clone())
         });
         pin!(headers_and_blocks);
@@ -191,18 +192,17 @@ impl Worker {
                 Some(res) = headers_and_blocks.next() => {
                     match res {
                         Ok((header, token_balances)) => {
-                            debug!(block_height = ?header.number, "token balances updated");
                             match  block_tx.send(Some((header, token_balances))) {
                                 Err(SendError(Some((header, _)))) => {
-                                    error!(block_height = %header.number, "channel has no receivers, block dropped.");
+                                    error!(block_height = %header.number, "Channel has no receivers, block dropped.");
                                     bail!("Failed to collect block");
                                 }
                                 Err(SendError(None)) => {
-                                    error!("channel has no receivers, failed to collect initial eth block.");
+                                    error!("Channel has no receivers, failed to collect initial eth block.");
                                     bail!("Failed to collect initial eth block");
                                 }
                                 Ok(_) => {
-                                    debug!("new eth block successfully collected");
+                                    debug!("Collected new Eth block info");
                                 }
                             }
                         }
@@ -233,6 +233,7 @@ async fn get_token_balances(
             )
         })?;
 
-    trace!(block_height = %header.number, "Received header");
+    trace!(block.height = header.number, "Token balances updated");
+
     Ok((header, token_balances_guard.clone()))
 }
