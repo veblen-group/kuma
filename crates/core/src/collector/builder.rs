@@ -69,6 +69,8 @@ impl Builder {
             shutdown_token: shutdown_token.clone(),
             block_sim_rx: tycho_worker_handle.get_block_sim_rx(),
             eth_rx: eth_worker_handle.get_block_changes_stream(),
+            curr_block_sim: None,
+            curr_eth_block: None,
         };
         let worker_task = tokio::task::spawn(async { worker.run().await });
 

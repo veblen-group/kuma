@@ -3,7 +3,7 @@
 use std::{pin::Pin, sync::Arc};
 
 use alloy::rpc::types::Header;
-use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{self};
 use color_eyre::eyre::{WrapErr as _, bail};
 use tokio::{select, sync::watch};
 use tokio_stream::StreamExt as _;
@@ -90,91 +90,69 @@ struct Worker {
     eth_rx: WatchStream<Option<EthBlock>>,
     block_tx: watch::Sender<Arc<Option<Block>>>,
     shutdown_token: CancellationToken,
+    curr_eth_block: Option<EthBlock>,
+    curr_block_sim: Option<BlockSim>,
 }
 
 impl Worker {
     #[instrument(name = "block_collector", skip(self), fields(chain.name = %self.chain.name))]
-    pub async fn run(self) -> eyre::Result<()> {
-        let Self {
-            mut block_sim_rx,
-            mut eth_rx,
-            block_tx,
-            shutdown_token,
-            ..
-        } = self;
-
-        let mut curr_eth_block: Option<EthBlock> = None;
-        let mut curr_block_sim: Option<BlockSim> = None;
-
+    pub async fn run(mut self) -> eyre::Result<()> {
         loop {
             select! {
-                () = shutdown_token.cancelled() => {
+                () = self.shutdown_token.cancelled() => {
                     info!("block collector received shutdown signal");
                     break Ok(())
                 }
 
-                Some(Some((header, token_balances))) = eth_rx.next() => {
-                     if let Some(block_sim) = curr_block_sim.take() {
-                        let eth_height = header.number;
-                        let tycho_height = block_sim.height;
-                        if let Err(error) = send_block(header, token_balances, block_sim, &block_tx) {
-                            error!(
-                                %error,
-                                ?eth_height,
-                                ?tycho_height,
-                                "Failed to send block");
-                            bail!(error)
-                        } else {
-                            info!(block.height  = eth_height, "🎁 Collected new block");
-                        };
-                        curr_eth_block = None;
-                        curr_block_sim = None;
-                    } else {
-                        curr_eth_block = Some((header, token_balances));
-                    }
+                Some(Some((header, token_balances))) = self.eth_rx.next() => {
+                    let Some(block_sim) = self.curr_block_sim.take() else {
+                        self.curr_eth_block = Some((header, token_balances));
+                        continue;
+                    };
+
+                    self.send_block(header, token_balances, block_sim)?;
+
+                    self.curr_eth_block = None;
+                    self.curr_block_sim = None;
                 }
 
-                Some(Some(block_sim)) = block_sim_rx.next() => {
-                    if let Some((header, token_balances)) = curr_eth_block.take() {
-                        let eth_height = header.number;
-                        let tycho_height = block_sim.height;
-                        if let Err(error) = send_block(header, token_balances, block_sim, &block_tx) {
-                            error!(
-                                %error,
-                                ?eth_height,
-                                ?tycho_height,
-                                "Failed to send block");
-                            bail!(error)
-                        } else {
-                            info!(block.height = eth_height, "🎁 Collected new block");
-                        };
-                        curr_eth_block = None;
-                        curr_block_sim = None;
-                    } else {
-                        curr_block_sim = Some(block_sim);
-                    }
+                Some(Some(block_sim)) = self.block_sim_rx.next() => {
+                    let Some((header, token_balances)) = self.curr_eth_block.take() else {
+                        self.curr_block_sim = Some(block_sim);
+                        continue;
+                    };
+
+                    self.send_block(header, token_balances, block_sim)?;
+
+                    self.curr_eth_block = None;
+                    self.curr_block_sim = None;
                 }
             }
         }
     }
-}
 
-fn send_block(
-    header: Header,
-    token_balances: TokenBalances,
-    block_sim: BlockSim,
-    block_tx: &watch::Sender<Arc<Option<Block>>>,
-) -> eyre::Result<()> {
-    if header.number != block_sim.height {
-        return Err(eyre!("Block heights out of order"));
-    }
-    let block = Block::from_components(header, token_balances, block_sim);
+    fn send_block(
+        &mut self,
+        header: Header,
+        token_balances: TokenBalances,
+        block_sim: BlockSim,
+    ) -> eyre::Result<()> {
+        if header.number != block_sim.height {
+            error!(
+                eth_height = %header.number,
+                tycho_height = %block_sim.height,
+                "Block heights are out of order"
+            );
+            bail!("Block heights out of order");
+        }
+        let block = Block::from_components(header, token_balances, block_sim);
+        let height = block.header.number;
 
-    if let Err(e) = block_tx.send(Arc::new(Some(block))) {
-        // TODO: handle send_res more
-        return Err(eyre!(
-            "failed to send block after receiving tycho block: {e}"
-        ));
+        if let Err(error) = self.block_tx.send(Arc::new(Some(block))) {
+            bail!("failed to send block after receiving tycho block: {error}")
+        } else {
+            info!(block.height = %height, "🎁 Collected new block");
+            Ok(())
+        }
     }
-    Ok(())
 }
