@@ -14,8 +14,6 @@ use tracing::{error, info, instrument, warn};
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    println!("Hello, world!");
-
     // set up config
     let cfg: Config = match Config::load() {
         Err(err) => {

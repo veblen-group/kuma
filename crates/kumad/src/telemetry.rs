@@ -28,6 +28,21 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
             "alloy_rpc_client=warn"
                 .parse()
                 .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "alloy_pubsub=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "alloy_transport_ws=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
+        )
+        .add_directive(
+            "alloy_json_rpc=warn"
+                .parse()
+                .expect("well-formed tracing directive"),
         );
 
     let concise = fmt::layer()
