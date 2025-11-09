@@ -1,7 +1,7 @@
-use std::sync::OnceLock;
+use std::{env, sync::OnceLock};
 
-use tracing::Subscriber;
-use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt as _};
+use tracing::{Subscriber, level_filters::LevelFilter};
+use tracing_subscriber::{EnvFilter, Layer, filter::FilterExt, fmt, layer::SubscriberExt as _};
 
 static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 
@@ -30,12 +30,32 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
                 .expect("well-formed tracing directive"),
         );
 
-    let verbose = false;
-    let fmt_layer = fmt::layer().with_file(verbose).with_line_number(verbose);
+    let concise = fmt::layer()
+        .with_file(false)
+        .with_target(false)
+        .with_line_number(false)
+        .with_level(true)
+        .compact()
+        .with_writer(std::io::stdout)
+        .with_filter(LevelFilter::INFO);
+
+    let is_verbose = env::var("RUST_VERBOSE")
+        .map(|val| val == "1" || val.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    let verbose = is_verbose.then_some(
+        fmt::layer()
+            .with_file(true)
+            .with_line_number(true)
+            .with_level(true)
+            .with_writer(std::io::stderr)
+            .with_filter(LevelFilter::TRACE.and(LevelFilter::INFO.not())),
+    );
 
     tracing_subscriber::Registry::default()
         .with(filter)
-        .with(fmt_layer)
+        .with(verbose)
+        .with(concise)
 }
 
 pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
