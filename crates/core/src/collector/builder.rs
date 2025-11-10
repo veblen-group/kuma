@@ -15,6 +15,8 @@ use crate::{
     state::block::Block,
 };
 
+const COLLECTOR_LAG_TOLERANCE: i64 = 1;
+
 pub struct Builder {
     pub chain: Chain,
     pub tycho_url: String,
@@ -71,6 +73,7 @@ impl Builder {
             eth_rx: eth_worker_handle.get_block_changes_stream(),
             curr_block_sim: None,
             curr_eth_block: None,
+            collector_lag_tolerance: COLLECTOR_LAG_TOLERANCE,
         };
         let worker_task = tokio::task::spawn(async { worker.run().await });
 
