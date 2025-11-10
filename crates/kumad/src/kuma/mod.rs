@@ -229,7 +229,7 @@ impl Kuma {
         );
         match &reason {
             Ok(reason) => info!(%reason, message),
-            Err(reason) => error!(%reason, message),
+            Err(reason) => error!(?reason, message),
         };
 
         // Shutdown strategy workers
