@@ -7,8 +7,12 @@ use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
 use core::{
-    chain::Chain, collector, config::Config, signals, state::pair::Pair,
-    strategy::CrossChainSingleHop,
+    chain::Chain,
+    collector,
+    config::Config,
+    signals,
+    state::pair::Pair,
+    strategy::{self, CrossChainSingleHop},
 };
 
 use crate::cli::StrategyArgs;
@@ -75,15 +79,7 @@ impl Kuma {
             strategy_config.fast_chain,
             &tokens_by_chain,
         );
-        let slow_pair = pairs.get(&slow_chain).expect(&format!(
-            "could not find pair info for {:}",
-            slow_chain.name
-        ));
-        let fast_pair = pairs.get(&fast_chain).expect(&format!(
-            "could not find pair info for {:}",
-            fast_chain.name
-        ));
-
+        //
         // set up tycho stream collectors
         let (slow_block_handle, slow_eth_handle, slow_tycho_handle) = collector::Builder {
             tycho_url: slow_chain.tycho_url.clone(),
@@ -109,34 +105,30 @@ impl Kuma {
         .build()
         .wrap_err("failed to start tycho collector for chain : {fast_chain}")?;
 
-        // initialize single hop strategy
-        let slow_inventory = (
-            inventory[&slow_chain][slow_pair.token_a()].clone(),
-            inventory[&slow_chain][slow_pair.token_b()].clone(),
-        );
-        let fast_inventory = (
-            inventory[&fast_chain][fast_pair.token_a()].clone(),
-            inventory[&fast_chain][fast_pair.token_b()].clone(),
-        );
+        let slow_pair = pairs.get(&slow_chain).expect(&format!(
+            "could not find pair info for {:}",
+            slow_chain.name
+        ));
 
-        let strategy = CrossChainSingleHop {
-            slow_pair: slow_pair.clone(),
+        let strategy = strategy::Builder {
+            token_a: slow_pair.token_a().symbol.clone(),
+            token_b: slow_pair.token_b().symbol.clone(),
             slow_chain: slow_chain.clone(),
-            fast_pair: fast_pair.clone(),
             fast_chain: fast_chain.clone(),
-            slow_inventory,
-            fast_inventory,
+            inventory,
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
-        };
+        }
+        .build()
+        .wrap_err("failed to build strategy")?;
 
         Ok(Self {
             all_tokens: tokens_by_chain,
             slow_chain,
             slow_pair: slow_pair.clone(),
             fast_chain,
-            fast_pair: fast_pair.clone(),
+            fast_pair: strategy.fast_pair.clone(),
             slow_block_handle,
             slow_eth_handle,
             slow_tycho_handle,
@@ -162,12 +154,10 @@ impl Kuma {
 
         info!(command = "generating signal");
 
-        let slow_usdc = todo!();
         let mut slow_chain_states =
-            slow_block_handle.get_block_state_stream(slow_pair.clone(), slow_usdc);
-        let fast_usdc = todo!();
+            slow_block_handle.get_block_state_stream(slow_pair.clone(), strategy.slow_usdc.clone());
         let mut fast_chain_states =
-            fast_block_handle.get_block_state_stream(fast_pair.clone(), fast_usdc);
+            fast_block_handle.get_block_state_stream(fast_pair.clone(), strategy.fast_usdc.clone());
         // read state from stream
         let slow_state = slow_chain_states
             .next()
