@@ -44,8 +44,7 @@ impl PaginationQuery {
         let page_size = self
             .page_size
             .unwrap_or(DEFAULT_PAGE_SIZE)
-            .min(MAX_PAGE_SIZE)
-            .max(1);
+            .clamp(MAX_PAGE_SIZE, 1);
         (page, page_size)
     }
 

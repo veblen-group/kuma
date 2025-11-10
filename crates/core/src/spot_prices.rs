@@ -33,7 +33,7 @@ impl SpotPrices {
         }
     }
     pub fn try_from_sorted_prices(
-        sorted_spot_prices: &Vec<(PoolId, f64)>,
+        sorted_spot_prices: &[(PoolId, f64)],
         block_height: u64,
         chain: Chain,
         pair: Pair,

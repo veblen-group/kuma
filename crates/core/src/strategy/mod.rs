@@ -178,7 +178,8 @@ impl CrossChainSingleHop {
     /// the fast chain's `Swap`, and the a candidate `signals::CrossChainSingleHop`. The signals'
     /// expected profits are compared to find the optimal signal.
     ///
-    // TODO: add slow_inventory to logs?
+    /// TODO: add slow_inventory to logs?
+    #[allow(clippy::too_many_arguments)]
     fn find_optimal_signal(
         &self,
         // TODO: have an abstraction around slow = (height, pool_id, sims) and fast = (height, pool_id, protocol_sim, inventory)
@@ -300,10 +301,11 @@ impl CrossChainSingleHop {
             }
         };
 
-        Swap::from_protocol_sim(&amount_in, &token_in, &token_out, fast_state)
+        Swap::from_protocol_sim(&amount_in, token_in, token_out, fast_state)
             .wrap_err("swap simulation failed")
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn try_signal_from_precompute(
         &self,
         slow_sim: Swap,
@@ -347,7 +349,7 @@ impl CrossChainSingleHop {
             self.congestion_risk_discount_bps,
         )
         .map_err(|err| {
-            trace!(%slow_sim, %fast_sim,
+            trace!(%slow_sim, %fast_sim, %err,
                     "‼️ failed to make signal");
             err
         })

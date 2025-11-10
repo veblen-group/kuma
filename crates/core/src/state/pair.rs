@@ -1,16 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
-    pin::Pin,
     sync::Arc,
-    task::{self, Poll},
 };
 
-use crate::state::{self, block::Block};
-use futures::{Stream, StreamExt};
+use crate::state::{self};
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
-use tokio_stream::wrappers::WatchStream;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_common::models::token::Token,
     tycho_core::simulation::protocol_sim::ProtocolSim,

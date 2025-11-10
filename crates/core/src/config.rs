@@ -119,23 +119,24 @@ impl Config {
                     token_config.decimals,
                     token_config.tax,
                     &token_config.gas.clone(),
-                    chain.name.clone(),
+                    chain.name,
                     token_config.quality,
                 );
 
                 let inventory = token_config
                     .inventory
                     .get(&chain.name)
-                    .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?
-                    .clone();
+                    .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?;
 
                 let token_inventory = BigUint::from_str(inventory.as_str())
                     .wrap_err("Failed to parse inventory for {token.symbol} on {chain.name}")?;
 
                 if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
-                    match token_inventories.insert(token.clone(), token_inventory) {
-                        Some(_) => return Err(eyre!("duplicate token inventory")),
-                        None => (),
+                    if token_inventories
+                        .insert(token.clone(), token_inventory)
+                        .is_some()
+                    {
+                        return Err(eyre!("duplicate token inventory"));
                     }
                 } else {
                     inventories_by_chain.insert(
@@ -156,7 +157,7 @@ impl Config {
     pub fn get_usdc_token<'a>(tokens: impl Iterator<Item = &'a Token>) -> Option<Token> {
         tokens
             .into_iter()
-            .find(|token| token.symbol.to_ascii_uppercase() == "USDC")
+            .find(|token| token.symbol.eq_ignore_ascii_case("USDC"))
             .cloned()
     }
 
@@ -171,10 +172,10 @@ impl Config {
         for (chain, tokens) in tokens_for_chain {
             let a = tokens
                 .keys()
-                .find(|token| token.symbol.to_ascii_uppercase() == token_a.to_ascii_uppercase());
+                .find(|token| token.symbol.eq_ignore_ascii_case(token_a));
             let b = tokens
                 .keys()
-                .find(|token| token.symbol.to_ascii_uppercase() == token_b.to_ascii_uppercase());
+                .find(|token| token.symbol.eq_ignore_ascii_case(token_b));
 
             match (a, b) {
                 (None, _) | (_, None) => {

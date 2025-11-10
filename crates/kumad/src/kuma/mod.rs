@@ -54,8 +54,8 @@ impl Kuma {
             fast_chain,
         } in &cfg.strategies
         {
-            let slow_chain = Config::get_chain_from_name(&slow_chain, addrs_for_chain.keys())?;
-            let fast_chain = Config::get_chain_from_name(&fast_chain, addrs_for_chain.keys())?;
+            let slow_chain = Config::get_chain_from_name(slow_chain, addrs_for_chain.keys())?;
+            let fast_chain = Config::get_chain_from_name(fast_chain, addrs_for_chain.keys())?;
 
             // set up collectors for each chain
             for chain in [&slow_chain, &fast_chain] {
@@ -63,7 +63,7 @@ impl Kuma {
                     chain: chain.clone(),
                     tycho_url: chain.tycho_url.clone(),
                     tycho_api_key: cfg.tycho_api_key.clone(),
-                    token_addrs: addrs_for_chain[&chain].clone(),
+                    token_addrs: addrs_for_chain[chain].clone(),
                     add_tvl_threshold: cfg.add_tvl_threshold,
                     remove_tvl_threshold: cfg.remove_tvl_threshold,
                     shutdown_token: shutdown_token.clone(),
@@ -75,7 +75,7 @@ impl Kuma {
                 tycho_handles.entry(chain.clone()).or_insert(tycho_handle);
             }
 
-            let strategy = kuma_core::strategy::Builder {
+            let strategy_config = kuma_core::strategy::Builder {
                 token_a: token_a.clone(),
                 token_b: token_b.clone(),
                 slow_chain: slow_chain.clone(),
@@ -88,20 +88,24 @@ impl Kuma {
             .build()
             .wrap_err("failed to build strategy")?;
 
-            let slow_stream = block_handles[&strategy.slow_chain]
-                .get_block_state_stream(strategy.slow_pair.clone(), strategy.slow_usdc.clone());
+            let slow_stream = block_handles[&strategy_config.slow_chain].get_block_state_stream(
+                strategy_config.slow_pair.clone(),
+                strategy_config.slow_usdc.clone(),
+            );
 
-            let fast_stream = block_handles[&strategy.fast_chain]
-                .get_block_state_stream(strategy.fast_pair.clone(), strategy.fast_usdc.clone());
+            let fast_stream = block_handles[&strategy_config.fast_chain].get_block_state_stream(
+                strategy_config.fast_pair.clone(),
+                strategy_config.fast_usdc.clone(),
+            );
 
-            let slow_block_time = strategy
+            let slow_block_time = strategy_config
                 .slow_chain
                 .metadata
                 .average_blocktime_hint()
                 .expect("chain metadata for average block time not found");
 
             let strategy_handle = strategy::Builder {
-                strategy,
+                strategy_config,
                 slow_stream,
                 fast_stream,
                 slow_block_time,

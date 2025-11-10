@@ -9,7 +9,7 @@ use kuma_core::{database, signals, state::block::BlockStateStream, strategy};
 use super::{Handle, Worker};
 
 pub struct Builder {
-    pub strategy: strategy::CrossChainSingleHop,
+    pub strategy_config: strategy::CrossChainSingleHop,
     pub slow_stream: BlockStateStream,
     pub fast_stream: BlockStateStream,
     pub slow_block_time: Duration,
@@ -19,7 +19,7 @@ pub struct Builder {
 impl Builder {
     pub fn build(self) -> eyre::Result<Handle> {
         let Self {
-            strategy,
+            strategy_config: strategy,
             slow_stream,
             fast_stream,
             slow_block_time: slow_block_time_ms,

@@ -66,7 +66,7 @@ impl Precomputes {
             .iter()
             .filter_map(|pool_id| state.states.get(pool_id).map(|pool| (pool_id, pool)))
             .filter_map(|(pool_id, state)| {
-                match simulation::PoolSteps::from_protocol_sim(&pair, steps, inventory, state.as_ref()) {
+                match simulation::PoolSteps::from_protocol_sim(pair, steps, inventory, state.as_ref()) {
                     Ok(pool_sim) => Some((pool_id.clone(), pool_sim)),
                     Err(e) => {
                         error!(error = %e, pool.id = %pool_id, pair = %pair, "precompute failed, skipping pool");
@@ -76,7 +76,7 @@ impl Precomputes {
             });
         pool_sims.extend(precomputes);
 
-        let sorted_spot_prices: Vec<(state::PoolId, f64)> = make_sorted_spot_prices(&state, &pair);
+        let sorted_spot_prices: Vec<(state::PoolId, f64)> = make_sorted_spot_prices(state, pair);
         if sorted_spot_prices.is_empty() {
             warn!(pair= %pair, "No spot prices found");
         } else {

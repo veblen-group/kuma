@@ -9,7 +9,5 @@ async fn main() -> eyre::Result<()> {
 
     let config = Config::load()?;
 
-    let res = spawn(config).await?;
-
-    Ok(res)
+    spawn(config).await
 }

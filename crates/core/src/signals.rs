@@ -50,6 +50,7 @@ pub struct CrossChainSingleHop {
 }
 
 impl CrossChainSingleHop {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_from_simulations(
         slow_chain: &Chain,
         slow_pair: &Pair,
@@ -119,7 +120,7 @@ impl CrossChainSingleHop {
                 .ok_or_eyre("missing protocol component")?
                 .as_ref()
                 .clone();
-            create_solution(slow_component, &slow_swap_sim, slow_chain.signer().clone())?
+            create_solution(slow_component, slow_swap_sim, slow_chain.signer().clone())?
         };
 
         let fast_solution = {
@@ -131,10 +132,12 @@ impl CrossChainSingleHop {
             create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
         };
 
-        let slow_unsigned_tx = UnsignedTransaction::try_from_solution(&slow_solution, &slow_chain)
-            .wrap_err("Failed to create unsigned transaction from slow solution")?;
-        let fast_unsigned_tx = UnsignedTransaction::try_from_solution(&fast_solution, &fast_chain)
-            .wrap_err("Failed to create unsigned transaction from fast solution")?;
+        let slow_unsigned_tx =
+            UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
+                .wrap_err("Failed to create unsigned transaction from slow solution")?;
+        let fast_unsigned_tx =
+            UnsignedTransaction::try_from_solution(&fast_solution, fast_chain)
+                .wrap_err("Failed to create unsigned transaction from fast solution")?;
 
         // add gas prices and sign transactions
         Ok(Trade::new(slow_unsigned_tx, fast_unsigned_tx))

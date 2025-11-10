@@ -158,7 +158,7 @@ impl Worker {
             self.curr_eth_block = None;
             self.curr_block_sim = Some(block_sim);
 
-            if height_diff < (self.collector_lag_tolerance * -1) {
+            if height_diff < -self.collector_lag_tolerance {
                 error!(
                     lag = height_diff,
                     tolerance = self.collector_lag_tolerance,

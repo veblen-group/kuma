@@ -52,7 +52,7 @@ impl Kuma {
 
         info!("Parsed {} chains from config:", tokens_by_chain.len());
 
-        for (chain, _tokens) in &tokens_by_chain {
+        for chain in tokens_by_chain.keys() {
             info!(chain.name = %chain.name,
                         chain.id = %chain.metadata.id(),
                         "🔗 Initialized chain info from config");
