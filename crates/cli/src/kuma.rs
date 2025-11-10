@@ -172,7 +172,7 @@ impl Kuma {
         info!(block = %fast_state.pair_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
         // precompute data for signal
-        let precompute = strategy.precompute(slow_state.pair_state);
+        let precompute = strategy.precompute(slow_state);
 
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
         let fast_sorted_spot_prices =

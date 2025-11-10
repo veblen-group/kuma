@@ -83,6 +83,8 @@ impl CrossChainSingleHop {
 
         // TODO: save max slippage for each side?
 
+        // TODO: calculate expected profit in usdc
+
         Ok(Self {
             slow_chain: slow_chain.clone(),
             slow_pair: slow_pair.clone(),

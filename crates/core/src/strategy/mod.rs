@@ -19,6 +19,7 @@ use crate::{
     signals::{self, Direction, bps_discount},
     state::{
         self, PoolId,
+        block::BlockState,
         pair::{Pair, PairState},
     },
 };
@@ -49,9 +50,9 @@ pub struct CrossChainSingleHop {
 
 impl CrossChainSingleHop {
     #[instrument(skip_all)]
-    pub fn precompute(&self, slow_state: PairState) -> Precomputes {
+    pub fn precompute(&self, slow_state: BlockState) -> Precomputes {
         Precomputes::from_pair_state(
-            &slow_state,
+            &slow_state.pair_state,
             &self.slow_pair,
             &self.slow_inventory,
             None,
@@ -108,6 +109,7 @@ impl CrossChainSingleHop {
                 },
             )
         {
+            // TODO: feed token_a_usdc_price and token_b_usdc_price here as well
             match direction {
                 Direction::AtoB => {
                     if let Some(signal) = self.find_optimal_signal(
@@ -230,6 +232,7 @@ impl CrossChainSingleHop {
             );
 
             // make sims for mid+1
+            // TODO: usdc prices in here
             let next_signal = match self.try_signal_from_precompute(
                 slow_sims[mid + 1].clone(),
                 slow_protocol_component.clone(),
@@ -332,6 +335,7 @@ impl CrossChainSingleHop {
             }
         };
 
+        // TODO: usdc prices
         signals::CrossChainSingleHop::try_from_simulations(
             &self.slow_chain,
             &self.slow_pair,
@@ -557,6 +561,78 @@ mod tests {
         let reserve_b_u256 = alloy::primitives::U256::from_str(&reserve_b.to_string()).unwrap();
 
         Arc::new(UniswapV2State::new(reserve_a_u256, reserve_b_u256))
+    }
+
+    fn make_mainnet_weth_usdc_pair() -> Pair {
+        let weth = make_mainnet_weth();
+        let usdc = make_mainnet_usdc();
+        Pair::new(weth, usdc)
+    }
+
+    fn make_base_weth_usdc_pair() -> Pair {
+        let weth = make_base_weth();
+        let usdc = make_base_usdc();
+        Pair::new(weth, usdc)
+    }
+
+    fn make_mainnet_pepe_usdc_pair() -> Pair {
+        let pepe = make_mainnet_pepe();
+        let usdc = make_mainnet_usdc();
+        Pair::new(pepe, usdc)
+    }
+
+    fn make_base_pepe_usdc_pair() -> Pair {
+        let pepe = make_base_pepe();
+        let usdc = make_base_usdc();
+        Pair::new(pepe, usdc)
+    }
+
+    fn make_mainnet_weth_usdc_univ2_pair_state() -> PairState {
+        let pair = make_mainnet_weth_usdc_pair();
+        make_single_univ2_pair_state(
+            &pair,
+            0,
+            "0x0000000000000000000000000000000000000011",
+            500000000000000000,
+            1000000000000000000,
+            tycho_common::models::Chain::Ethereum,
+        )
+    }
+
+    fn make_mainnet_pepe_usdc_univ2_pair_state() -> PairState {
+        let pair = make_mainnet_pepe_usdc_pair();
+        make_single_univ2_pair_state(
+            &pair,
+            0,
+            "0x0000000000000000000000000000000000000022",
+            1000000000000000000,
+            500000000000000000,
+            tycho_common::models::Chain::Ethereum,
+        )
+    }
+
+    fn make_base_weth_usdc_univ2_pair_state() -> PairState {
+        let pair = make_base_weth_usdc_pair();
+        make_single_univ2_pair_state(
+            &pair,
+            0,
+            "0x0000000000000000000000000000000000000011",
+            500000000000000000,
+            1000000000000000000,
+            tycho_common::models::Chain::Base,
+        )
+    }
+
+    fn make_base_pepe_usdc_univ2_pair_state() -> PairState {
+        let pair = make_base_pepe_usdc_pair();
+        make_single_univ2_pair_state(
+            &pair,
+            0,
+            "0x0000000000000000000000000000000000000022",
+            1000000000000000000,
+            500000000000000000,
+            tycho_common::models::Chain::Base,
+        )
     }
 
     fn make_single_univ2_pair_state(

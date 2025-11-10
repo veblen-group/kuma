@@ -154,7 +154,8 @@ impl Worker {
                     );
 
                     // Generate precomputes
-                    let new_precompute = self.strategy.precompute(slow_state.pair_state);
+                    let new_precompute = self.strategy.precompute(slow_state);
+                    // TODO: get usdc spot prices for token a and token b
 
                     debug!(
                         block.height = new_precompute.block_height,
@@ -197,6 +198,9 @@ impl Worker {
                             repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
                         }.boxed());
 
+                        // TODO: get usdc spot prices for token a and token b
+
+                        // TODO: feed usdc prices in here as well
                         match self.strategy.generate_signal(precompute, fast_state.pair_state, fast_sorted_spot_prices) {
                             Ok(signal) => {
                                 info!(
