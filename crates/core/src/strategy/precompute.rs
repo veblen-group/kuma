@@ -7,7 +7,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
-use tracing::{error, instrument, trace};
+use tracing::{error, instrument, trace, warn};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use crate::{
@@ -47,8 +47,6 @@ impl Precomputes {
 
         // reuse precomputes for unmodified pools
         if let Some(mut precomputes) = unmodified_precomputes {
-            // TODO: maybe take this out and just keep the previous signals around in the run function and then feed them into generate_signal
-
             let unmodified_sims: HashMap<PoolId, simulation::PoolSteps> = state
                 .unmodified_pools
                 .iter()
@@ -80,7 +78,7 @@ impl Precomputes {
 
         let sorted_spot_prices: Vec<(state::PoolId, f64)> = make_sorted_spot_prices(&state, &pair);
         if sorted_spot_prices.is_empty() {
-            trace!(pair= %pair, "No spot prices found");
+            warn!(pair= %pair, "No spot prices found");
         } else {
             trace!(
                 // min a->b

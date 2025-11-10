@@ -35,6 +35,13 @@ pub struct TokenBalances {
 }
 
 impl TokenBalances {
+    pub fn get_balance(&self, token: &Token) -> BigUint {
+        self.balances
+            .get(&Address::from_slice(&token.address))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub async fn get_curr_balances(
         account_addr: Address,
         token_addrs: Vec<Address>,

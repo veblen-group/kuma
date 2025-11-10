@@ -4,14 +4,14 @@ use color_eyre::eyre::{self};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
-use kuma_core::{database, signals, state::pair::PairStateStream, strategy};
+use kuma_core::{database, signals, state::block::BlockStateStream, strategy};
 
 use super::{Handle, Worker};
 
 pub struct Builder {
     pub strategy: strategy::CrossChainSingleHop,
-    pub slow_stream: PairStateStream,
-    pub fast_stream: PairStateStream,
+    pub slow_stream: BlockStateStream,
+    pub fast_stream: BlockStateStream,
     pub slow_block_time: Duration,
     pub db: database::Handle,
 }

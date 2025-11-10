@@ -88,10 +88,13 @@ impl Kuma {
             .build()
             .wrap_err("failed to build strategy")?;
 
-            let slow_stream =
-                block_handles[&strategy.slow_chain].get_pair_state_stream(&strategy.slow_pair);
-            let fast_stream =
-                block_handles[&strategy.fast_chain].get_pair_state_stream(&strategy.fast_pair);
+            let slow_usdc = todo!();
+            let slow_stream = block_handles[&strategy.slow_chain]
+                .get_block_state_stream(strategy.slow_pair.clone(), slow_usdc);
+
+            let fast_usdc = todo!();
+            let fast_stream = block_handles[&strategy.fast_chain]
+                .get_block_state_stream(strategy.fast_pair.clone(), fast_usdc);
 
             let slow_block_time = strategy
                 .slow_chain

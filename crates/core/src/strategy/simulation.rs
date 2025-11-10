@@ -9,7 +9,7 @@ use std::fmt::Display;
 use color_eyre::eyre::{self, Context as _, eyre};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
+use tracing::{debug, warn};
 use tycho_simulation::{
     tycho_common::models::token::Token, tycho_core::simulation::protocol_sim::ProtocolSim,
 };
@@ -146,7 +146,7 @@ pub fn make_sorted_spot_prices(state: &PairState, pair: &Pair) -> Vec<(PoolId, f
             match spot_price {
                 Ok(price) => Some((id.clone(), price)),
                 Err(err) => {
-                    debug!(
+                    warn!(
                         error = %err,
                         pair = %pair,
                         "failed to get spot price, skipping pool"

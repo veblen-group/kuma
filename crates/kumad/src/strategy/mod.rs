@@ -16,7 +16,7 @@ use tracing::{debug, error, info, instrument};
 use kuma_core::{
     database, signals,
     spot_prices::SpotPrices,
-    state::pair::PairStateStream,
+    state::block::BlockStateStream,
     strategy::{self, Precomputes, simulation::make_sorted_spot_prices},
 };
 
@@ -82,8 +82,8 @@ impl Future for Handle {
 struct Worker {
     // TODO: set up strategy object from core
     strategy: strategy::CrossChainSingleHop,
-    slow_stream: PairStateStream,
-    fast_stream: PairStateStream,
+    slow_stream: BlockStateStream,
+    fast_stream: BlockStateStream,
     signal_tx: broadcast::Sender<signals::CrossChainSingleHop>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,
@@ -149,12 +149,12 @@ impl Worker {
                     submission_deadline = Some(Instant::now() + submission_delay);
 
                     debug!(
-                        block.height = slow_state.block_height,
+                        block.height = slow_state.pair_state.block_height,
                         "⏱️ Slow block received. Started timer for next signal generation."
                     );
 
                     // Generate precomputes
-                    let new_precompute = self.strategy.precompute(slow_state);
+                    let new_precompute = self.strategy.precompute(slow_state.pair_state);
 
                     debug!(
                         block.height = new_precompute.block_height,
@@ -182,12 +182,12 @@ impl Worker {
                     if let Some(precompute) = precompute.as_ref() {
                         // Step 3: Read latest fast chain state and generate signal
                         // TODO: fix this to use the curr fast state object
-                        let (slow_height, fast_height) = (precompute.block_height, fast_state.block_height);
-                        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &self.strategy.fast_pair);
+                        let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
+                        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair);
 
                         let spot_prices = SpotPrices::try_from_sorted_prices(
                             &fast_sorted_spot_prices,
-                            fast_state.block_height,
+                            fast_state.pair_state.block_height,
                             self.strategy.fast_chain.clone(),
                             self.strategy.fast_pair.clone()
                         ).wrap_err("fast chain spot prices should exist")?;
@@ -197,7 +197,7 @@ impl Worker {
                             repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
                         }.boxed());
 
-                        match self.strategy.generate_signal(precompute, fast_state, fast_sorted_spot_prices) {
+                        match self.strategy.generate_signal(precompute, fast_state.pair_state, fast_sorted_spot_prices) {
                             Ok(signal) => {
                                 info!(
                                     %signal,
@@ -227,7 +227,10 @@ impl Worker {
                             }
                         }
                     } else {
-                        debug!(block.height = fast_state.block_height, "New fast chain state but no slow chain precompute, skipping signal generation");
+                        debug!(
+                            block.height = fast_state.pair_state.block_height,
+                            "New fast chain state but no slow chain precompute, skipping signal generation"
+                        );
                     }
                 }
 

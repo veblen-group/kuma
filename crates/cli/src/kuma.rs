@@ -162,10 +162,12 @@ impl Kuma {
 
         info!(command = "generating signal");
 
-        let mut slow_chain_states = slow_block_handle.get_pair_state_stream(&slow_pair);
-        let mut fast_chain_states = fast_block_handle.get_pair_state_stream(&fast_pair);
-
-        // TODO: run until found signal
+        let slow_usdc = todo!();
+        let mut slow_chain_states =
+            slow_block_handle.get_block_state_stream(slow_pair.clone(), slow_usdc);
+        let fast_usdc = todo!();
+        let mut fast_chain_states =
+            fast_block_handle.get_block_state_stream(fast_pair.clone(), fast_usdc);
         // read state from stream
         let slow_state = slow_chain_states
             .next()
@@ -176,17 +178,21 @@ impl Kuma {
             .await
             .expect("chain b stream should yield initial block");
 
-        info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
-        info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
+        info!(block = %slow_state.pair_state.block_height, chain = %slow_chain.name, "reaped initial block");
+        info!(block = %fast_state.pair_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
         // precompute data for signal
-        let precompute = strategy.precompute(slow_state);
+        let precompute = strategy.precompute(slow_state.pair_state);
 
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
         let fast_sorted_spot_prices =
-            core::strategy::simulation::make_sorted_spot_prices(&fast_state, &fast_pair);
+            core::strategy::simulation::make_sorted_spot_prices(&fast_state.pair_state, &fast_pair);
         // compute arb signal
-        let signal = strategy.generate_signal(&precompute, fast_state, fast_sorted_spot_prices)?;
+        let signal = strategy.generate_signal(
+            &precompute,
+            fast_state.pair_state,
+            fast_sorted_spot_prices,
+        )?;
 
         info!(signal = ?signal, "📊 generated signal");
 

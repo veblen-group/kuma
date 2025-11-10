@@ -12,15 +12,13 @@ use tokio_stream::StreamExt as _;
 use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
+use tycho_common::models::token::Token;
 
+use crate::state::block::BlockStateStream;
 use crate::{
     chain::Chain,
     collector::eth::EthBlock,
-    state::{
-        block::Block,
-        pair::{Pair, PairStateStream},
-        tycho::BlockSim,
-    },
+    state::{block::Block, pair::Pair, tycho::BlockSim},
 };
 
 pub use builder::Builder;
@@ -55,9 +53,9 @@ impl Handle {
         self.block_rx.clone()
     }
 
-    pub fn get_pair_state_stream(&self, pair: &Pair) -> PairStateStream {
+    pub fn get_block_state_stream(&self, pair: Pair, usdc: Token) -> BlockStateStream {
         let block_rx = self.block_rx.clone();
-        PairStateStream::from_block_rx(pair.clone(), block_rx)
+        BlockStateStream::from_block_rx(pair, block_rx, usdc)
     }
 }
 
