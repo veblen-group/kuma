@@ -152,6 +152,14 @@ impl Config {
         Ok((tokens_by_chain, inventories_by_chain))
     }
 
+    /// Get USDC token for given chain
+    pub fn get_usdc_token<'a>(tokens: impl Iterator<Item = &'a Token>) -> Option<Token> {
+        tokens
+            .into_iter()
+            .find(|token| token.symbol.to_ascii_uppercase() == "USDC")
+            .cloned()
+    }
+
     /// Get trading pairs for given token symbols across configured chains
     pub fn get_chain_pairs(
         token_a: &str,

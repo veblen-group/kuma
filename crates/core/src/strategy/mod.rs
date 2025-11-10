@@ -9,6 +9,7 @@ use std::sync::Arc;
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, instrument, trace};
+use tycho_common::models::token::Token;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_core::simulation::protocol_sim::ProtocolSim,
 };
@@ -30,13 +31,14 @@ pub use precompute::Precomputes;
 pub use simulation::Swap;
 
 // Implementation of the arbitrage strategy
-// TODO: should this and precompute be different types or should this just populate
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrossChainSingleHop {
     // TODO: make a (chain, pair, inventory) tuple?
     pub slow_pair: Pair,
+    pub slow_usdc: Token,
     pub slow_chain: Chain,
     pub fast_pair: Pair,
+    pub fast_usdc: Token,
     pub fast_chain: Chain,
     pub slow_inventory: (BigUint, BigUint),
     pub fast_inventory: (BigUint, BigUint),
@@ -83,9 +85,6 @@ impl CrossChainSingleHop {
                 chain = %self.fast_chain,
                 "Computed spot prices for fast chain");
         }
-        // TODO: make a SpotPrices object from this
-        // db.write(precompute.spot_prices[0])
-        // db.write(precompute.spot_prices[precompute.spot_prices.len() - 1])
 
         if let Some((slow_id, fast_id, direction)) =
             find_first_crossed_pools(&precompute.sorted_spot_prices, &fast_sorted_spot_prices).map(
@@ -614,12 +613,14 @@ mod tests {
         // so pair order is always (pepe, weth) for uniswap zero2one
         let slow_chain = Chain::eth_mainnet();
         let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
+        let slow_usdc = make_mainnet_usdc();
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
         );
 
         let fast_chain = Chain::base_mainnet();
+        let fast_usdc = make_base_usdc();
         let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
@@ -628,9 +629,11 @@ mod tests {
 
         Arc::new(CrossChainSingleHop {
             slow_chain,
+            slow_usdc,
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
+            fast_usdc,
             fast_pair,
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
@@ -647,6 +650,7 @@ mod tests {
         // custom weth addr 0x0..2
         // so pair order is always (usdc, weth) for uniswap zero2one
         let slow_chain = Chain::eth_mainnet();
+        let slow_usdc = make_mainnet_usdc();
         let slow_pair = Pair::new(make_mainnet_usdc(), make_mainnet_weth());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
@@ -654,6 +658,7 @@ mod tests {
         );
 
         let fast_chain = Chain::base_mainnet();
+        let fast_usdc = make_base_usdc();
         let fast_pair = Pair::new(make_base_usdc(), make_base_weth());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
@@ -662,9 +667,11 @@ mod tests {
 
         Arc::new(CrossChainSingleHop {
             slow_chain,
+            slow_usdc,
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
+            fast_usdc,
             fast_pair,
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%

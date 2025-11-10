@@ -1,4 +1,4 @@
-use color_eyre::eyre::{self};
+use color_eyre::eyre::{self, OptionExt};
 
 use crate::{
     chain::Chain,
@@ -44,10 +44,17 @@ impl Builder {
             inventory[&fast_chain][fast_pair.token_b()].clone(),
         );
 
+        let slow_usdc = Config::get_usdc_token(inventory[&slow_chain].keys())
+            .ok_or_eyre("No USDC token found for slow chain")?;
+        let fast_usdc = Config::get_usdc_token(inventory[&fast_chain].keys())
+            .ok_or_eyre("No USDC token found for fast chain")?;
+
         Ok(CrossChainSingleHop {
             slow_pair: slow_pair.clone(),
+            slow_usdc,
             slow_chain: slow_chain.clone(),
             fast_pair: fast_pair.clone(),
+            fast_usdc,
             fast_chain: fast_chain.clone(),
             slow_inventory,
             fast_inventory,
