@@ -13,8 +13,7 @@ use kuma_core::{
     database, signals,
     spot_prices::SpotPrices,
     state::pair::PairStateStream,
-    strategy::simulation::make_sorted_spot_prices,
-    strategy::{self, Precomputes},
+    strategy::{self, Precomputes, simulation::make_sorted_spot_prices},
 };
 
 pub use builder::Builder;
@@ -23,7 +22,7 @@ mod builder;
 pub struct Handle {
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
-    #[allow(dead_code)]
+    strategy: strategy::CrossChainSingleHop,
     signal_rx: broadcast::Receiver<signals::CrossChainSingleHop>,
 }
 
@@ -42,9 +41,12 @@ impl Handle {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub fn get_signal_rx(&self) -> broadcast::Receiver<signals::CrossChainSingleHop> {
         self.signal_rx.resubscribe()
+    }
+
+    pub fn strategy_config(&self) -> strategy::CrossChainSingleHop {
+        self.strategy.clone()
     }
 }
 
@@ -210,7 +212,6 @@ impl Worker {
                                         eyre!("failed to write signal to db: {e:}")
                                     })
                                 }.boxed());
-                                panic!("Signal generated")
                             }
                             Err(e) => {
                                 debug!(
