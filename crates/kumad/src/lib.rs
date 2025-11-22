@@ -9,6 +9,7 @@ use kuma_core::config::Config;
 use tokio::task::{JoinError, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
+mod execution;
 mod kuma;
 mod strategy;
 pub mod telemetry;

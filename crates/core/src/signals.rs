@@ -102,7 +102,7 @@ impl CrossChainSingleHop {
         })
     }
 
-    pub fn try_into_trade(&self) -> eyre::Result<Trade> {
+    pub fn try_promote(&self) -> eyre::Result<Trade> {
         let Self {
             slow_chain,
             slow_protocol_component,
