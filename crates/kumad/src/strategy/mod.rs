@@ -1,4 +1,8 @@
-//! Strategy module for managing cross-chain arbitrage signal generation
+//! Strategy worker for cross-chain arbitrage signal generation and database persistence.
+//!
+//! Coordinates slow and fast chain state streams to generate profitable arbitrage signals.
+//! Uses a timing-based submission system (75% of slow block time) to maximize signal freshness.
+//! Persists spot prices and generated signals to the database for analysis and monitoring.
 
 use std::{pin::Pin, time::Duration};
 

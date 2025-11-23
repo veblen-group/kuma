@@ -1,26 +1,19 @@
-# Database configuration
-database:
-  user: "api_user"
-  password: "password"
-  host: "localhost"
-  port: 5432
-  dbname: "api_db"
-  max_connections: 10
-  connection_timeout_secs: 30
-  idle_timeout_secs: 600
-
-# Server configuration
-server:
-  host: "0.0.0.0"
-  port: 8080
-
 # Arbitrage paths to create strategies for
 strategies:
   - token_a: UNI
     token_b: WETH
     slow_chain: ethereum
     fast_chain: unichain
-# TODO: multiple strats, additional chains, additional tokens
+
+binary_search_steps: 16384
+
+# Risk and trading parameters
+congestion_risk_discount_bps: 0
+max_slippage_bps: 25
+
+# Tycho simulation stream filter
+add_tvl_threshold: 5.0
+remove_tvl_threshold: 1.0
 
 # Token configurations with addresses on multiple chains
 tokens:
@@ -102,35 +95,41 @@ tokens:
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
-    rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/"
+    rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/"
     tycho_url: "tycho-beta.propellerheads.xyz/"
-    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
-    private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
+    private_key: ""
 
   - name: base
-    rpc_url: "https://base-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
-    rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_url: "https://base-mainnet.g.alchemy.com/v2/"
+    rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
-    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
-    private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
+    private_key: ""
 
   - name: unichain
-    rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
-    rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/yfnwWHSb4KmV2zmbJqw04"
+    rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/"
+    rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
-    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3"
-    private_key: "0x8178c037a66c2de76675b7e5f9a42d83682fe3b4c0c1aab7f57c77380fbb192b"
-
-binary_search_steps: 16384
-
-# Risk and trading parameters
-congestion_risk_discount_bps: 0
-max_slippage_bps: 25
-
-# Tycho simulation stream filter
-add_tvl_threshold: 5.0
-remove_tvl_threshold: 1.0
+    permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
+    private_key: ""
 
 # tycho simulation
-tycho_api_key: "a80dcbce-1c32-4711-8f92-f95123526c02"
+tycho_api_key: ""
+
+# Database configuration
+database:
+  user: "api_user"
+  password: "password"
+  host: "localhost"
+  port: 5432
+  dbname: "api_db"
+  max_connections: 10
+  connection_timeout_secs: 30
+  idle_timeout_secs: 600
+
+# Backend server configuration
+server:
+  host: "0.0.0.0"
+  port: 8080

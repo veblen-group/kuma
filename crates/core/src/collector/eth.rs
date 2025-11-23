@@ -1,14 +1,7 @@
-//! This module provides functionality to collect Ethereum block headers and token balances from an Ethereum node's JSON-RPC API.
-//! Headers are collected from `eth_getBlock` and token balances are parsed from logs using the `TokenBalances` struct.
+//! Ethereum block and token balance collector via WebSocket subscription.
 //!
-//! The `Handle` struct represents a handle to the collector, allowing for shutdown, awaiting the worker's result
-//! and getting a receiver for the latest block.
-//! The `Worker` struct represents the worker that collects data from the Ethereum node's JSON-RPC API.
-//!
-//! The `EthBlock` type represents a block header and token balances.
-//!
-//! The `Handle` struct provides methods for shutting down the collector and awaiting the worker's result.
-//! The `Future` trait implementation for the `Handle` struct allows for awaiting the worker's result.
+//! Subscribes to block headers and tracks token balance changes for a configured account address
+//! by monitoring transfer logs. Provides a stream of `(Header, TokenBalances)` tuples.
 
 use std::{pin::Pin, str::FromStr, sync::Arc};
 

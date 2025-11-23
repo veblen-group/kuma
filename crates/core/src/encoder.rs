@@ -1,3 +1,8 @@
+//! Transaction encoding and signing for Tycho router execution.
+//!
+//! Converts swap solutions into signed Ethereum transactions with Permit2 approvals,
+//! handling EIP712 signature generation and ABI encoding for the Tycho router contract.
+
 use std::str::FromStr as _;
 use std::u64;
 

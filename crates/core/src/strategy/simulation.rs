@@ -1,3 +1,9 @@
+//! DEX swap simulation utilities.
+//!
+//! Provides swap simulation functionality using Tycho's protocol simulators. Generates
+//! swap outcomes across multiple inventory steps for both directions of a pair, and
+//! computes sorted spot prices for arbitrage detection.
+
 use std::fmt::Display;
 
 use color_eyre::eyre::{self, Context as _, eyre};
