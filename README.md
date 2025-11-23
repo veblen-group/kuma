@@ -6,9 +6,7 @@ Cross-chain arbitrage bot for [Tycho Community Extensions TAP-6](https://github.
 [Proposal link](https://hackmd.io/qU6uAJ2BQe2pDwI2k9m_XA) (or in the [docs](docs/tap6-proposal.md) directory).
 
 ## Local Development
-See [Prerequisites](#prerequisites)
-
-### Quick Start
+See [Prerequisites](#prerequisites) to make sure all dependencies are installed.
 
 Follow these steps to get the full system running locally:
 
@@ -39,7 +37,51 @@ Follow these steps to get the full system running locally:
    just kumad-split
    ```
 
-**Note**: Signing Permit2 is required only once per chain per wallet per token. Use the CLI utility to sign Permit2 payloads (see [CLI Utilities](#cli-utilities)).
+**Note**: Signing Permit2 is required only once per chain per wallet. Use the CLI utility to sign Permit2 payloads (see [CLI Utilities](#cli-utilities)).
+
+## CLI Utilities
+
+The `kuma-cli` provides several utilities for testing and interacting with the system:
+
+### Generate Signals
+```bash
+just generate-signal usdc weth ethereum unichain
+```
+
+This command will try to generate a signal from the next block on the provided chains.
+
+### Dry Run
+```bash
+just dry-run signal.json trade.json
+```
+
+Encodes a signal into calldata and signs the transactions, saving the unexecuted trade to the provided output path.
+
+### Trade Execution
+```bash
+just execute-trade trade.json
+```
+
+Executes a trade from the signed transaction data created by `dry-run`.
+
+### Get Token Data
+```bash
+just get-tokens ethereum # alt: base, unichain
+```
+
+This retrieves comprehensive token data including addresses, decimals, tax information, and gas costs. The output can be used to populate the `tokens` section of `kuma.yaml`.
+
+### Sign Permit2
+```bash
+just init-permit2
+```
+
+This signs the Permit2 approval that allows the arbitrage contract to spend your tokens. **This only needs to be done once per chain per wallet, ever.** The approval persists across all future trades.
+
+The permit will be signed for all the tokens configured for the given chain in [`kuma.yaml`](kuma.yaml)
+
+After signing, you can execute trades without needing additional approvals.
+
 
 ### Configuration (`kuma.yaml`)
 
@@ -191,9 +233,7 @@ The schema includes tables for:
 TODO
 
 #### Reset the database
-**Reset database** (removes all data):
 ```bash
-# Using Just commands (recommended)
 just db-reset
 ```
 
@@ -212,49 +252,6 @@ just db-prepare
 ```
 
 If the database schema is modified, you may need to reset the database and run migrations again before recompiling with the SQLx CLI.
-
-## CLI Utilities
-
-The `kuma-cli` provides several utilities for testing and interacting with the system:
-
-### Generate Signals
-```bash
-just generate-signal usdc weth ethereum unichain
-```
-
-This command will try to generate a signal from the next block on the provided chains.
-
-### Dry Run
-```bash
-just dry-run signal.json trade.json
-```
-
-Encodes a signal into calldata and signs the transactions, saving the unexecuted trade to the provided output path.
-
-### Trade Execution
-```bash
-just execute-trade trade.json
-```
-
-Executes a trade from the signed transaction data created by `dry-run`.
-
-### Get Token Data
-```bash
-just get-tokens ethereum # alt: base, unichain
-```
-
-This retrieves comprehensive token data including addresses, decimals, tax information, and gas costs. The output can be used to populate the `tokens` section of `kuma.yaml`.
-
-### Sign Permit2
-```bash
-just init-permit2
-```
-
-This signs the Permit2 approval that allows the arbitrage contract to spend your tokens. **This only needs to be done once per chain per wallet, ever.** The approval persists across all future trades.
-
-The permit will be signed for all the tokens configured for the given chain in [`kuma.yaml`](kuma.yaml)
-
-After signing, you can execute trades without needing additional approvals.
 
 ## Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
