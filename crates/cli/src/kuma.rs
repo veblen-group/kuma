@@ -164,6 +164,8 @@ impl Kuma {
 
         let mut slow_chain_states = slow_block_handle.get_pair_state_stream(&slow_pair);
         let mut fast_chain_states = fast_block_handle.get_pair_state_stream(&fast_pair);
+
+        // TODO: run until found signal
         // read state from stream
         let slow_state = slow_chain_states
             .next()

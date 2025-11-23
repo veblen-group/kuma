@@ -1,4 +1,8 @@
-//! Module for interacting with Tycho Simulation's ProtocolStream
+//! Tycho Simulation protocol state collector.
+//!
+//! Subscribes to Tycho's ProtocolStream for real-time DEX state updates across configured
+//! exchanges (UniswapV2, UniswapV3, PancakeSwap, etc.). Applies TVL filtering and produces
+//! a stream of `BlockSim` updates containing pool states and metadata.
 use std::collections::HashMap;
 use std::pin::Pin;
 

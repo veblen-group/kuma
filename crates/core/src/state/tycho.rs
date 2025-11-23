@@ -1,3 +1,9 @@
+//! DEX protocol state snapshot and update management.
+//!
+//! `BlockSim` represents a snapshot of all DEX pool states at a specific block height,
+//! tracking modified and unmodified pools. Supports incremental updates from Tycho's
+//! protocol stream and pair-specific state extraction.
+
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

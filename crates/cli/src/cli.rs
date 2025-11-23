@@ -71,6 +71,8 @@ impl Cli {
                 // Run the command with the Kuma instance
                 let signal = kuma.generate_signal().await?;
                 info!(%signal, "✅ Generated signal");
+
+                todo!("save signal to file");
             }
             Commands::DryRun(cmd) => {
                 cmd.run(config).await?;

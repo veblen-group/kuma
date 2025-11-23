@@ -1,3 +1,9 @@
+//! Precomputed swap simulations for strategy optimization.
+//!
+//! Creates a series of swap simulations across inventory steps for each pool, caching
+//! spot prices and simulation results. Enables efficient binary search during signal
+//! generation by reusing simulations for unmodified pools across blocks.
+
 use std::{collections::HashMap, sync::Arc};
 
 use num_bigint::BigUint;
