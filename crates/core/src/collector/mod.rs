@@ -1,5 +1,8 @@
-//! This collector multiplexes data from the Ethereum JSON RPC collector and the Tycho simulation stream.
-//! It provides a simplified handle for getting blocks, or pair-specific state updates.
+//! Block collector that synchronizes Ethereum on-chain data with Tycho DEX state.
+//!
+//! Multiplexes streams from the Ethereum RPC collector (block headers and token balances)
+//! and Tycho simulation collector (DEX pool states), ensuring block height alignment with
+//! configurable lag tolerance. Provides unified `Block` objects and pair-specific state streams.
 use std::{pin::Pin, sync::Arc};
 
 use color_eyre::eyre::{self};

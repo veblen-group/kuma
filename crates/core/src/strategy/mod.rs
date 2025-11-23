@@ -1,3 +1,9 @@
+//! Cross-chain single-hop arbitrage strategy implementation.
+//!
+//! Detects price differences between DEX pools on slow and fast chains for a token pair.
+//! Uses precomputed swap simulations on the slow chain and real-time simulation on the fast
+//! chain to identify profitable arbitrage opportunities via binary search optimization.
+
 use std::sync::Arc;
 
 use color_eyre::eyre::{self, Context, eyre};
