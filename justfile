@@ -5,10 +5,16 @@ set fallback
 
 # CLI commands
 ###################
-generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
+generate-signal token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
     cargo run -p kuma-cli generate-signals \
     --token-a {{token-a}} --token-b {{token-b}} \
     --slow-chain {{slow-chain}} --fast-chain {{fast-chain}} \
+
+dry-run input="signal.json" output="./trade.json":
+    echo "TODO"
+
+execute-trade input="trade.json":
+    echo "TODO"
 
 get-tokens chain="ethereum":
     cargo run -p kuma-cli tokens --chain {{chain}}
