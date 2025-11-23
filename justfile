@@ -5,7 +5,6 @@ set fallback
 
 # CLI commands
 ###################
-# TODO: use compiled binaries instead of cargo run
 generate-signals token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="unichain":
     cargo run -p kuma-cli generate-signals \
     --token-a {{token-a}} --token-b {{token-b}} \
@@ -36,8 +35,42 @@ kumad-stop:
 
 # Webapp
 ###################
+# Run webapp in dev mode
 webapp-dev:
     cd webapp && npm run dev
+
+# Build the Next.js app
+webapp-build:
+    cd webapp && npm run build
+
+# Start the webapp
+webapp-start:
+    cd webapp && npm run start
+
+# Database
+#####################
+# Start PostgreSQL database with Docker Compose and run migrations
+db-start:
+  docker compose --profile db up -d
+
+# Stop PostgreSQL database with Docker Compose
+db-stop:
+  docker compose --profile db down
+
+# Reset database (removes all data)
+db-reset:
+    #!/usr/bin/env bash
+    docker exec kuma-db psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations" --target-version "001"
+
+# Run database migrations
+db-migrate-test:
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
+
+# Compile-time checks for postgres queries
+db-prepare:
+    cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}"
+
 
 # Backend API server commands
 ##############################
@@ -73,30 +106,6 @@ docker-run:
 # Stop all services
 docker-stop:
   docker-compose --profile all down
-
-# Database
-#####################
-# Start PostgreSQL database with Docker Compose and run migrations
-db-start:
-  docker compose --profile db up -d
-
-# Stop PostgreSQL database with Docker Compose
-db-stop:
-  docker compose --profile db down
-
-# Reset database (removes all data)
-db-reset:
-    #!/usr/bin/env bash
-    docker exec kuma-db psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations" --target-version "001"
-
-# Run database migrations
-db-migrate-test:
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
-
-# Compile-time checks for postgres queries
-db-prepare:
-    cargo sqlx prepare --workspace --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}"
 
 # Linting & formatting
 ##################
