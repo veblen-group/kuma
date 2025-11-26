@@ -138,9 +138,9 @@ tokens:
       - 1000
     quality: 100
     inventory:
-      ethereum: 500
-      base: 500
-      unichain: 500
+      ethereum: "500000000000000000000"
+      base: "5000000000000000000000"
+      unichain: "500000000000000000000"
 ```
 
 - **addresses**: Token contract address on each chain

@@ -129,8 +129,8 @@ impl Config {
                     .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?
                     .clone();
 
-                let token_inventory =
-                    BigUint::from((inventory * 10f64.powi(token.decimals as i32)) as u128);
+                let token_inventory = BigUint::from_str(inventory.as_str())
+                    .wrap_err("Failed to parse inventory for {token.symbol} on {chain.name}")?;
 
                 if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
                     match token_inventories.insert(token.clone(), token_inventory) {
@@ -219,7 +219,7 @@ pub struct TokenConfig {
     pub quality: u32,
 
     /// Existing inventory for this token
-    pub inventory: HashMap<tycho_common::models::Chain, f64>,
+    pub inventory: HashMap<tycho_common::models::Chain, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
