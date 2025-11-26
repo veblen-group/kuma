@@ -130,7 +130,7 @@ impl Config {
                     .clone();
 
                 let token_inventory = BigUint::from_str(inventory.as_str())
-                    .wrap_err("failed getting inventory from config")?;
+                    .wrap_err("Failed to parse inventory for {token.symbol} on {chain.name}")?;
 
                 if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
                     match token_inventories.insert(token.clone(), token_inventory) {
