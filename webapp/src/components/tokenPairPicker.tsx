@@ -9,6 +9,7 @@ import {
     PolygonCircleColorful,
     ChainlinkCircleColorful,
     AvaxCircleColorful,
+    UniCircleColorful
 } from '@ant-design/web3-icons';
 
 const WBTC: Token = {
@@ -18,36 +19,11 @@ const WBTC: Token = {
     icon: <WBTCCircleColorful />,
     availableChains: [],
 };
-
-const SOL: Token = {
-    symbol: 'SOL',
-    name: 'Solana',
-    decimal: 9,
-    icon: <SolanaCircleColorful />,
-    availableChains: [],
-};
-
-const MATIC: Token = {
-    symbol: 'MATIC',
-    name: 'Polygon',
+const UNI: Token = {
+    symbol: 'UNI',
+    name: 'Uniswap',
     decimal: 18,
-    icon: <PolygonCircleColorful />,
-    availableChains: [],
-};
-
-const LINK: Token = {
-    symbol: 'LINK',
-    name: 'Chainlink',
-    decimal: 18,
-    icon: <ChainlinkCircleColorful />,
-    availableChains: [],
-};
-
-const AVAX: Token = {
-    symbol: 'AVAX',
-    name: 'Avalanche',
-    decimal: 18,
-    icon: <AvaxCircleColorful />,
+    icon: <UniCircleColorful />,
     availableChains: [],
 };
 
@@ -60,7 +36,7 @@ const tokens: Token[] = [
     USDC,
     USDT,
     WBTC,
-    SOL,
+    UNI,
 ];
 
 interface TokenPairPickerProps {

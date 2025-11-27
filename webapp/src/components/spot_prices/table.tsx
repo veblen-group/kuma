@@ -41,7 +41,7 @@ export function SpotPriceTable({ pair }: SpotPriceTableProps) {
     },
     {
       placeholderData: previousData => previousData,
-      staleTime: 1000 * 60 * 5, // 1 minute
+      refetchInterval: 5000, // 5 seconds
     }
   );
 
