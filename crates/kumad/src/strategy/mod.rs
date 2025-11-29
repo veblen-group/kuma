@@ -1,22 +1,8 @@
-//! Strategy worker for cross-chain arbitrage signal generation and database persistence.
+//! Strategy worker for cross-chain arbitrage signal generation and persistence.
 //!
-//! Coordinates slow and fast chain state streams to generate profitable arbitrage signals.
-//! Uses a timing-based submission system (75% of slow block time) to maximize signal freshness.
-//! Persists spot prices and generated signals to the database for analysis and monitoring.
-//! Strategy module for managing cross-chain arbitrage signal generation
-//!
-//! biased loop
-//! 1. shutdown signal
-//! 2. timer ended and there's a signal to emit - populate the signal emission
-//! 2. slow chain updates
-//!  1. set up signal generation timer
-//!  2. precompute
-//!  3. save spot prices to db
-//! 3. fast chain updates
-//!  1. try to generate signal from precompute
-//!  2. overwrite current signal
-//! 4. db write
-//! 5. emit signal
+//! This module coordinates slow and fast chain state streams to generate profitable arbitrage signals.
+//! It employs a timing-based submission system, triggered at 75% of the slow block time, to maximize signal freshness.
+//! All generated spot prices and arbitrage signals are persisted to the database for analysis and monitoring.
 
 use std::{pin::Pin, time::Duration};
 
@@ -108,6 +94,30 @@ struct Worker {
 }
 
 impl Worker {
+    /// The main event loop for the strategy worker. It uses a `tokio::select!` biased loop
+    /// to prioritize shutdown signals, then signal emission, and then process slow and fast
+    /// chain updates. Database writes are handled concurrently via `FuturesUnordered`.
+    ///
+    /// The loop operates as follows:
+    ///
+    /// 1.  **Shutdown Signal**: Always the highest priority. If a shutdown signal is received,
+    ///     the worker will gracefully exit.
+    /// 2.  **Signal Emission Timer**: If a signal is present (`curr_signal` is `Some`) and the
+    ///     `submission_deadline` has been reached, the signal is emitted via `signal_tx`.
+    /// 3.  **Slow Chain Updates**: When a new slow chain block state is received:
+    ///     *   A timer (`submission_deadline`) is started for emitting the signal (75% of the slow block time).
+    ///     *   Precomputations are performed based on the slow chain state.
+    ///     *   Spot prices for the slow chain (A/B, A/USDC, B/USDC) are calculated and pushed
+    ///         to `db_writes` for asynchronous persistence.
+    /// 4.  **Fast Chain Updates**: When a new fast chain block state is received:
+    ///     *   If `precompute` data from the slow chain is available, a cross-chain signal is
+    ///         attempted to be generated using the latest fast chain state and the slow chain precomputes.
+    ///     *   Spot prices for the fast chain (A/B, A/USDC, B/USDC) are calculated and pushed
+    ///         to `db_writes` for asynchronous persistence.
+    ///     *   If a profitable signal is generated, it updates `curr_signal` and is also
+    ///         pushed to `db_writes` for asynchronous persistence.
+    /// 5.  **Database Writes**: Any completed database write futures from `db_writes` are
+    ///     polled. Errors during database writes are logged but do not block the main loop.
     #[instrument(name = "strategy_worker", skip(self), fields(
         slow_chain = self.strategy.slow_chain.name.to_string(),
         fast_chain = self.strategy.fast_chain.name.to_string(),
@@ -172,6 +182,7 @@ impl Worker {
                     );
 
                     // calculate usdc spot prices
+                    // TODO: parallelize with the a<->b simulation
                     let prices_a_usdc = make_prices(&slow_state.token_a_usdc_state, self.strategy.slow_token_a_usdc.clone(), self.strategy.slow_chain.clone())
                         .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.slow_token_a_usdc))?;
                     let prices_b_usdc = make_prices(&slow_state.token_b_usdc_state, self.strategy.slow_token_b_usdc.clone(), self.strategy.slow_chain.clone())

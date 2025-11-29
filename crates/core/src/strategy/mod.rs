@@ -117,7 +117,6 @@ impl CrossChainSingleHop {
                 },
             )
         {
-            // TODO: feed token_a_usdc_price and token_b_usdc_price here as well
             match direction {
                 Direction::AtoB => {
                     if let Some(signal) = self.find_optimal_signal(
@@ -125,11 +124,15 @@ impl CrossChainSingleHop {
                         precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
+                        slow_prices_a_usdc,
+                        slow_prices_b_usdc,
                         fast_state.states[&fast_id].as_ref(),
                         fast_state.metadata[&fast_id].clone(),
                         &fast_id,
                         fast_state.block_height,
                         &self.fast_inventory.1,
+                        fast_prices_a_usdc,
+                        fast_prices_b_usdc,
                     ) {
                         trace!(
                             slow_sim = %signal.slow_swap_sim,
@@ -151,11 +154,15 @@ impl CrossChainSingleHop {
                         precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
+                        slow_prices_a_usdc,
+                        slow_prices_b_usdc,
                         fast_state.states[&fast_id].as_ref(),
                         fast_state.metadata[&fast_id].clone(),
                         &fast_id,
                         fast_state.block_height,
                         &self.fast_inventory.0,
+                        fast_prices_a_usdc,
+                        fast_prices_b_usdc,
                     ) {
                         trace!(slow_sim = %signal.slow_swap_sim, fast_sim = %signal.fast_swap_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
                         Ok(signal)
@@ -197,11 +204,15 @@ impl CrossChainSingleHop {
         slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
+        slow_prices_a_usdc: &SpotPrices,
+        slow_prices_b_usdc: &SpotPrices,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
+        fast_prices_a_usdc: &SpotPrices,
+        fast_prices_b_usdc: &SpotPrices,
     ) -> Option<signals::CrossChainSingleHop> {
         let (mut left, mut right) = (0, slow_sims.len() - 1);
 
@@ -216,11 +227,15 @@ impl CrossChainSingleHop {
                 slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
+                slow_prices_a_usdc,
+                slow_prices_b_usdc,
                 fast_state,
                 fast_protocol_component.clone(),
                 fast_pool_id,
                 fast_height,
                 fast_inventory,
+                fast_prices_a_usdc,
+                fast_prices_b_usdc,
             ) {
                 Ok(signal) => signal,
                 Err(err) => {
@@ -246,11 +261,15 @@ impl CrossChainSingleHop {
                 slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
+                slow_prices_a_usdc,
+                slow_prices_b_usdc,
                 fast_state,
                 fast_protocol_component.clone(),
                 fast_pool_id,
                 fast_height,
                 fast_inventory,
+                fast_prices_a_usdc,
+                fast_prices_b_usdc,
             ) {
                 Ok(signal) => signal,
                 Err(err) => {
@@ -323,11 +342,15 @@ impl CrossChainSingleHop {
         slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
+        slow_prices_a_usdc: &SpotPrices,
+        slow_prices_b_usdc: &SpotPrices,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
+        fast_prices_a_usdc: &SpotPrices,
+        fast_prices_b_usdc: &SpotPrices,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         let fast_sim = match self.swap_from_precompute(
             slow_sim.clone(),
@@ -343,7 +366,6 @@ impl CrossChainSingleHop {
             }
         };
 
-        // TODO: usdc prices
         signals::CrossChainSingleHop::try_from_simulations(
             &self.slow_chain,
             &self.slow_pair,
@@ -351,18 +373,21 @@ impl CrossChainSingleHop {
             slow_pool_id,
             slow_height,
             slow_sim.clone(),
+            slow_prices_a_usdc,
+            slow_prices_b_usdc,
             &self.fast_chain,
             &self.fast_pair,
             fast_protocol_component,
             fast_pool_id,
             fast_height,
             fast_sim.clone(),
+            fast_prices_a_usdc,
+            fast_prices_b_usdc,
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
         )
         .map_err(|err| {
-            trace!(%slow_sim, %fast_sim, %err,
-                    "‼️ failed to make signal");
+            trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
             err
         })
     }
@@ -483,7 +508,6 @@ mod tests {
         )
     }
 
-    #[allow(dead_code)]
     fn make_6_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
         Token::new(
             // 0x0..03 address for uniswap zero2one pool order
@@ -700,14 +724,18 @@ mod tests {
         let slow_chain = Chain::eth_mainnet();
         let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
         let slow_usdc = make_mainnet_usdc();
+        let slow_token_a_usdc = Pair::new(make_mainnet_pepe(), slow_usdc.clone());
+        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
         );
 
         let fast_chain = Chain::base_mainnet();
-        let fast_usdc = make_base_usdc();
         let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
+        let fast_usdc = make_base_usdc();
+        let fast_token_a_usdc = Pair::new(make_base_pepe(), fast_usdc.clone());
+        let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
@@ -726,6 +754,10 @@ mod tests {
             congestion_risk_discount_bps: 25,
             // min_profit_threshold: 0.5, // 0.5%
             binary_search_steps: 16,
+            slow_token_a_usdc,
+            slow_token_b_usdc,
+            fast_token_a_usdc,
+            fast_token_b_usdc,
         })
     }
 
@@ -737,7 +769,10 @@ mod tests {
         // so pair order is always (usdc, weth) for uniswap zero2one
         let slow_chain = Chain::eth_mainnet();
         let slow_usdc = make_mainnet_usdc();
-        let slow_pair = Pair::new(make_mainnet_usdc(), make_mainnet_weth());
+        let slow_token_a = make_6_dec_token(slow_chain.name, "SLOW");
+        let slow_pair = Pair::new(slow_token_a.clone(), make_mainnet_weth());
+        let slow_token_a_usdc = Pair::new(slow_token_a, slow_usdc.clone());
+        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -745,7 +780,10 @@ mod tests {
 
         let fast_chain = Chain::base_mainnet();
         let fast_usdc = make_base_usdc();
-        let fast_pair = Pair::new(make_base_usdc(), make_base_weth());
+        let fast_token_a = make_6_dec_token(fast_chain.name, "FAST");
+        let fast_pair = Pair::new(fast_token_a.clone(), make_base_weth());
+        let fast_token_a_usdc = Pair::new(fast_token_a, fast_usdc.clone());
+        let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),
@@ -764,6 +802,10 @@ mod tests {
             congestion_risk_discount_bps: 25,
             // min_profit_threshold: 0.5, // 0.5%
             binary_search_steps: 16,
+            slow_token_a_usdc,
+            slow_token_b_usdc,
+            fast_token_a_usdc,
+            fast_token_b_usdc,
         })
     }
 
@@ -913,6 +955,7 @@ mod tests {
     fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
+        // pepe -> weth price = 2
         let slow_state = make_single_univ2_pair_state(
             &strategy.slow_pair,
             2000,
@@ -922,6 +965,27 @@ mod tests {
             tycho_common::models::Chain::Ethereum,
         );
 
+        // pepe -> usdc price = 10
+        let slow_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            2000,
+            "0xabc",
+            10_000,
+            1_000,
+            tycho_common::models::Chain::Ethereum,
+        );
+
+        // weth -> usdc price = 15
+        let slow_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            2000,
+            "0xdef",
+            15_000,
+            1_000,
+            tycho_common::models::Chain::Ethereum,
+        );
+
+        // pepe -> weth price = 5
         let fast_state = make_single_univ2_pair_state(
             &strategy.fast_pair,
             100,
@@ -931,10 +995,67 @@ mod tests {
             tycho_common::models::Chain::Base,
         );
 
+        // pepe -> usdc price = 10
+        let fast_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_a_usdc,
+            2000,
+            "0xghi",
+            10_000,
+            1_000,
+            tycho_common::models::Chain::Base,
+        );
+        // weth -> usdc price = 15
+        let fast_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_b_usdc,
+            2000,
+            "0xjkl",
+            15_000,
+            1_000,
+            tycho_common::models::Chain::Base,
+        );
+
         let precompute = strategy.precompute(slow_state);
+        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_a_usdc_state, &strategy.slow_token_a_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_a_usdc.clone(),
+        )
+        .expect("spot prices should exist");
+        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_b_usdc.clone(),
+        )
+        .expect("spot prices should exist");
+
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_a_usdc_state, &strategy.fast_token_a_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_a_usdc.clone(),
+        )
+        .expect("spot prices should exist");
+        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_b_usdc_state, &strategy.fast_token_b_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_b_usdc.clone(),
+        )
+        .expect("spot prices should exist");
+
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                &slow_prices_a_usdc,
+                &slow_prices_b_usdc,
+                fast_state.clone(),
+                fast_sorted_spot_prices,
+                &fast_prices_a_usdc,
+                &fast_prices_b_usdc,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));

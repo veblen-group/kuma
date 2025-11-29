@@ -9,6 +9,7 @@ use num_bigint::BigUint;
 use crate::{
     chain::Chain,
     encoder::{Trade, UnsignedTransaction, create_solution},
+    spot_prices::SpotPrices,
     state::{self, pair::Pair},
     strategy::Swap,
 };
@@ -58,12 +59,16 @@ impl CrossChainSingleHop {
         slow_id: &state::PoolId,
         slow_height: u64,
         slow_sim: Swap,
+        slow_prices_a_usdc: &SpotPrices,
+        slow_prices_b_usdc: &SpotPrices,
         fast_chain: &Chain,
         fast_pair: &Pair,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_id: &state::PoolId,
         fast_height: u64,
         fast_sim: Swap,
+        fast_prices_a_usdc: &SpotPrices,
+        fast_prices_b_usdc: &SpotPrices,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
