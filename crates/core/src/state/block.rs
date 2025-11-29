@@ -55,6 +55,8 @@ impl BlockStateStream {
         block_rx: watch::Receiver<Arc<Option<Block>>>,
         usdc: Token,
     ) -> Self {
+        // TODO: handle token a/b being usdc by making those pairs optional
+
         Self {
             token_a_usdc_pair: Pair::new(pair.token_a().clone(), usdc.clone()),
             token_b_usdc_pair: Pair::new(pair.token_b().clone(), usdc),
@@ -81,6 +83,8 @@ impl Stream for BlockStateStream {
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Ready(Some(block)) => match block.as_ref() {
                 Some(block) => {
+                    // TODO: handle token a/b being usdc
+
                     let pair_state = block.sims.get_pair_state(&self.pair);
                     let token_a_usdc_state = block.sims.get_pair_state(&self.token_a_usdc_pair);
                     let token_b_usdc_state = block.sims.get_pair_state(&self.token_b_usdc_pair);

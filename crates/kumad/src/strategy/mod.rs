@@ -3,6 +3,20 @@
 //! Coordinates slow and fast chain state streams to generate profitable arbitrage signals.
 //! Uses a timing-based submission system (75% of slow block time) to maximize signal freshness.
 //! Persists spot prices and generated signals to the database for analysis and monitoring.
+//! Strategy module for managing cross-chain arbitrage signal generation
+//!
+//! biased loop
+//! 1. shutdown signal
+//! 2. timer ended and there's a signal to emit - populate the signal emission
+//! 2. slow chain updates
+//!  1. set up signal generation timer
+//!  2. precompute
+//!  3. save spot prices to db
+//! 3. fast chain updates
+//!  1. try to generate signal from precompute
+//!  2. overwrite current signal
+//! 4. db write
+//! 5. emit signal
 
 use std::{pin::Pin, time::Duration};
 
@@ -14,9 +28,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
 use kuma_core::{
+    chain::Chain,
     database, signals,
     spot_prices::SpotPrices,
-    state::block::BlockStateStream,
+    state::{
+        block::BlockStateStream,
+        pair::{Pair, PairState},
+    },
     strategy::{self, Precomputes, simulation::make_sorted_spot_prices},
 };
 
@@ -80,7 +98,6 @@ impl Future for Handle {
 }
 
 struct Worker {
-    // TODO: set up strategy object from core
     strategy: strategy::CrossChainSingleHop,
     slow_stream: BlockStateStream,
     fast_stream: BlockStateStream,
@@ -99,26 +116,14 @@ impl Worker {
     pub async fn run(mut self) -> eyre::Result<()> {
         info!("Starting strategy worker");
 
+        // only submit late into the slow block
         let submission_delay = self.slow_block_time.mul_f64(0.75);
         let mut submission_deadline = None;
-        let mut precompute: Option<Precomputes> = None;
+        let mut precompute: Option<(Precomputes, SpotPrices, SpotPrices)> = None;
         let mut curr_signal = None;
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
         > = FuturesUnordered::new();
-
-        // biased loop
-        // 1. shutdown signal
-        // 2. timer ended and there's a signal to emit - populate the signal emission
-        // 2. slow chain updates
-        //  1. set up signal generation timer
-        //  2. precompute
-        //  3. save spot prices to db
-        // 3. fast chain updates
-        //  1. try to generate signal from precompute
-        //  2. overwrite current signal
-        // 4. db write
-        // 5. emit signal
 
         loop {
             select! {
@@ -154,54 +159,84 @@ impl Worker {
                     );
 
                     // Generate precomputes
-                    let new_precompute = self.strategy.precompute(slow_state);
-                    // TODO: get usdc spot prices for token a and token b
-
+                    let new_precompute = self.strategy.precompute(slow_state.pair_state);
                     debug!(
                         block.height = new_precompute.block_height,
                         "✅ Precomputed trade sizes for slow chain"
                     );
 
-                    // Write spot prices to db
-                    let spot_prices = SpotPrices::from_precompute(
+                    let prices_a_b = SpotPrices::from_precompute(
                         &new_precompute,
                         self.strategy.slow_chain.clone(),
                         self.strategy.slow_pair.clone()
                     );
 
+                    // calculate usdc spot prices
+                    let prices_a_usdc = make_prices(&slow_state.token_a_usdc_state, self.strategy.slow_token_a_usdc.clone(), self.strategy.slow_chain.clone())
+                        .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.slow_token_a_usdc))?;
+                    let prices_b_usdc = make_prices(&slow_state.token_b_usdc_state, self.strategy.slow_token_b_usdc.clone(), self.strategy.slow_chain.clone())
+                        .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.slow_token_b_usdc))?;
+
                     let repo = self.db.spot_price_repository();
-                    db_writes.push(async move {
-                        repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
+                    db_writes.push({
+                        let pair_a_b = self.strategy.slow_pair.clone();
+                        let pair_a_usdc = self.strategy.slow_token_a_usdc.clone();
+                        let pair_b_usdc = self.strategy.slow_token_b_usdc.clone();
+
+                        let prices_a_b = prices_a_b.clone();
+                        let prices_a_usdc = prices_a_usdc.clone();
+                        let prices_b_usdc = prices_b_usdc.clone();
+
+                        async move {
+                            repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
+                            repo.insert(prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
+                            repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
+                            Ok(())
+                        }
                     }.boxed());
 
-                    // Save precompute
-                    precompute = Some(new_precompute);
+                    precompute = Some((new_precompute, prices_a_usdc, prices_b_usdc));
                 }
 
                 // Handle timer expiration for signal generation
                 Some(fast_state) = self.fast_stream.next() => {
-                    if let Some(precompute) = precompute.as_ref() {
+                    if let Some((precompute, slow_prices_a_usdc, slow_prices_b_usdc)) = precompute.as_ref() {
                         // Step 3: Read latest fast chain state and generate signal
-                        // TODO: fix this to use the curr fast state object
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
                         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair);
 
-                        let spot_prices = SpotPrices::try_from_sorted_prices(
+                        let prices_a_b = SpotPrices::try_from_sorted_prices(
                             &fast_sorted_spot_prices,
                             fast_state.pair_state.block_height,
                             self.strategy.fast_chain.clone(),
                             self.strategy.fast_pair.clone()
-                        ).wrap_err("fast chain spot prices should exist")?;
+                        ).wrap_err_with(|| format!("fast chain spot prices should exist at height {}", fast_height))?;
+
+                        // calculate usdc spot prices
+                        let fast_prices_a_usdc = make_prices(&fast_state.token_a_usdc_state, self.strategy.fast_token_a_usdc.clone(),self.strategy.fast_chain.clone())
+                            .wrap_err_with(|| format!("failed to write spot prices to db for {}", self.strategy.fast_token_a_usdc))?;
+                        let fast_prices_b_usdc = make_prices(&fast_state.token_b_usdc_state, self.strategy.fast_token_b_usdc.clone(), self.strategy.fast_chain.clone())
+                            .wrap_err_with(|| format!("failed to write spot prices to db for {}", self.strategy.fast_token_b_usdc))?;
 
                         let repo = self.db.spot_price_repository();
-                        db_writes.push(async move {
-                            repo.insert(spot_prices).await.map_err(|e| eyre!("failed to write spot prices to db: {e:}"))
+                        db_writes.push({
+                            let pair_a_b = self.strategy.fast_pair.clone();
+                            let pair_a_usdc = self.strategy.fast_token_a_usdc.clone();
+                            let pair_b_usdc = self.strategy.fast_token_b_usdc.clone();
+
+                            let fast_prices_a_usdc = fast_prices_a_usdc.clone();
+                            let fast_prices_b_usdc = fast_prices_b_usdc.clone();
+
+                            async move {
+                                repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
+                                repo.insert(fast_prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
+                                repo.insert(fast_prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
+                                Ok(())
+                            }
                         }.boxed());
 
-                        // TODO: get usdc spot prices for token a and token b
 
-                        // TODO: feed usdc prices in here as well
-                        match self.strategy.generate_signal(precompute, fast_state.pair_state, fast_sorted_spot_prices) {
+                        match self.strategy.generate_signal(precompute, slow_prices_a_usdc, slow_prices_b_usdc, fast_state.pair_state, fast_sorted_spot_prices, &fast_prices_a_usdc, &fast_prices_b_usdc) {
                             Ok(signal) => {
                                 info!(
                                     %signal,
@@ -246,4 +281,23 @@ impl Worker {
             }
         }
     }
+}
+
+fn make_prices(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<SpotPrices> {
+    let sorted_spot_prices = make_sorted_spot_prices(state, &pair);
+
+    let spot_prices = SpotPrices::try_from_sorted_prices(
+        &sorted_spot_prices,
+        state.block_height,
+        chain,
+        pair.clone(),
+    )?;
+
+    debug!(
+        block.height = spot_prices.block_height,
+        %pair,
+        "✅ Generated USDC spot prices for token A"
+    );
+
+    Ok(spot_prices)
 }

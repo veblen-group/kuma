@@ -17,9 +17,9 @@ use tycho_simulation::{
 use crate::{
     chain::Chain,
     signals::{self, Direction, bps_discount},
+    spot_prices::SpotPrices,
     state::{
         self, PoolId,
-        block::BlockState,
         pair::{Pair, PairState},
     },
 };
@@ -37,8 +37,12 @@ pub struct CrossChainSingleHop {
     // TODO: make a (chain, pair, inventory) tuple?
     pub slow_pair: Pair,
     pub slow_usdc: Token,
+    pub slow_token_a_usdc: Pair,
+    pub slow_token_b_usdc: Pair,
     pub slow_chain: Chain,
     pub fast_pair: Pair,
+    pub fast_token_a_usdc: Pair,
+    pub fast_token_b_usdc: Pair,
     pub fast_usdc: Token,
     pub fast_chain: Chain,
     pub slow_inventory: (BigUint, BigUint),
@@ -50,9 +54,9 @@ pub struct CrossChainSingleHop {
 
 impl CrossChainSingleHop {
     #[instrument(skip_all)]
-    pub fn precompute(&self, slow_state: BlockState) -> Precomputes {
+    pub fn precompute(&self, slow_state: PairState) -> Precomputes {
         Precomputes::from_pair_state(
-            &slow_state.pair_state,
+            &slow_state,
             &self.slow_pair,
             &self.slow_inventory,
             None,
@@ -71,8 +75,12 @@ impl CrossChainSingleHop {
     pub fn generate_signal(
         &self,
         precompute: &Precomputes,
+        slow_prices_a_usdc: &SpotPrices,
+        slow_prices_b_usdc: &SpotPrices,
         fast_state: PairState,
         fast_sorted_spot_prices: Vec<(PoolId, f64)>,
+        fast_prices_a_usdc: &SpotPrices,
+        fast_prices_b_usdc: &SpotPrices,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
         if fast_sorted_spot_prices.is_empty() {

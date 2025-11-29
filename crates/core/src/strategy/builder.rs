@@ -3,6 +3,7 @@ use color_eyre::eyre::{self, OptionExt};
 use crate::{
     chain::Chain,
     config::{Config, InventoriesForChain},
+    state::pair::Pair,
     strategy::CrossChainSingleHop,
 };
 
@@ -49,6 +50,12 @@ impl Builder {
         let fast_usdc = Config::get_usdc_token(inventory[&fast_chain].keys())
             .ok_or_eyre("No USDC token found for fast chain")?;
 
+        let slow_token_a_usdc = Pair::new(slow_pair.token_a().clone(), slow_usdc.clone());
+        let slow_token_b_usdc = Pair::new(slow_pair.token_b().clone(), slow_usdc.clone());
+
+        let fast_token_a_usdc = Pair::new(fast_pair.token_a().clone(), fast_usdc.clone());
+        let fast_token_b_usdc = Pair::new(fast_pair.token_b().clone(), fast_usdc.clone());
+
         Ok(CrossChainSingleHop {
             slow_pair: slow_pair.clone(),
             slow_usdc,
@@ -61,6 +68,10 @@ impl Builder {
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            slow_token_a_usdc,
+            slow_token_b_usdc,
+            fast_token_a_usdc,
+            fast_token_b_usdc,
         })
     }
 }

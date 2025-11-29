@@ -105,10 +105,9 @@ impl Kuma {
         .build()
         .wrap_err("failed to start tycho collector for chain : {fast_chain}")?;
 
-        let slow_pair = pairs.get(&slow_chain).expect(&format!(
-            "could not find pair info for {:}",
-            slow_chain.name
-        ));
+        let slow_pair = pairs
+            .get(&slow_chain)
+            .unwrap_or_else(|| panic!("could not find pair info for {:}", slow_chain.name));
 
         let strategy = strategy::Builder {
             token_a: slow_pair.token_a().symbol.clone(),
