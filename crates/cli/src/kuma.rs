@@ -67,8 +67,6 @@ impl Kuma {
 
         let Config {
             tycho_api_key,
-            add_tvl_threshold,
-            remove_tvl_threshold,
             max_slippage_bps,
             congestion_risk_discount_bps,
             binary_search_steps,
@@ -85,8 +83,8 @@ impl Kuma {
         let (slow_block_handle, slow_eth_handle, slow_tycho_handle) = collector::Builder {
             tycho_url: slow_chain.tycho_url.clone(),
             tycho_api_key: tycho_api_key.to_string(),
-            add_tvl_threshold,
-            remove_tvl_threshold,
+            add_tvl_threshold: slow_chain.add_tvl_threshold,
+            remove_tvl_threshold: slow_chain.remove_tvl_threshold,
             token_addrs: tokens_by_chain[&slow_chain].clone(),
             chain: slow_chain.clone(),
             shutdown_token: shutdown_token.clone(),
@@ -97,8 +95,8 @@ impl Kuma {
         let (fast_block_handle, fast_eth_handle, fast_tycho_handle) = collector::Builder {
             tycho_url: fast_chain.tycho_url.clone(),
             tycho_api_key: tycho_api_key.to_string(),
-            add_tvl_threshold,
-            remove_tvl_threshold,
+            add_tvl_threshold: fast_chain.add_tvl_threshold,
+            remove_tvl_threshold: fast_chain.remove_tvl_threshold,
             token_addrs: tokens_by_chain[&fast_chain].clone(),
             chain: fast_chain.clone(),
             shutdown_token: shutdown_token.clone(),

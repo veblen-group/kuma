@@ -33,12 +33,6 @@ pub struct Config {
     /// API key for Tycho Indexer
     pub tycho_api_key: String,
 
-    /// Threshold for adding TVL to the system
-    pub add_tvl_threshold: f64,
-
-    /// Threshold for removing TVL from the system
-    pub remove_tvl_threshold: f64,
-
     /// Congestion risk discount factor (0.0 - 1.0)
     pub congestion_risk_discount_bps: u64,
 
@@ -80,6 +74,8 @@ impl Config {
                      tycho_url,
                      permit2_address,
                      private_key,
+                     add_tvl_threshold,
+                     remove_tvl_threshold,
                  }| {
                     Chain::new(
                         name,
@@ -88,6 +84,8 @@ impl Config {
                         tycho_url,
                         permit2_address,
                         private_key,
+                        *add_tvl_threshold,
+                        *remove_tvl_threshold,
                     )
                     .wrap_err("failed to parse chain info")
                 },
@@ -251,7 +249,14 @@ pub struct ChainConfig {
 
     /// Private key for signing transactions
     pub private_key: String,
+
+    /// Threshold for adding TVL to the system
+    pub add_tvl_threshold: f64,
+
+    /// Threshold for removing TVL from the system
+    pub remove_tvl_threshold: f64,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyConfig {
     pub token_a: String,

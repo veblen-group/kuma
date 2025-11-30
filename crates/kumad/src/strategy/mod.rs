@@ -305,9 +305,9 @@ fn make_prices(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<Spot
     )?;
 
     debug!(
+        %spot_prices,
         block.height = spot_prices.block_height,
         %chain.name,
-        %spot_prices,
         "✅ Generated USDC spot prices"
     );
 
