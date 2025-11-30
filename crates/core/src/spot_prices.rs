@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use color_eyre::eyre::{self, eyre};
 use serde::{Deserialize, Serialize};
 
@@ -32,6 +34,7 @@ impl SpotPrices {
             chain,
         }
     }
+
     pub fn try_from_sorted_prices(
         sorted_spot_prices: &[(PoolId, f64)],
         block_height: u64,
@@ -52,5 +55,15 @@ impl SpotPrices {
             max_price: max.1,
             chain,
         })
+    }
+}
+
+impl Display for SpotPrices {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Pair: {}, Block Height: {}, Min Price: {}, Max Price: {}",
+            self.pair, self.block_height, self.min_price, self.max_price
+        )
     }
 }

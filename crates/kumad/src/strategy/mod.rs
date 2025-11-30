@@ -225,9 +225,9 @@ impl Worker {
 
                         // calculate usdc spot prices
                         let fast_prices_a_usdc = make_prices(&fast_state.token_a_usdc_state, self.strategy.fast_token_a_usdc.clone(),self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to write spot prices to db for {}", self.strategy.fast_token_a_usdc))?;
+                            .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.fast_token_a_usdc))?;
                         let fast_prices_b_usdc = make_prices(&fast_state.token_b_usdc_state, self.strategy.fast_token_b_usdc.clone(), self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to write spot prices to db for {}", self.strategy.fast_token_b_usdc))?;
+                            .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.fast_token_b_usdc))?;
 
                         let repo = self.db.spot_price_repository();
                         db_writes.push({
@@ -300,14 +300,15 @@ fn make_prices(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<Spot
     let spot_prices = SpotPrices::try_from_sorted_prices(
         &sorted_spot_prices,
         state.block_height,
-        chain,
+        chain.clone(),
         pair.clone(),
     )?;
 
     debug!(
         block.height = spot_prices.block_height,
-        %pair,
-        "✅ Generated USDC spot prices for token A"
+        %chain.name,
+        %spot_prices,
+        "✅ Generated USDC spot prices"
     );
 
     Ok(spot_prices)

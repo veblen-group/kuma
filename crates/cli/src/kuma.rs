@@ -11,8 +11,9 @@ use core::{
     collector,
     config::Config,
     signals,
+    spot_prices::SpotPrices,
     state::pair::Pair,
-    strategy::{self, CrossChainSingleHop},
+    strategy::{self, CrossChainSingleHop, simulation::make_sorted_spot_prices},
 };
 
 use crate::cli::StrategyArgs;
@@ -79,7 +80,7 @@ impl Kuma {
             strategy_config.fast_chain,
             &tokens_by_chain,
         );
-        //
+
         // set up tycho stream collectors
         let (slow_block_handle, slow_eth_handle, slow_tycho_handle) = collector::Builder {
             tycho_url: slow_chain.tycho_url.clone(),
@@ -152,6 +153,7 @@ impl Kuma {
         } = self;
 
         info!(command = "generating signal");
+        // TODO: use strategy worker?
 
         let mut slow_chain_states =
             slow_block_handle.get_block_state_stream(slow_pair.clone(), strategy.slow_usdc.clone());
@@ -172,16 +174,84 @@ impl Kuma {
 
         // precompute data for signal
         let precompute = strategy.precompute(slow_state.pair_state);
-
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
+
+        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_state.token_a_usdc_state, &strategy.slow_token_a_usdc),
+            slow_state.token_a_usdc_state.block_height,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_a_usdc.clone(),
+        )
+        .wrap_err_with(|| {
+            format!(
+                "{} block {} did not contain spot prices for {}",
+                strategy.slow_chain.name,
+                slow_state.token_a_usdc_state.block_height,
+                strategy.slow_token_a_usdc
+            )
+        })?;
+        info!(chain = %strategy.slow_chain.name, token.prices = %slow_prices_a_usdc, "✅ fetched USDC prices");
+
+        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_state.token_b_usdc_state, &strategy.slow_token_b_usdc),
+            slow_state.token_b_usdc_state.block_height,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_b_usdc.clone(),
+        )
+        .wrap_err_with(|| {
+            format!(
+                "{} block {} did not contain spot prices for {}",
+                strategy.slow_chain.name,
+                slow_state.token_b_usdc_state.block_height,
+                strategy.slow_token_b_usdc
+            )
+        })?;
+        info!(chain = %strategy.slow_chain.name, token.prices = %slow_prices_b_usdc, "✅ fetched USDC prices");
+
         let fast_sorted_spot_prices =
             core::strategy::simulation::make_sorted_spot_prices(&fast_state.pair_state, &fast_pair);
-        // TODO: usdc prices
+
+        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &fast_sorted_spot_prices,
+            fast_state.pair_state.block_height,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_a_usdc.clone(),
+        )
+        .wrap_err_with(|| {
+            format!(
+                "{} block {} did not contain spot prices for {}",
+                strategy.fast_chain.name,
+                fast_state.pair_state.block_height,
+                strategy.fast_token_a_usdc
+            )
+        })?;
+        info!(chain = %strategy.fast_chain.name, token.prices = %fast_prices_a_usdc, "✅ fetched USDC prices");
+
+        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &fast_sorted_spot_prices,
+            fast_state.pair_state.block_height,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_b_usdc.clone(),
+        )
+        .wrap_err_with(|| {
+            format!(
+                "{} block {} did not contain spot prices for {}",
+                strategy.fast_chain.name,
+                fast_state.pair_state.block_height,
+                strategy.fast_token_b_usdc
+            )
+        })?;
+        info!(chain = %strategy.fast_chain.name, token.prices = %fast_prices_b_usdc, "✅ fetched USDC prices");
+
         // compute arb signal
         let signal = strategy.generate_signal(
             &precompute,
+            &slow_prices_a_usdc,
+            &slow_prices_b_usdc,
             fast_state.pair_state,
             fast_sorted_spot_prices,
+            &fast_prices_a_usdc,
+            &fast_prices_b_usdc,
         )?;
 
         info!(signal = ?signal, "📊 generated signal");

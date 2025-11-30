@@ -59,6 +59,7 @@ pub type PairForChain = HashMap<Chain, Pair>;
 
 impl Config {
     /// Load configuration from environment and optional config file
+    #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {
         let config: Config = Figment::new()
             .merge(Yaml::file("kuma.yaml"))

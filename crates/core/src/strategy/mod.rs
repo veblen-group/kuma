@@ -72,6 +72,7 @@ impl CrossChainSingleHop {
         fast.pair = %self.fast_pair,
         fast.height = %fast_state.block_height
     ))]
+    #[allow(clippy::too_many_arguments)]
     pub fn generate_signal(
         &self,
         precompute: &Precomputes,

@@ -38,7 +38,7 @@ impl DryRun {
         signal.fast_chain.private_key = fast_signer.private_key.clone();
 
         let trade = signal.try_promote()?;
-        let slow_tx_request = get_tx_request(&trade.slow_tx(), &signal.slow_chain)
+        let slow_tx_request = get_tx_request(trade.slow_tx(), &signal.slow_chain)
             .await
             .wrap_err("Failed to create transaction request for slow chain")?;
         let fast_tx_request = get_tx_request(trade.fast_tx(), &signal.fast_chain)

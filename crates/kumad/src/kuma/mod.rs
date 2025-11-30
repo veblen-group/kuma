@@ -59,6 +59,7 @@ impl Kuma {
 
             // set up collectors for each chain
             for chain in [&slow_chain, &fast_chain] {
+                // TODO: only create the collectors if it doesnt already exist, dont create and only afterwards check
                 let (block_handle, eth_handle, tycho_handle) = collector::Builder {
                     chain: chain.clone(),
                     tycho_url: chain.tycho_url.clone(),
