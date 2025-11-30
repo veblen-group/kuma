@@ -184,9 +184,16 @@ impl Worker {
                     // calculate usdc spot prices
                     // TODO: parallelize with the a<->b simulation
                     let prices_a_usdc = make_prices(&slow_state.token_a_usdc_state, self.strategy.slow_token_a_usdc.clone(), self.strategy.slow_chain.clone())
-                        .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.slow_token_a_usdc))?;
+                        .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.slow_token_a_usdc, self.strategy.slow_chain))?;
                     let prices_b_usdc = make_prices(&slow_state.token_b_usdc_state, self.strategy.slow_token_b_usdc.clone(), self.strategy.slow_chain.clone())
-                        .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.slow_token_b_usdc))?;
+                        .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.slow_token_b_usdc, self.strategy.slow_chain))?;
+
+                    // debug!(
+                    //     %spot_prices,
+                    //     block.height = spot_prices.block_height,
+                    //     %chain.name,
+                    //     "✅ Generated USDC spot prices"
+                    // );
 
                     let repo = self.db.spot_price_repository();
                     db_writes.push({
@@ -214,20 +221,14 @@ impl Worker {
                     if let Some((precompute, slow_prices_a_usdc, slow_prices_b_usdc)) = precompute.as_ref() {
                         // Step 3: Read latest fast chain state and generate signal
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
-                        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair);
-
-                        let prices_a_b = SpotPrices::try_from_sorted_prices(
-                            &fast_sorted_spot_prices,
-                            fast_state.pair_state.block_height,
-                            self.strategy.fast_chain.clone(),
-                            self.strategy.fast_pair.clone()
-                        ).wrap_err_with(|| format!("fast chain spot prices should exist at height {}", fast_height))?;
+                        let prices_a_b = SpotPrices::try_from_pair_state(&fast_state.pair_state, self.strategy.fast_pair.clone(), self.strategy.fast_chain.clone())
+                            .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.fast_pair, self.strategy.fast_chain))?;
 
                         // calculate usdc spot prices
-                        let fast_prices_a_usdc = make_prices(&fast_state.token_a_usdc_state, self.strategy.fast_token_a_usdc.clone(),self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.fast_token_a_usdc))?;
-                        let fast_prices_b_usdc = make_prices(&fast_state.token_b_usdc_state, self.strategy.fast_token_b_usdc.clone(), self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to simulate spot prices for {}", self.strategy.fast_token_b_usdc))?;
+                        let fast_prices_a_usdc = SpotPrices::try_from_pair_state(&fast_state.token_a_usdc_state, self.strategy.fast_token_a_usdc.clone(), self.strategy.fast_chain.clone())
+                            .wrap_err_with(|| format!("failed to simulate fast chain spot prices for {} on {}", self.strategy.fast_token_a_usdc, self.strategy.fast_chain))?;
+                        let fast_prices_b_usdc = SpotPrices::try_from_pair_state(&fast_state.token_b_usdc_state, self.strategy.fast_token_b_usdc.clone(), self.strategy.fast_chain.clone())
+                            .wrap_err_with(|| format!("failed to simulate fast chain spot prices for {} on {}", self.strategy.fast_token_b_usdc, self.strategy.fast_chain))?;
 
                         let repo = self.db.spot_price_repository();
                         db_writes.push({
@@ -292,24 +293,4 @@ impl Worker {
             }
         }
     }
-}
-
-fn make_prices(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<SpotPrices> {
-    let sorted_spot_prices = make_sorted_spot_prices(state, &pair);
-
-    let spot_prices = SpotPrices::try_from_sorted_prices(
-        &sorted_spot_prices,
-        state.block_height,
-        chain.clone(),
-        pair.clone(),
-    )?;
-
-    debug!(
-        %spot_prices,
-        block.height = spot_prices.block_height,
-        %chain.name,
-        "✅ Generated USDC spot prices"
-    );
-
-    Ok(spot_prices)
 }

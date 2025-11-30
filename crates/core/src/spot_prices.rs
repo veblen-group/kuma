@@ -5,8 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     chain::Chain,
-    state::{PoolId, pair::Pair},
-    strategy::Precomputes,
+    state::{
+        PoolId,
+        pair::{Pair, PairState},
+    },
+    strategy::{Precomputes, simulation::make_sorted_spot_prices},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,6 +58,12 @@ impl SpotPrices {
             max_price: max.1,
             chain,
         })
+    }
+
+    pub fn try_from_pair_state(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<Self> {
+        let sorted_spot_prices = make_sorted_spot_prices(state, &pair);
+
+        SpotPrices::try_from_sorted_prices(&sorted_spot_prices, state.block_height, chain, pair)
     }
 }
 

@@ -6,6 +6,7 @@ resolver = "3"
 alloy = "1.0.12"
 alloy-chains = "0.2.5"
 alloy-primitives = "^1.0.0"
+axum = "0.7"
 binance = "0.21.0"
 color-eyre = "0.6.3"
 figment = { version = "0.10.19", features = ["yaml", "env"] }
@@ -27,6 +28,7 @@ tokio = { version = "1.43.0", features = [
 tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
 tokio-tungstenite = "0.27.0"
+tower-http = "0.6"
 tracing = "0.1.41"
 tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.19", features = [
