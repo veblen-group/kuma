@@ -511,7 +511,7 @@ mod tests {
     fn make_6_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
         Token::new(
             // 0x0..03 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000003").unwrap(),
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000099").unwrap(),
             symbol,
             6,
             1000,
@@ -544,8 +544,8 @@ mod tests {
 
     fn make_mainnet_usdc() -> Token {
         Token::new(
-            // 0x0..01 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000001").unwrap(),
+            // 0x0..03 address for uniswap zero2one pool order
+            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000003").unwrap(),
             "USDC",
             6,
             1000,
@@ -593,78 +593,6 @@ mod tests {
         let reserve_b_u256 = alloy::primitives::U256::from_str(&reserve_b.to_string()).unwrap();
 
         Arc::new(UniswapV2State::new(reserve_a_u256, reserve_b_u256))
-    }
-
-    fn make_mainnet_weth_usdc_pair() -> Pair {
-        let weth = make_mainnet_weth();
-        let usdc = make_mainnet_usdc();
-        Pair::new(weth, usdc)
-    }
-
-    fn make_base_weth_usdc_pair() -> Pair {
-        let weth = make_base_weth();
-        let usdc = make_base_usdc();
-        Pair::new(weth, usdc)
-    }
-
-    fn make_mainnet_pepe_usdc_pair() -> Pair {
-        let pepe = make_mainnet_pepe();
-        let usdc = make_mainnet_usdc();
-        Pair::new(pepe, usdc)
-    }
-
-    fn make_base_pepe_usdc_pair() -> Pair {
-        let pepe = make_base_pepe();
-        let usdc = make_base_usdc();
-        Pair::new(pepe, usdc)
-    }
-
-    fn make_mainnet_weth_usdc_univ2_pair_state() -> PairState {
-        let pair = make_mainnet_weth_usdc_pair();
-        make_single_univ2_pair_state(
-            &pair,
-            0,
-            "0x0000000000000000000000000000000000000011",
-            500000000000000000,
-            1000000000000000000,
-            tycho_common::models::Chain::Ethereum,
-        )
-    }
-
-    fn make_mainnet_pepe_usdc_univ2_pair_state() -> PairState {
-        let pair = make_mainnet_pepe_usdc_pair();
-        make_single_univ2_pair_state(
-            &pair,
-            0,
-            "0x0000000000000000000000000000000000000022",
-            1000000000000000000,
-            500000000000000000,
-            tycho_common::models::Chain::Ethereum,
-        )
-    }
-
-    fn make_base_weth_usdc_univ2_pair_state() -> PairState {
-        let pair = make_base_weth_usdc_pair();
-        make_single_univ2_pair_state(
-            &pair,
-            0,
-            "0x0000000000000000000000000000000000000011",
-            500000000000000000,
-            1000000000000000000,
-            tycho_common::models::Chain::Base,
-        )
-    }
-
-    fn make_base_pepe_usdc_univ2_pair_state() -> PairState {
-        let pair = make_base_pepe_usdc_pair();
-        make_single_univ2_pair_state(
-            &pair,
-            0,
-            "0x0000000000000000000000000000000000000022",
-            1000000000000000000,
-            500000000000000000,
-            tycho_common::models::Chain::Base,
-        )
     }
 
     fn make_single_univ2_pair_state(
@@ -715,6 +643,10 @@ mod tests {
         Swap::from_protocol_sim(&amount_in, token_in, token_out, pool_state.as_ref()).unwrap()
     }
 
+    /// Creates a strategy that uses the same number of decimals for all tokens.
+    /// Token A is pepe 0x000
+    /// Token B is weth 0x002
+    /// USDC is 0x003
     fn make_same_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
         init_tracing();
 
@@ -761,18 +693,22 @@ mod tests {
         })
     }
 
+    /// Creates a strategy that uses different number of decimals for tokens.
+    /// Token A is weth 0x002
+    /// Token B is TEST 0x099
+    /// USDC is 0x003
     fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
         init_tracing();
 
-        // custom usdc addr 0x0..1
+        // custom usdc addr 0x0..3
         // custom weth addr 0x0..2
         // so pair order is always (usdc, weth) for uniswap zero2one
         let slow_chain = Chain::eth_mainnet();
         let slow_usdc = make_mainnet_usdc();
-        let slow_token_a = make_6_dec_token(slow_chain.name, "SLOW");
-        let slow_pair = Pair::new(slow_token_a.clone(), make_mainnet_weth());
-        let slow_token_a_usdc = Pair::new(slow_token_a, slow_usdc.clone());
-        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
+        let slow_token_b = make_6_dec_token(slow_chain.name, "TEST");
+        let slow_pair = Pair::new(slow_token_b.clone(), make_mainnet_weth());
+        let slow_token_a_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
+        let slow_token_b_usdc = Pair::new(slow_token_b, slow_usdc.clone());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -780,7 +716,7 @@ mod tests {
 
         let fast_chain = Chain::base_mainnet();
         let fast_usdc = make_base_usdc();
-        let fast_token_a = make_6_dec_token(fast_chain.name, "FAST");
+        let fast_token_a = make_6_dec_token(fast_chain.name, "TEST");
         let fast_pair = Pair::new(fast_token_a.clone(), make_base_weth());
         let fast_token_a_usdc = Pair::new(fast_token_a, fast_usdc.clone());
         let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
@@ -962,7 +898,7 @@ mod tests {
             "0x123",
             10_000,
             5_000,
-            tycho_common::models::Chain::Ethereum,
+            strategy.slow_chain.name,
         );
 
         // pepe -> usdc price = 10
@@ -972,7 +908,7 @@ mod tests {
             "0xabc",
             10_000,
             1_000,
-            tycho_common::models::Chain::Ethereum,
+            strategy.slow_chain.name,
         );
 
         // weth -> usdc price = 15
@@ -982,7 +918,7 @@ mod tests {
             "0xdef",
             15_000,
             1_000,
-            tycho_common::models::Chain::Ethereum,
+            strategy.slow_chain.name,
         );
 
         // pepe -> weth price = 5
@@ -992,7 +928,7 @@ mod tests {
             "0x456",
             10_000,
             2_000,
-            tycho_common::models::Chain::Base,
+            strategy.fast_chain.name,
         );
 
         // pepe -> usdc price = 10
@@ -1002,7 +938,7 @@ mod tests {
             "0xghi",
             10_000,
             1_000,
-            tycho_common::models::Chain::Base,
+            strategy.fast_chain.name,
         );
         // weth -> usdc price = 15
         let fast_token_b_usdc_state = make_single_univ2_pair_state(
@@ -1011,7 +947,7 @@ mod tests {
             "0xjkl",
             15_000,
             1_000,
-            tycho_common::models::Chain::Base,
+            strategy.fast_chain.name,
         );
 
         let precompute = strategy.precompute(slow_state);
@@ -1021,14 +957,14 @@ mod tests {
             strategy.slow_chain.clone(),
             strategy.slow_token_a_usdc.clone(),
         )
-        .expect("spot prices should exist");
+        .expect("slow token a usdc spot prices should exist");
         let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
             &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
             2000,
             strategy.slow_chain.clone(),
             strategy.slow_token_b_usdc.clone(),
         )
-        .expect("spot prices should exist");
+        .expect("slow token b usdc spot prices should exist");
 
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
         let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
@@ -1118,28 +1054,107 @@ mod tests {
     fn generate_signal_same_decimals_bab() {
         let strategy = make_same_decimals_strategy();
 
+        // pepe -> weth price is 0.5
         let slow_state = make_single_univ2_pair_state(
             &strategy.slow_pair,
             2000,
             "0x123",
             5_000,
             10_000,
-            tycho_common::models::Chain::Ethereum,
+            strategy.slow_chain.name,
         );
 
+        // pepe -> usdc price = 10
+        let slow_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            2000,
+            "0xabc",
+            10_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // weth -> usdc price = 15
+        let slow_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            2000,
+            "0xdef",
+            15_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // pepe -> weth price is 0.2
         let fast_state = make_single_univ2_pair_state(
             &strategy.fast_pair,
             100,
             "0x456",
             2_000,
             10_000,
-            tycho_common::models::Chain::Ethereum,
+            strategy.fast_chain.name,
+        );
+
+        // pepe -> usdc price = 10
+        let fast_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_a_usdc,
+            2000,
+            "0xghi",
+            10_000,
+            1_000,
+            strategy.fast_chain.name,
+        );
+        // weth -> usdc price = 15
+        let fast_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_b_usdc,
+            2000,
+            "0xjkl",
+            15_000,
+            1_000,
+            strategy.fast_chain.name,
         );
 
         let precompute = strategy.precompute(slow_state);
+        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_a_usdc_state, &strategy.slow_token_a_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_a_usdc.clone(),
+        )
+        .expect("slow token a usdc spot prices should exist");
+        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_b_usdc.clone(),
+        )
+        .expect("slow token b usdc spot prices should exist");
+
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_a_usdc_state, &strategy.fast_token_a_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_a_usdc.clone(),
+        )
+        .expect("fast token a usdc spot prices should exist");
+        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_b_usdc_state, &strategy.fast_token_b_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_b_usdc.clone(),
+        )
+        .expect("fast token b usdc spot prices should exist");
+
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                &slow_prices_a_usdc,
+                &slow_prices_b_usdc,
+                fast_state.clone(),
+                fast_sorted_spot_prices,
+                &fast_prices_a_usdc,
+                &fast_prices_b_usdc,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1201,6 +1216,7 @@ mod tests {
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
+        // weth -> TEST price is 200
         let slow_state = make_single_univ2_pair_state(
             &strategy.slow_pair,
             2000,
@@ -1210,6 +1226,27 @@ mod tests {
             tycho_common::models::Chain::Ethereum,
         );
 
+        // weth -> usdc price = 10
+        let slow_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            2000,
+            "0xabc",
+            10_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // TEST -> usdc price = 5
+        let slow_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            2000,
+            "0xdef",
+            5_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // weth -> TEST price is 500
         let fast_state = make_single_univ2_pair_state(
             &strategy.fast_pair,
             100,
@@ -1219,10 +1256,67 @@ mod tests {
             tycho_common::models::Chain::Base,
         );
 
+        // weth -> usdc price = 10
+        let fast_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_a_usdc,
+            2000,
+            "0xghi",
+            10_000,
+            1_000,
+            strategy.fast_chain.name,
+        );
+        // test -> usdc price = 5
+        let fast_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_b_usdc,
+            2000,
+            "0xjkl",
+            5_000,
+            1_000,
+            strategy.fast_chain.name,
+        );
+
         let precompute = strategy.precompute(slow_state);
+        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_a_usdc_state, &strategy.slow_token_a_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_a_usdc.clone(),
+        )
+        .expect("slow token a usdc prices should exist");
+        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_b_usdc.clone(),
+        )
+        .expect("slow token b usdc prices should exist");
+
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_a_usdc_state, &strategy.fast_token_a_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_a_usdc.clone(),
+        )
+        .expect("fast token a usdc prices should exist");
+        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_b_usdc_state, &strategy.fast_token_b_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_b_usdc.clone(),
+        )
+        .expect("fast token b usdc prices should exist");
+
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                &slow_prices_a_usdc,
+                &slow_prices_b_usdc,
+                fast_state.clone(),
+                fast_sorted_spot_prices,
+                &fast_prices_a_usdc,
+                &fast_prices_b_usdc,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1285,6 +1379,7 @@ mod tests {
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
+        // weth -> TEST price is 0.5
         let slow_state = make_single_univ2_pair_state(
             &strategy.slow_pair,
             2000,
@@ -1294,6 +1389,27 @@ mod tests {
             tycho_common::models::Chain::Ethereum,
         );
 
+        // weth -> usdc price = 10
+        let slow_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            2000,
+            "0xabc",
+            10_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // TEST -> usdc price = 5
+        let slow_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            2000,
+            "0xdef",
+            5_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // weth -> TEST price is 0.2
         let fast_state = make_single_univ2_pair_state(
             &strategy.fast_pair,
             100,
@@ -1303,10 +1419,67 @@ mod tests {
             tycho_common::models::Chain::Base,
         );
 
+        // weth -> usdc price = 10
+        let fast_token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_a_usdc,
+            2000,
+            "0xghi",
+            10_000,
+            1_000,
+            strategy.fast_chain.name,
+        );
+        // test -> usdc price = 5
+        let fast_token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.fast_token_b_usdc,
+            2000,
+            "0xjkl",
+            5_000,
+            1_000,
+            strategy.fast_chain.name,
+        );
+
         let precompute = strategy.precompute(slow_state);
+        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_a_usdc_state, &strategy.slow_token_a_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_a_usdc.clone(),
+        )
+        .expect("slow token a usdc prices should exist");
+        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
+            2000,
+            strategy.slow_chain.clone(),
+            strategy.slow_token_b_usdc.clone(),
+        )
+        .expect("slow token b usdc prices should exist");
+
         let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_a_usdc_state, &strategy.fast_token_a_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_a_usdc.clone(),
+        )
+        .expect("fast token a usdc prices should exist");
+        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
+            &make_sorted_spot_prices(&fast_token_b_usdc_state, &strategy.fast_token_b_usdc),
+            2000,
+            strategy.fast_chain.clone(),
+            strategy.fast_token_b_usdc.clone(),
+        )
+        .expect("fast token b usdc prices should exist");
+
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                &slow_prices_a_usdc,
+                &slow_prices_b_usdc,
+                fast_state.clone(),
+                fast_sorted_spot_prices,
+                &fast_prices_a_usdc,
+                &fast_prices_b_usdc,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
