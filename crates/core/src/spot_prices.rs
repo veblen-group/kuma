@@ -25,8 +25,8 @@ pub struct SpotPrices {
 
 impl SpotPrices {
     pub fn from_precompute(precompute: &Precomputes, chain: Chain, pair: Pair) -> Self {
-        let min = precompute.sorted_spot_prices[0].clone();
-        let max = precompute.sorted_spot_prices[precompute.sorted_spot_prices.len() - 1].clone();
+        let min = precompute.sorted_prices_a_b[0].clone();
+        let max = precompute.sorted_prices_a_b[precompute.sorted_prices_a_b.len() - 1].clone();
         SpotPrices {
             pair,
             block_height: precompute.block_height,

@@ -67,8 +67,6 @@ impl CrossChainSingleHop {
         fast_id: &state::PoolId,
         fast_height: u64,
         fast_sim: Swap,
-        fast_prices_a_usdc: &SpotPrices,
-        fast_prices_b_usdc: &SpotPrices,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
@@ -84,6 +82,8 @@ impl CrossChainSingleHop {
             &fast_sim,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            slow_prices_a_usdc,
+            slow_prices_b_usdc,
         )?;
 
         // TODO: save max slippage for each side?
@@ -237,6 +237,8 @@ pub fn calculate_expected_profits(
     fast_sim: &Swap,
     max_slippage_bps: u64,
     congestion_risk_discount_bps: u64,
+    _slow_prices_a_usdc: &SpotPrices,
+    _slow_prices_b_usdc: &SpotPrices,
 ) -> eyre::Result<(BigUint, BigUint)> {
     let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
     let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);

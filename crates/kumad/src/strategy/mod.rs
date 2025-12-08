@@ -14,13 +14,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
 use kuma_core::{
-    chain::Chain,
     database, signals,
     spot_prices::SpotPrices,
-    state::{
-        block::BlockStateStream,
-        pair::{Pair, PairState},
-    },
+    state::block::BlockStateStream,
     strategy::{self, Precomputes, simulation::make_sorted_spot_prices},
 };
 
@@ -129,7 +125,7 @@ impl Worker {
         // only submit late into the slow block
         let submission_delay = self.slow_block_time.mul_f64(0.75);
         let mut submission_deadline = None;
-        let mut precompute: Option<(Precomputes, SpotPrices, SpotPrices)> = None;
+        let mut precompute: Option<Precomputes> = None;
         let mut curr_signal = None;
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
@@ -169,31 +165,12 @@ impl Worker {
                     );
 
                     // Generate precomputes
-                    let new_precompute = self.strategy.precompute(slow_state.pair_state);
+                    // TODO: reuse unmodified precomputes if possible
+                    let new_precompute = self.strategy.try_precompute(slow_state, None)?;
                     debug!(
                         block.height = new_precompute.block_height,
                         "✅ Precomputed trade sizes for slow chain"
                     );
-
-                    let prices_a_b = SpotPrices::from_precompute(
-                        &new_precompute,
-                        self.strategy.slow_chain.clone(),
-                        self.strategy.slow_pair.clone()
-                    );
-
-                    // calculate usdc spot prices
-                    // TODO: parallelize with the a<->b simulation
-                    let prices_a_usdc = make_prices(&slow_state.token_a_usdc_state, self.strategy.slow_token_a_usdc.clone(), self.strategy.slow_chain.clone())
-                        .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.slow_token_a_usdc, self.strategy.slow_chain))?;
-                    let prices_b_usdc = make_prices(&slow_state.token_b_usdc_state, self.strategy.slow_token_b_usdc.clone(), self.strategy.slow_chain.clone())
-                        .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.slow_token_b_usdc, self.strategy.slow_chain))?;
-
-                    // debug!(
-                    //     %spot_prices,
-                    //     block.height = spot_prices.block_height,
-                    //     %chain.name,
-                    //     "✅ Generated USDC spot prices"
-                    // );
 
                     let repo = self.db.spot_price_repository();
                     db_writes.push({
@@ -201,9 +178,9 @@ impl Worker {
                         let pair_a_usdc = self.strategy.slow_token_a_usdc.clone();
                         let pair_b_usdc = self.strategy.slow_token_b_usdc.clone();
 
-                        let prices_a_b = prices_a_b.clone();
-                        let prices_a_usdc = prices_a_usdc.clone();
-                        let prices_b_usdc = prices_b_usdc.clone();
+                        let prices_a_b = new_precompute.prices_a_b.clone();
+                        let prices_a_usdc = new_precompute.prices_a_usdc.clone();
+                        let prices_b_usdc = new_precompute.prices_b_usdc.clone();
 
                         async move {
                             repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
@@ -213,42 +190,30 @@ impl Worker {
                         }
                     }.boxed());
 
-                    precompute = Some((new_precompute, prices_a_usdc, prices_b_usdc));
+                    precompute = Some(new_precompute);
                 }
 
                 // Handle timer expiration for signal generation
                 Some(fast_state) = self.fast_stream.next() => {
-                    if let Some((precompute, slow_prices_a_usdc, slow_prices_b_usdc)) = precompute.as_ref() {
-                        // Step 3: Read latest fast chain state and generate signal
+                    // Step 3: Read latest fast chain state
+                    let sorted_prices_a_b = make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair);
+                    let prices_a_b = SpotPrices::try_from_sorted_prices(&sorted_prices_a_b, fast_state.pair_state.block_height, self.strategy.fast_chain.clone(), self.strategy.fast_pair.clone())
+                        .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.fast_pair, self.strategy.fast_chain))?;
+
+                    let repo = self.db.spot_price_repository();
+                    db_writes.push({
+                        let pair_a_b = self.strategy.fast_pair.clone();
+
+                        async move {
+                            repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
+                            Ok(())
+                        }
+                    }.boxed());
+
+                    // try to generate signal if precompute is available
+                    if let Some(precompute) = precompute.as_ref() {
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
-                        let prices_a_b = SpotPrices::try_from_pair_state(&fast_state.pair_state, self.strategy.fast_pair.clone(), self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.fast_pair, self.strategy.fast_chain))?;
-
-                        // calculate usdc spot prices
-                        let fast_prices_a_usdc = SpotPrices::try_from_pair_state(&fast_state.token_a_usdc_state, self.strategy.fast_token_a_usdc.clone(), self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to simulate fast chain spot prices for {} on {}", self.strategy.fast_token_a_usdc, self.strategy.fast_chain))?;
-                        let fast_prices_b_usdc = SpotPrices::try_from_pair_state(&fast_state.token_b_usdc_state, self.strategy.fast_token_b_usdc.clone(), self.strategy.fast_chain.clone())
-                            .wrap_err_with(|| format!("failed to simulate fast chain spot prices for {} on {}", self.strategy.fast_token_b_usdc, self.strategy.fast_chain))?;
-
-                        let repo = self.db.spot_price_repository();
-                        db_writes.push({
-                            let pair_a_b = self.strategy.fast_pair.clone();
-                            let pair_a_usdc = self.strategy.fast_token_a_usdc.clone();
-                            let pair_b_usdc = self.strategy.fast_token_b_usdc.clone();
-
-                            let fast_prices_a_usdc = fast_prices_a_usdc.clone();
-                            let fast_prices_b_usdc = fast_prices_b_usdc.clone();
-
-                            async move {
-                                repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
-                                repo.insert(fast_prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
-                                repo.insert(fast_prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
-                                Ok(())
-                            }
-                        }.boxed());
-
-
-                        match self.strategy.generate_signal(precompute, slow_prices_a_usdc, slow_prices_b_usdc, fast_state.pair_state, fast_sorted_spot_prices, &fast_prices_a_usdc, &fast_prices_b_usdc) {
+                        match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b) {
                             Ok(signal) => {
                                 info!(
                                     %signal,

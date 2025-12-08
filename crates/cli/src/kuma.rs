@@ -6,14 +6,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
+use core::strategy::CrossChainSingleHop;
 use core::{
-    chain::Chain,
-    collector,
-    config::Config,
-    signals,
-    spot_prices::SpotPrices,
-    state::pair::Pair,
-    strategy::{self, CrossChainSingleHop, simulation::make_sorted_spot_prices},
+    chain::Chain, collector, config::Config, signals, spot_prices::SpotPrices, state::pair::Pair,
+    strategy,
 };
 
 use crate::cli::StrategyArgs;
@@ -171,40 +167,16 @@ impl Kuma {
         info!(block = %fast_state.pair_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
         // precompute data for signal
-        let precompute = strategy.precompute(slow_state.pair_state);
+        let precompute = strategy.try_precompute(slow_state, None)?;
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
 
-        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
-            &make_sorted_spot_prices(&slow_state.token_a_usdc_state, &strategy.slow_token_a_usdc),
-            slow_state.token_a_usdc_state.block_height,
-            strategy.slow_chain.clone(),
-            strategy.slow_token_a_usdc.clone(),
-        )
-        .wrap_err_with(|| {
-            format!(
-                "{} block {} did not contain spot prices for {}",
-                strategy.slow_chain.name,
-                slow_state.token_a_usdc_state.block_height,
-                strategy.slow_token_a_usdc
-            )
-        })?;
-        info!(chain = %strategy.slow_chain.name, token.prices = %slow_prices_a_usdc, "✅ fetched USDC prices");
-
-        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
-            &make_sorted_spot_prices(&slow_state.token_b_usdc_state, &strategy.slow_token_b_usdc),
-            slow_state.token_b_usdc_state.block_height,
-            strategy.slow_chain.clone(),
-            strategy.slow_token_b_usdc.clone(),
-        )
-        .wrap_err_with(|| {
-            format!(
-                "{} block {} did not contain spot prices for {}",
-                strategy.slow_chain.name,
-                slow_state.token_b_usdc_state.block_height,
-                strategy.slow_token_b_usdc
-            )
-        })?;
-        info!(chain = %strategy.slow_chain.name, token.prices = %slow_prices_b_usdc, "✅ fetched USDC prices");
+        info!(
+            chain = %strategy.slow_chain.name,
+            prices.a_b = %precompute.prices_a_b,
+            prices.a_usdc = %precompute.prices_a_usdc,
+            prices.b_usdc = %precompute.prices_b_usdc,
+            "✅ simulated USDC prices"
+        );
 
         let fast_sorted_spot_prices =
             core::strategy::simulation::make_sorted_spot_prices(&fast_state.pair_state, &fast_pair);
@@ -244,12 +216,8 @@ impl Kuma {
         // compute arb signal
         let signal = strategy.generate_signal(
             &precompute,
-            &slow_prices_a_usdc,
-            &slow_prices_b_usdc,
             fast_state.pair_state,
             fast_sorted_spot_prices,
-            &fast_prices_a_usdc,
-            &fast_prices_b_usdc,
         )?;
 
         info!(signal = ?signal, "📊 generated signal");
