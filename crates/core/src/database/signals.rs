@@ -8,7 +8,7 @@ use tracing::instrument;
 use crate::{
     chain::Chain,
     config::TokenAddressesForChain,
-    signals,
+    signals::{self, Surplus},
     state::{PoolId, pair::Pair},
     strategy::Swap,
 };
@@ -63,8 +63,8 @@ impl SignalRepository {
             &signal.fast_swap_sim.amount_in.to_string(),
             &signal.fast_swap_sim.amount_out.to_string(),
             &signal.fast_swap_sim.gas_cost.to_string(),
-            &signal.surplus.0.to_string(),
-            &signal.surplus.1.to_string(),
+            &signal.surplus.token_amounts.0.to_string(),
+            &signal.surplus.token_amounts.1.to_string(),
             &signal.expected_profit.0.to_string(),
             &signal.expected_profit.1.to_string(),
             signal.max_slippage_bps as i64,
@@ -216,7 +216,13 @@ fn try_signal_from_row(
             .map_err(|e| eyre!("failed to parse surplus a from db: {e:}"))?;
         let b = BigUint::from_str(&row.surplus_b)
             .map_err(|e| eyre!("failed to parse surplus b from db: {e:}"))?;
-        (a, b)
+        // TODO: add usdc and slippage to db
+        Surplus {
+            slow_pair: slow_pair.clone(),
+            token_amounts: (a, b),
+            usdc_amounts: (BigUint::ZERO, BigUint::ZERO),
+            token_amounts_after_slippage: (BigUint::ZERO, BigUint::ZERO),
+        }
     };
 
     let expected_profit = {

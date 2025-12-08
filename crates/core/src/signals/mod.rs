@@ -1,10 +1,11 @@
-use num_traits::CheckedSub;
+use num_rational::BigRational;
+use num_traits::{CheckedMul as _, CheckedSub as _, FromPrimitive as _};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use color_eyre::eyre::{self, Context, ContextCompat, Ok, OptionExt};
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
 
 use crate::{
     chain::Chain,
@@ -13,6 +14,12 @@ use crate::{
     state::{self, pair::Pair},
     strategy::Swap,
 };
+
+mod profit;
+mod surplus;
+
+pub use profit::ExpectedProfit;
+pub use surplus::Surplus;
 
 // TODO: rename to buy/sell? need to clarify the direction
 #[derive(Debug, Clone)]
@@ -46,7 +53,8 @@ pub struct CrossChainSingleHop {
     pub fast_height: u64,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
-    pub surplus: (BigUint, BigUint),
+    pub surplus: Surplus,
+    // TODO: use ExpectedProfit
     pub expected_profit: (BigUint, BigUint),
 }
 
@@ -74,21 +82,20 @@ impl CrossChainSingleHop {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
-        let (surplus_a, surplus_b) = calculate_surplus(&slow_sim, &fast_sim)?;
+        let surplus = Surplus::try_from_swaps(
+            &slow_sim,
+            &fast_sim,
+            slow_prices_a_usdc,
+            slow_prices_b_usdc,
+            max_slippage_bps,
+        )?;
 
-        // TODO: compound two separate congestion risks, one for each side
-        let expected_profits = calculate_expected_profits(
+        let expected_profit = ExpectedProfit::try_from_swaps(
             &slow_sim,
             &fast_sim,
             max_slippage_bps,
             congestion_risk_discount_bps,
-            slow_prices_a_usdc,
-            slow_prices_b_usdc,
         )?;
-
-        // TODO: save max slippage for each side?
-
-        // TODO: calculate expected profit in usdc
 
         Ok(Self {
             slow_chain: slow_chain.clone(),
@@ -103,8 +110,8 @@ impl CrossChainSingleHop {
             fast_height,
             fast_pool_id: fast_id.clone(),
             fast_swap_sim: fast_sim,
-            surplus: (surplus_a, surplus_b),
-            expected_profit: expected_profits,
+            surplus,
+            expected_profit: expected_profit.token_amounts,
             max_slippage_bps,
             congestion_risk_discount_bps,
         })
@@ -177,7 +184,7 @@ impl Display for CrossChainSingleHop {
                 Amount Out: {}
                 Max Slippage: {}
             Expected Profit: {} ({}) {} ({})
-                Surplus: {} ({}) {} ({})
+                Surplus: {}
             ",
             self.slow_chain,
             self.slow_pair,
@@ -197,10 +204,7 @@ impl Display for CrossChainSingleHop {
             self.slow_pair.token_a().symbol,
             self.expected_profit.1,
             self.slow_pair.token_b().symbol,
-            self.surplus.0,
-            self.slow_pair.token_a().symbol,
-            self.surplus.1,
-            self.slow_pair.token_b().symbol,
+            self.surplus,
         )
     }
 }
@@ -208,28 +212,6 @@ impl Display for CrossChainSingleHop {
 pub(crate) fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
     (amount * slippage_multiplier) / BigUint::from(10000u64)
-}
-
-pub fn calculate_surplus(slow_sim: &Swap, fast_sim: &Swap) -> eyre::Result<(BigUint, BigUint)> {
-    let surplus_a = fast_sim
-        .amount_out
-        .checked_sub(&slow_sim.amount_in)
-        .wrap_err_with(|| {
-            format!(
-                "surplus of token a cannot be negative: fast.amount_out - slow.amount_in = {} - {} ",
-                fast_sim.amount_out, slow_sim.amount_in
-            )
-        })?;
-    let surplus_b = slow_sim
-        .amount_out
-        .checked_sub(&fast_sim.amount_in)
-        .wrap_err_with(|| {
-            format!(
-                "surplus of token b cannot be negative: slow.amount_out={} - fast.amount_in={} ",
-                slow_sim.amount_out, fast_sim.amount_in
-            )
-        })?;
-    Ok((surplus_a, surplus_b))
 }
 
 pub fn calculate_expected_profits(
@@ -254,4 +236,23 @@ pub fn calculate_expected_profits(
         bps_discount(&min_surplus_a, congestion_risk_discount_bps),
         bps_discount(&min_surplus_b, congestion_risk_discount_bps),
     ))
+}
+
+fn try_mul_usdc_price(amount: BigUint, usdc_prices: &SpotPrices) -> eyre::Result<BigUint> {
+    let price = BigRational::from_f64(
+        usdc_prices
+            .try_pessimistic_usdc_price()
+            .wrap_err_with(|| format!("failed to get price for {}", usdc_prices.pair))?,
+    )
+    .ok_or_eyre("failed to convert token A USDC price to BigRational")?;
+
+    // TODO: are these conversions safe?
+    let amount_usdc = price
+        .checked_mul(&BigRational::from_integer(BigInt::from(amount.clone())))
+        .wrap_err("surplus of token a cannot be converted to USDC")?
+        .to_integer()
+        .to_biguint()
+        .ok_or_eyre("failed to multiply surplus a by usdc price")?;
+
+    Ok(amount_usdc)
 }

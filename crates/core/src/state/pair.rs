@@ -12,6 +12,7 @@ use tycho_simulation::{
 };
 
 /// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
+/// TODO: it isnt normalized to zero2one, its normalized by symbol order
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pair(Token, Token);
 

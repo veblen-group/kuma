@@ -4996,6 +4996,7 @@ dependencies = [
  "figment",
  "futures 0.3.31",
  "num-bigint",
+ "num-rational",
  "num-traits",
  "pin-project 1.1.10",
  "proptest",

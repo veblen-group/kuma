@@ -274,7 +274,13 @@ impl CrossChainSingleHop {
                         fast_state.block_height,
                         &self.fast_inventory.0,
                     ) {
-                        trace!(slow_sim = %signal.slow_swap_sim, fast_sim = %signal.fast_swap_sim, signal.surplus = ?signal.surplus, signal.expected_profit = ?signal.expected_profit, "found optimal swap for B->A (slow) and A->B (fast)");
+                        trace!(
+                            slow_sim = %signal.slow_swap_sim,
+                            fast_sim = %signal.fast_swap_sim,
+                            signal.surplus = ?signal.surplus,
+                            signal.expected_profit = ?signal.expected_profit,
+                            "found optimal swap for B->A (slow) and A->B (fast)"
+                        );
                         Ok(signal)
                     } else {
                         Err(eyre!(
@@ -353,8 +359,7 @@ impl CrossChainSingleHop {
 
             trace!(
                 index = mid,
-                surplus.a = %mid_signal.surplus.0,
-                surplus.b = %mid_signal.surplus.1,
+                surplus = %mid_signal.surplus,
                 expected_profit.a = %mid_signal.expected_profit.0,
                 expected_profit.b = %mid_signal.expected_profit.1,
                 "Generated mid candidate signal"
@@ -384,8 +389,7 @@ impl CrossChainSingleHop {
             };
             trace!(
                 index = mid+1,
-                surplus.a = %next_signal.surplus.0,
-                surplus.b = %next_signal.surplus.1,
+                surplus = %next_signal.surplus,
                 expected_profit.a = %next_signal.expected_profit.0,
                 expected_profit.b = %next_signal.expected_profit.1,
                 "Generated mid+1 candidate signal"
@@ -555,7 +559,7 @@ mod tests {
     use super::*;
     use crate::{
         chain::Chain,
-        signals::{calculate_expected_profits, calculate_surplus},
+        signals::{Surplus, calculate_expected_profits},
         state::{self, pair::PairState},
         strategy::{self, CrossChainSingleHop, simulation::make_sorted_spot_prices},
     };
@@ -743,6 +747,204 @@ mod tests {
         Swap::from_protocol_sim(&amount_in, token_in, token_out, pool_state.as_ref()).unwrap()
     }
 
+    /// Creates a BlockState for the slow chain with constant USDC prices.
+    ///
+    /// Constant USDC prices for same-decimals strategy:
+    /// - PEPE->USDC = 0.1 (10k PEPE : 1k USDC)
+    /// - WETH->USDC = 3000 (1 WETH : 3000 USDC)
+    ///
+    /// Pool IDs created:
+    /// - "slow_main" - main A-B pair
+    /// - "slow_a_usdc" - token A to USDC pair
+    /// - "slow_b_usdc" - token B to USDC pair
+    fn make_slow_block_state_same_decimals(
+        strategy: &CrossChainSingleHop,
+        block_height: u64,
+        main_reserve_a: u64,
+        main_reserve_b: u64,
+    ) -> state::block::BlockState {
+        let pair_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            block_height,
+            "slow_main",
+            main_reserve_a,
+            main_reserve_b,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: PEPE->USDC = 0.1 (10k PEPE : 1k USDC)
+        let token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            block_height,
+            "slow_a_usdc",
+            10_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: WETH->USDC = 3000 (1 WETH : 3000 USDC)
+        let token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            block_height,
+            "slow_b_usdc",
+            1,
+            3_000,
+            strategy.slow_chain.name,
+        );
+
+        state::block::BlockState {
+            pair_state,
+            token_a_usdc_state,
+            token_a_balance: BigUint::from(0u64),
+            token_b_usdc_state,
+            token_b_balance: BigUint::from(0u64),
+        }
+    }
+
+    /// Creates a block state for a fast chain with same token decimals.
+    fn make_fast_block_same_decimals(
+        strategy: &CrossChainSingleHop,
+        block_height: u64,
+        main_reserve_a: u64,
+        main_reserve_b: u64,
+    ) -> state::block::BlockState {
+        let pair_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            block_height,
+            "fast_main",
+            main_reserve_a,
+            main_reserve_b,
+            strategy.fast_chain.name,
+        );
+
+        // Constant USDC prices: PEPE->USDC = 0.1 (10k PEPE : 1k USDC)
+        let token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            block_height,
+            "fast_a_usdc",
+            10_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: WETH->USDC = 3000 (1000 WETH : 3m USDC)
+        let token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            block_height,
+            "fast_b_usdc",
+            1_000,
+            3_000_000,
+            strategy.slow_chain.name,
+        );
+
+        state::block::BlockState {
+            pair_state,
+            token_a_usdc_state,
+            token_a_balance: BigUint::from(0u64),
+            token_b_usdc_state,
+            token_b_balance: BigUint::from(0u64),
+        }
+    }
+
+    /// Creates a BlockState for the slow chain with different decimals and constant USDC prices.
+    ///
+    /// Constant USDC prices for different-decimals strategy:
+    /// - TEST (6 decimals)->USDC = 0.2 (5k TEST : 1k USDC)
+    /// - WETH (18 decimals)->USDC = 3000 (1 WETH : 3000 USDC)
+    ///
+    /// Pool IDs created:
+    /// - "slow_main" - main A-B pair
+    /// - "slow_a_usdc" - token A to USDC pair
+    /// - "slow_b_usdc" - token B to USDC pair
+    fn make_slow_block_state_different_decimals(
+        strategy: &CrossChainSingleHop,
+        block_height: u64,
+        main_reserve_a: u64,
+        main_reserve_b: u64,
+    ) -> state::block::BlockState {
+        let pair_state = make_single_univ2_pair_state(
+            &strategy.slow_pair,
+            block_height,
+            "slow_main",
+            main_reserve_a,
+            main_reserve_b,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: WETH->USDC = 3000 (1000 WETH : 3m USDC)
+        let token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            block_height,
+            "slow_a_usdc",
+            1_000,
+            3_000_000,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: TEST->USDC = 0.2 (5m TEST : 1m USDC)
+        let token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            block_height,
+            "slow_b_usdc",
+            5_000_000,
+            1_000_000,
+            strategy.slow_chain.name,
+        );
+
+        state::block::BlockState {
+            pair_state,
+            token_a_usdc_state,
+            token_a_balance: BigUint::from(0u64),
+            token_b_usdc_state,
+            token_b_balance: BigUint::from(0u64),
+        }
+    }
+
+    /// Creates a block state for a fast chain with different token decimals.
+    fn make_fast_block_different_decimals(
+        strategy: &CrossChainSingleHop,
+        block_height: u64,
+        main_reserve_a: u64,
+        main_reserve_b: u64,
+    ) -> state::block::BlockState {
+        let pair_state = make_single_univ2_pair_state(
+            &strategy.fast_pair,
+            block_height,
+            "fast_main",
+            main_reserve_a,
+            main_reserve_b,
+            strategy.fast_chain.name,
+        );
+
+        // Constant USDC prices: WETH->USDC = 3000 (1 WETH : 3000 USDC)
+        let token_a_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_a_usdc,
+            block_height,
+            "fast_a_usdc",
+            1,
+            3_000,
+            strategy.slow_chain.name,
+        );
+
+        // Constant USDC prices: TEST->USDC = 0.2 (5k TEST : 1k USDC)
+        let token_b_usdc_state = make_single_univ2_pair_state(
+            &strategy.slow_token_b_usdc,
+            block_height,
+            "fast_b_usdc",
+            5_000,
+            1_000,
+            strategy.slow_chain.name,
+        );
+
+        state::block::BlockState {
+            pair_state,
+            token_a_usdc_state,
+            token_a_balance: BigUint::from(0u64),
+            token_b_usdc_state,
+            token_b_balance: BigUint::from(0u64),
+        }
+    }
+
     /// Creates a strategy that uses the same number of decimals for all tokens.
     /// Token A is pepe 0x000
     /// Token B is weth 0x002
@@ -848,23 +1050,14 @@ mod tests {
     #[test]
     fn precompute_same_decimals() {
         // Arrange
-        // slow chain inventory is 100,000 PEPE and 50 ETH
         let strategy = make_same_decimals_strategy();
 
-        // 0x123 -> univ2(1m, 1k)
-        // spot price should be ~1000/ or 0.001
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            0,
-            "0x123",
-            1_000_000,
-            1_000,
-            tycho_common::models::Chain::Ethereum,
-        );
+        // Spot price: PEPE->WETH = 0.001 (1m PEPE : 1k WETH)
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 0, 1_000_000, 1_000);
 
         // Act
         let precompute = strategy
-            .try_precompute(slow_state.clone(), None)
+            .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
         assert_eq!(precompute.block_height, 0);
 
@@ -872,47 +1065,44 @@ mod tests {
         // correct spot prices
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("0x123"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
         );
 
         // assert that only one pool is simulated
         assert_eq!(precompute.pool_sims.len(), 1);
         assert_eq!(
-            precompute.pool_sims[&state::PoolId::from("0x123")]
+            precompute.pool_sims[&state::PoolId::from("slow_main")]
                 .a_to_b
                 .len(),
             strategy.binary_search_steps
         );
         assert_eq!(
-            precompute.pool_sims[&state::PoolId::from("0x123")]
+            precompute.pool_sims[&state::PoolId::from("slow_main")]
                 .b_to_a
                 .len(),
             strategy.binary_search_steps
         );
 
         // check valid first and last step inputs
-        // 100,000 PEPE inventory / 5 steps  = 20,000 PEPE
-        let first_a_to_b = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b[0];
+        let first_a_to_b = &precompute.pool_sims[&state::PoolId::from("slow_main")].a_to_b[0];
         assert_eq!(
             first_a_to_b.amount_in,
             BigUint::from_str("3125000000000000000").unwrap()
         );
-        // 50 ETH / 5 steps = 10 ETH
-        let first_b_to_a = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a[0];
+
+        let first_b_to_a = &precompute.pool_sims[&state::PoolId::from("slow_main")].b_to_a[0];
         assert_eq!(
             first_b_to_a.amount_in,
             BigUint::from_str("6250000000000000000").unwrap()
         );
 
         // check valid last step inputs
-        // 100,000 PEPE
-        let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b
+        let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("slow_main")].a_to_b
             [strategy.binary_search_steps - 1]
             .amount_in;
         assert_eq!(*last_amount_in_a, strategy.slow_inventory.0);
 
-        // 50 ETH
-        let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a
+        let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("slow_main")].b_to_a
             [strategy.binary_search_steps - 1]
             .amount_in;
         assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
@@ -921,23 +1111,14 @@ mod tests {
     #[test]
     fn precompute_different_decimals() {
         // Arrange
-        // slow chain inventory is 100,000 PEPE and 50 ETH
         let strategy = make_different_decimals_strategy();
 
-        // 0x123 -> univ2(1m, 1k)
-        // spot price should be ~1000/ or 0.001
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            0,
-            "0x123",
-            1_000_000,
-            1_000,
-            tycho_common::models::Chain::Ethereum,
-        );
+        // Spot price: TEST->WETH = 0.001 (1m TEST : 1k WETH)
+        let slow_state = make_slow_block_state_different_decimals(&strategy, 0, 1_000_000, 1_000);
 
         // Act
         let precompute = strategy
-            .try_precompute(slow_state.clone(), None)
+            .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
         assert_eq!(precompute.block_height, 0);
 
@@ -945,47 +1126,44 @@ mod tests {
         // correct spot prices
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("0x123"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
         );
 
         // assert that only one pool is simulated
         assert_eq!(precompute.pool_sims.len(), 1);
         assert_eq!(
-            precompute.pool_sims[&state::PoolId::from("0x123")]
+            precompute.pool_sims[&state::PoolId::from("slow_main")]
                 .a_to_b
                 .len(),
             strategy.binary_search_steps
         );
         assert_eq!(
-            precompute.pool_sims[&state::PoolId::from("0x123")]
+            precompute.pool_sims[&state::PoolId::from("slow_main")]
                 .b_to_a
                 .len(),
             strategy.binary_search_steps
         );
 
         // check valid first and last step inputs
-        // 100,000 PEPE inventory / 5 steps  = 20,000 PEPE
-        let first_a_to_b = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b[0];
+        let first_a_to_b = &precompute.pool_sims[&state::PoolId::from("slow_main")].a_to_b[0];
         assert_eq!(
             first_a_to_b.amount_in,
             BigUint::from_str("3125000000").unwrap()
         );
-        // 50 ETH / 5 steps = 10 ETH
-        let first_b_to_a = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a[0];
+
+        let first_b_to_a = &precompute.pool_sims[&state::PoolId::from("slow_main")].b_to_a[0];
         assert_eq!(
             first_b_to_a.amount_in,
             BigUint::from_str("6250000000000000000").unwrap()
         );
 
         // check valid last step inputs
-        // 100,000 PEPE
-        let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("0x123")].a_to_b
+        let last_amount_in_a = &precompute.pool_sims[&state::PoolId::from("slow_main")].a_to_b
             [strategy.binary_search_steps - 1]
             .amount_in;
         assert_eq!(*last_amount_in_a, strategy.slow_inventory.0);
 
-        // 50 ETH
-        let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("0x123")].b_to_a
+        let last_amount_in_b = &precompute.pool_sims[&state::PoolId::from("slow_main")].b_to_a
             [strategy.binary_search_steps - 1]
             .amount_in;
         assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
@@ -995,57 +1173,30 @@ mod tests {
     fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
-        // pepe -> weth price = 2
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            2000,
-            "0x123",
-            10_000,
-            5_000,
-            strategy.slow_chain.name,
-        );
+        // Slow: PEPE->WETH = 0.5 (10k PEPE : 5k WETH) - expensive WETH on slow chain
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
 
-        // pepe -> usdc price = 10
-        let slow_token_a_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_a_usdc,
-            2000,
-            "0xabc",
-            10_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // weth -> usdc price = 15
-        let slow_token_b_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_b_usdc,
-            2000,
-            "0xdef",
-            15_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // pepe -> weth price = 5
-        let fast_state = make_single_univ2_pair_state(
-            &strategy.fast_pair,
-            100,
-            "0x456",
-            10_000,
-            2_000,
-            strategy.fast_chain.name,
-        );
+        // Fast: PEPE->WETH = 0.2 (10k PEPE : 2k WETH) - cheap WETH on fast chain
+        // Arb: Sell PEPE on slow for WETH, buy PEPE on fast with WETH
+        let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 2_000);
 
         let precompute = strategy
             .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
 
-        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_sorted_spot_prices =
+            make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair);
+
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                fast_state.pair_state.clone(),
+                fast_sorted_spot_prices,
+            )
             .unwrap();
 
-        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
         // assert pepe->weth and weth->pepe legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_pepe());
@@ -1055,7 +1206,7 @@ mod tests {
 
         let expected_slow_sim = precompute
             .pool_sims
-            .get(&PoolId::from("0x123"))
+            .get(&PoolId::from("slow_main"))
             .unwrap()
             .a_to_b
             .last()
@@ -1073,11 +1224,11 @@ mod tests {
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
-            "0x456",
+            "fast_main",
             expected_fast_amount_in,
             &make_base_weth(),
             &make_base_pepe(),
-            fast_state,
+            fast_state.pair_state,
         );
         assert_eq!(
             signal.fast_swap_sim.amount_out,
@@ -1086,7 +1237,14 @@ mod tests {
 
         assert_eq!(
             signal.surplus,
-            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+            Surplus::try_from_swaps(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                &precompute.prices_a_usdc,
+                &precompute.prices_b_usdc,
+                strategy.max_slippage_bps
+            )
+            .unwrap()
         );
         assert_eq!(
             signal.expected_profit,
@@ -1106,54 +1264,23 @@ mod tests {
     fn generate_signal_same_decimals_bab() {
         let strategy = make_same_decimals_strategy();
 
-        // pepe -> weth price is 0.5
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            2000,
-            "0x123",
-            5_000,
-            10_000,
-            strategy.slow_chain.name,
-        );
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 5_000, 10_000);
 
-        // pepe -> usdc price = 10
-        let slow_token_a_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_a_usdc,
-            2000,
-            "0xabc",
-            10_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // weth -> usdc price = 15
-        let slow_token_b_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_b_usdc,
-            2000,
-            "0xdef",
-            15_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // pepe -> weth price is 0.2
-        let fast_state = make_single_univ2_pair_state(
-            &strategy.fast_pair,
-            100,
-            "0x456",
-            2_000,
-            10_000,
-            strategy.fast_chain.name,
-        );
+        let fast_state = make_fast_block_same_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
             .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
 
-        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_sorted_spot_prices =
+            make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair);
 
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                fast_state.pair_state.clone(),
+                fast_sorted_spot_prices,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1189,7 +1316,7 @@ mod tests {
             expected_fast_amount_in,
             &make_base_pepe(),
             &make_base_weth(),
-            fast_state,
+            fast_state.pair_state,
         );
         assert_eq!(
             signal.fast_swap_sim.amount_out,
@@ -1198,7 +1325,14 @@ mod tests {
 
         assert_eq!(
             signal.surplus,
-            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+            Surplus::try_from_swaps(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                &precompute.prices_a_usdc,
+                &precompute.prices_b_usdc,
+                strategy.max_slippage_bps
+            )
+            .unwrap()
         );
         assert_eq!(
             signal.expected_profit,
@@ -1218,67 +1352,25 @@ mod tests {
         let strategy = make_different_decimals_strategy();
 
         // weth -> TEST price is 200
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            2000,
-            "0x123",
-            10_000_000,
-            5_000,
-            tycho_common::models::Chain::Ethereum,
-        );
-
-        // weth -> usdc price = 10
-        let slow_token_a_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_a_usdc,
-            2000,
-            "0xabc",
-            10_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // TEST -> usdc price = 5
-        let slow_token_b_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_b_usdc,
-            2000,
-            "0xdef",
-            5_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
+        let slow_state =
+            make_slow_block_state_different_decimals(&strategy, 2000, 10_000_000, 5_000);
 
         // weth -> TEST price is 500
-        let fast_state = make_single_univ2_pair_state(
-            &strategy.fast_pair,
-            100,
-            "0x456",
-            10_000_000,
-            2_000,
-            tycho_common::models::Chain::Base,
-        );
+        let fast_state = make_fast_block_different_decimals(&strategy, 100, 10_000_000, 2_000);
 
         let precompute = strategy
             .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
-        let slow_prices_a_usdc = SpotPrices::try_from_sorted_prices(
-            &make_sorted_spot_prices(&slow_token_a_usdc_state, &strategy.slow_token_a_usdc),
-            2000,
-            strategy.slow_chain.clone(),
-            strategy.slow_token_a_usdc.clone(),
-        )
-        .expect("slow token a usdc prices should exist");
-        let slow_prices_b_usdc = SpotPrices::try_from_sorted_prices(
-            &make_sorted_spot_prices(&slow_token_b_usdc_state, &strategy.slow_token_b_usdc),
-            2000,
-            strategy.slow_chain.clone(),
-            strategy.slow_token_b_usdc.clone(),
-        )
-        .expect("slow token b usdc prices should exist");
 
-        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_sorted_spot_prices =
+            make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair);
 
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                fast_state.pair_state.clone(),
+                fast_sorted_spot_prices,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1314,7 +1406,7 @@ mod tests {
             expected_fast_amount_in,
             &make_base_weth(),
             &make_base_usdc(),
-            fast_state,
+            fast_state.pair_state,
         );
         assert_eq!(
             signal.fast_swap_sim.amount_out,
@@ -1323,7 +1415,14 @@ mod tests {
 
         assert_eq!(
             signal.surplus,
-            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+            Surplus::try_from_swaps(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                &precompute.prices_a_usdc,
+                &precompute.prices_b_usdc,
+                strategy.max_slippage_bps
+            )
+            .unwrap()
         );
         assert_eq!(
             signal.expected_profit,
@@ -1332,8 +1431,8 @@ mod tests {
                 &expected_fast_sim,
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
-                &slow_prices_a_usdc,
-                &slow_prices_b_usdc,
+                &precompute.prices_a_usdc,
+                &precompute.prices_b_usdc,
             )
             .unwrap()
         )
@@ -1344,53 +1443,24 @@ mod tests {
         let strategy = make_different_decimals_strategy();
 
         // weth -> TEST price is 0.5
-        let slow_state = make_single_univ2_pair_state(
-            &strategy.slow_pair,
-            2000,
-            "0x123",
-            5_000,
-            10_000,
-            tycho_common::models::Chain::Ethereum,
-        );
-
-        // weth -> usdc price = 10
-        let slow_token_a_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_a_usdc,
-            2000,
-            "0xabc",
-            10_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
-
-        // TEST -> usdc price = 5
-        let slow_token_b_usdc_state = make_single_univ2_pair_state(
-            &strategy.slow_token_b_usdc,
-            2000,
-            "0xdef",
-            5_000,
-            1_000,
-            strategy.slow_chain.name,
-        );
+        let slow_state = make_slow_block_state_different_decimals(&strategy, 2000, 5_000, 10_000);
 
         // weth -> TEST price is 0.2
-        let fast_state = make_single_univ2_pair_state(
-            &strategy.fast_pair,
-            100,
-            "0x456",
-            2_000,
-            10_000,
-            tycho_common::models::Chain::Base,
-        );
+        let fast_state = make_fast_block_different_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
             .try_precompute(slow_state, None)
             .expect("precompute shouldn't fail");
 
-        let fast_sorted_spot_prices = make_sorted_spot_prices(&fast_state, &strategy.fast_pair);
+        let fast_sorted_spot_prices =
+            make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair);
 
         let signal = strategy
-            .generate_signal(&precompute, fast_state.clone(), fast_sorted_spot_prices)
+            .generate_signal(
+                &precompute,
+                fast_state.pair_state.clone(),
+                fast_sorted_spot_prices,
+            )
             .unwrap();
 
         assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
@@ -1426,7 +1496,7 @@ mod tests {
             expected_fast_amount_in,
             &make_base_pepe(),
             &make_base_weth(),
-            fast_state,
+            fast_state.pair_state,
         );
         assert_eq!(
             signal.fast_swap_sim.amount_out,
@@ -1435,7 +1505,14 @@ mod tests {
 
         assert_eq!(
             signal.surplus,
-            calculate_surplus(&expected_slow_sim, &expected_fast_sim).unwrap()
+            Surplus::try_from_swaps(
+                &expected_slow_sim,
+                &expected_fast_sim,
+                &precompute.prices_a_usdc,
+                &precompute.prices_b_usdc,
+                strategy.max_slippage_bps
+            )
+            .unwrap()
         );
         assert_eq!(
             signal.expected_profit,

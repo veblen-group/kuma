@@ -65,6 +65,16 @@ impl SpotPrices {
 
         SpotPrices::try_from_sorted_prices(&sorted_spot_prices, state.block_height, chain, pair)
     }
+
+    pub fn try_pessimistic_usdc_price(&self) -> eyre::Result<f64> {
+        if "USDC" == self.pair.token_a().symbol {
+            Ok(self.min_price)
+        } else if "USDC" == self.pair.token_b().symbol {
+            Ok(self.max_price)
+        } else {
+            Err(eyre!("not a USDC pair"))
+        }
+    }
 }
 
 impl Display for SpotPrices {
