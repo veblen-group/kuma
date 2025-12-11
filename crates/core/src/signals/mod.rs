@@ -1,5 +1,6 @@
 use num_rational::BigRational;
-use num_traits::{CheckedMul as _, CheckedSub as _, FromPrimitive as _};
+use num_traits::CheckedSub as _;
+use num_traits::{CheckedMul as _, FromPrimitive as _};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
@@ -54,8 +55,7 @@ pub struct CrossChainSingleHop {
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
     pub surplus: Surplus,
-    // TODO: use ExpectedProfit
-    pub expected_profit: (BigUint, BigUint),
+    pub expected_profit: ExpectedProfit,
 }
 
 impl CrossChainSingleHop {
@@ -93,6 +93,8 @@ impl CrossChainSingleHop {
         let expected_profit = ExpectedProfit::try_from_swaps(
             &slow_sim,
             &fast_sim,
+            slow_prices_a_usdc,
+            slow_prices_b_usdc,
             max_slippage_bps,
             congestion_risk_discount_bps,
         )?;
@@ -111,7 +113,7 @@ impl CrossChainSingleHop {
             fast_pool_id: fast_id.clone(),
             fast_swap_sim: fast_sim,
             surplus,
-            expected_profit: expected_profit.token_amounts,
+            expected_profit: expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
         })
@@ -183,7 +185,8 @@ impl Display for CrossChainSingleHop {
                 Amount In: {}
                 Amount Out: {}
                 Max Slippage: {}
-            Expected Profit: {} ({}) {} ({})
+            Tokens Expected Profit: {} ({}) {} ({})
+            Expected Profit USD: {}
                 Surplus: {}
             ",
             self.slow_chain,
@@ -200,10 +203,11 @@ impl Display for CrossChainSingleHop {
             self.fast_swap_sim.amount_in,
             self.fast_swap_sim.amount_out,
             max_slippage_fast,
-            self.expected_profit.0,
+            self.expected_profit.token_amounts.0,
             self.slow_pair.token_a().symbol,
-            self.expected_profit.1,
+            self.expected_profit.token_amounts.1,
             self.slow_pair.token_b().symbol,
+            self.expected_profit.usdc_amount,
             self.surplus,
         )
     }
@@ -219,9 +223,9 @@ pub fn calculate_expected_profits(
     fast_sim: &Swap,
     max_slippage_bps: u64,
     congestion_risk_discount_bps: u64,
-    _slow_prices_a_usdc: &SpotPrices,
-    _slow_prices_b_usdc: &SpotPrices,
-) -> eyre::Result<(BigUint, BigUint)> {
+    slow_prices_a_usdc: &SpotPrices,
+    slow_prices_b_usdc: &SpotPrices,
+) -> eyre::Result<ExpectedProfit> {
     let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
     let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
 
@@ -232,10 +236,20 @@ pub fn calculate_expected_profits(
         .checked_sub(&fast_sim.amount_in)
         .wrap_err("min surplus of token b cannot be negative")?;
 
-    Ok((
-        bps_discount(&min_surplus_a, congestion_risk_discount_bps),
-        bps_discount(&min_surplus_b, congestion_risk_discount_bps),
-    ))
+    let min_expected_profit_a = bps_discount(&min_surplus_a, congestion_risk_discount_bps);
+    let min_expected_profit_b = bps_discount(&min_surplus_b, congestion_risk_discount_bps);
+
+    let min_expected_profit_a_usdc =
+        try_mul_usdc_price(min_expected_profit_a.clone(), slow_prices_a_usdc)?;
+    let min_expected_profit_b_usdc =
+        try_mul_usdc_price(min_expected_profit_b.clone(), slow_prices_b_usdc)?;
+
+    Ok(ExpectedProfit {
+        usdc_amount: min_expected_profit_a_usdc + min_expected_profit_b_usdc,
+        token_amounts: (min_expected_profit_a, min_expected_profit_b),
+        token_a: slow_sim.token_in.clone(),
+        token_b: slow_sim.token_out.clone(),
+    })
 }
 
 fn try_mul_usdc_price(amount: BigUint, usdc_prices: &SpotPrices) -> eyre::Result<BigUint> {

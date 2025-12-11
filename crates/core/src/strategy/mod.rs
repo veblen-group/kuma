@@ -360,8 +360,7 @@ impl CrossChainSingleHop {
             trace!(
                 index = mid,
                 surplus = %mid_signal.surplus,
-                expected_profit.a = %mid_signal.expected_profit.0,
-                expected_profit.b = %mid_signal.expected_profit.1,
+                expected_profit = %mid_signal.expected_profit,
                 "Generated mid candidate signal"
             );
 
@@ -390,15 +389,14 @@ impl CrossChainSingleHop {
             trace!(
                 index = mid+1,
                 surplus = %next_signal.surplus,
-                expected_profit.a = %next_signal.expected_profit.0,
-                expected_profit.b = %next_signal.expected_profit.1,
+                expected_profit.a = %next_signal.expected_profit.token_amounts.0,
+                expected_profit.b = %next_signal.expected_profit.token_amounts.1,
                 "Generated mid+1 candidate signal"
             );
 
             // compare the expected profits
-            // TODO: is this the correct value to compare?
             // TODO: move this out to a function that compares two signals?
-            if mid_signal.expected_profit < next_signal.expected_profit {
+            if mid_signal.expected_profit.usdc_amount < next_signal.expected_profit.usdc_amount {
                 // next is higher -> check to the right (try a higher amount_in)
                 trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
                 best_signal = Some(next_signal);

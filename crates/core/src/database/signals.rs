@@ -41,10 +41,11 @@ impl SignalRepository {
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                expected_profit_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20, $21, $22
+                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
             )
             "#,
             &signal.slow_chain.name.to_string(),
@@ -65,8 +66,9 @@ impl SignalRepository {
             &signal.fast_swap_sim.gas_cost.to_string(),
             &signal.surplus.token_amounts.0.to_string(),
             &signal.surplus.token_amounts.1.to_string(),
-            &signal.expected_profit.0.to_string(),
-            &signal.expected_profit.1.to_string(),
+            &signal.expected_profit.token_amounts.0.to_string(),
+            &signal.expected_profit.token_amounts.1.to_string(),
+            &signal.expected_profit.usdc_amount.to_string(),
             signal.max_slippage_bps as i64,
             signal.congestion_risk_discount_bps as i64,
         )
@@ -118,6 +120,7 @@ impl SignalRepository {
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                expected_profit_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             FROM signals
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
@@ -162,6 +165,7 @@ struct SignalRow {
     surplus_b: String,
     expected_profit_a: String,
     expected_profit_b: String,
+    expected_profit_usdc: String,
     max_slippage_bps: i64,
     congestion_risk_discount_bps: i64,
 }
@@ -225,12 +229,22 @@ fn try_signal_from_row(
         }
     };
 
-    let expected_profit = {
+    let expected_profit_tokens = {
         let a = BigUint::from_str(&row.expected_profit_a)
             .map_err(|e| eyre!("failed to parse expected profit a from db: {e:}"))?;
         let b = BigUint::from_str(&row.expected_profit_b)
             .map_err(|e| eyre!("failed to parse expected profit b from db: {e:}"))?;
         (a, b)
+    };
+
+    let expected_profit_usdc = BigUint::from_str(&row.expected_profit_usdc)
+        .map_err(|e| eyre!("failed to parse expected profit usdc from db: {e:}"))?;
+
+    let expected_profit = signals::ExpectedProfit {
+        usdc_amount: expected_profit_usdc,
+        token_amounts: expected_profit_tokens,
+        token_a: slow_swap_sim.token_in.clone(),
+        token_b: slow_swap_sim.token_out.clone(),
     };
 
     Ok(signals::CrossChainSingleHop {
