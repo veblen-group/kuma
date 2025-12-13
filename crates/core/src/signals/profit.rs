@@ -4,11 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use tycho_common::models::token::Token;
 
-use crate::{
-    signals::{bps_discount, try_mul_usdc_price},
-    spot_prices::SpotPrices,
-    strategy::Swap,
-};
+use crate::{signals::bps_discount, spot_prices::SpotPrices, strategy::Swap, try_mul_usdc_price};
 use num_traits::CheckedSub as _;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -25,8 +21,8 @@ impl ExpectedProfit {
     pub fn try_from_swaps(
         slow_sim: &Swap,
         fast_sim: &Swap,
-        prices_a_usdc: &SpotPrices,
-        prices_b_usdc: &SpotPrices,
+        prices_a_usdc: &Option<SpotPrices>,
+        prices_b_usdc: &Option<SpotPrices>,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
@@ -48,10 +44,17 @@ impl ExpectedProfit {
             bps_discount(&after_max_slippage_b, congestion_risk_discount_bps);
 
         // Convert to USDC
-        let after_discount_a_usdc =
-            try_mul_usdc_price(after_discount_a_surplus.clone(), prices_a_usdc)?;
-        let after_discount_b_usdc =
-            try_mul_usdc_price(after_discount_b_surplus.clone(), prices_b_usdc)?;
+
+        let after_discount_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
+            try_mul_usdc_price(after_discount_a_surplus.clone(), prices_a_usdc)?
+        } else {
+            BigUint::ZERO
+        };
+        let after_discount_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
+            try_mul_usdc_price(after_discount_b_surplus.clone(), prices_b_usdc)?
+        } else {
+            BigUint::ZERO
+        };
 
         Ok(ExpectedProfit {
             usdc_amount: after_discount_a_usdc + after_discount_b_usdc,

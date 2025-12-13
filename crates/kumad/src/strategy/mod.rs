@@ -15,9 +15,9 @@ use tracing::{debug, error, info, instrument};
 
 use kuma_core::{
     database, signals,
-    spot_prices::SpotPrices,
+    spot_prices::{SpotPrices, try_make_sorted_spot_prices},
     state::block::BlockStateStream,
-    strategy::{self, Precomputes, simulation::make_sorted_spot_prices},
+    strategy::{self, Precomputes},
 };
 
 pub use builder::Builder;
@@ -184,8 +184,12 @@ impl Worker {
 
                         async move {
                             repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
-                            repo.insert(prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
-                            repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
+                            if let (Some(pair_a_usdc), Some(prices_a_usdc)) = (pair_a_usdc, prices_a_usdc) {
+                                repo.insert(prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
+                            }
+                            if let (Some(pair_b_usdc), Some(prices_b_usdc)) = (pair_b_usdc, prices_b_usdc) {
+                                repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
+                            }
                             Ok(())
                         }
                     }.boxed());
@@ -196,9 +200,10 @@ impl Worker {
                 // Handle timer expiration for signal generation
                 Some(fast_state) = self.fast_stream.next() => {
                     // Step 3: Read latest fast chain state
-                    let sorted_prices_a_b = make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair);
-                    let prices_a_b = SpotPrices::try_from_sorted_prices(&sorted_prices_a_b, fast_state.pair_state.block_height, self.strategy.fast_chain.clone(), self.strategy.fast_pair.clone())
+                    let sorted_prices_a_b = try_make_sorted_spot_prices(&fast_state.pair_state, &self.strategy.fast_pair)
                         .wrap_err_with(|| format!("failed to simulate spot prices for {} on {}", self.strategy.fast_pair, self.strategy.fast_chain))?;
+                    let prices_a_b = SpotPrices::try_from_sorted_prices(&sorted_prices_a_b, fast_state.pair_state.block_height, self.strategy.fast_chain.clone(), self.strategy.fast_pair.clone())?;
+
 
                     let repo = self.db.spot_price_repository();
                     db_writes.push({

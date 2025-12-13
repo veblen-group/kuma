@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use color_eyre::eyre::{self, eyre};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 use crate::{
     chain::Chain,
@@ -9,7 +10,7 @@ use crate::{
         PoolId,
         pair::{Pair, PairState},
     },
-    strategy::{Precomputes, simulation::make_sorted_spot_prices},
+    strategy::Precomputes,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,7 +62,7 @@ impl SpotPrices {
     }
 
     pub fn try_from_pair_state(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<Self> {
-        let sorted_spot_prices = make_sorted_spot_prices(state, &pair);
+        let sorted_spot_prices = try_make_sorted_spot_prices(state, &pair)?;
 
         SpotPrices::try_from_sorted_prices(&sorted_spot_prices, state.block_height, chain, pair)
     }
@@ -85,4 +86,37 @@ impl Display for SpotPrices {
             self.pair, self.block_height, self.min_price, self.max_price
         )
     }
+}
+
+// NOTE: these are analogous to midprice
+pub fn try_make_sorted_spot_prices(
+    state: &PairState,
+    pair: &Pair,
+) -> eyre::Result<Vec<(PoolId, f64)>> {
+    let mut spot_prices: Vec<(PoolId, f64)> = state
+        .states
+        .iter()
+        .filter_map(|(id, pool)| {
+            let spot_price = pool.spot_price(pair.token_a(), pair.token_b());
+            match spot_price {
+                Ok(price) => Some((id.clone(), price)),
+                Err(err) => {
+                    warn!(
+                        error = %err,
+                        pair = %pair,
+                        "failed to get spot price, skipping pool"
+                    );
+                    None
+                }
+            }
+        })
+        .collect();
+
+    if spot_prices.is_empty() {
+        return Err(eyre::eyre!("no spot prices found"));
+    }
+
+    spot_prices
+        .sort_by(|(_, spot_price), (_, other_spot_price)| spot_price.total_cmp(other_spot_price));
+    Ok(spot_prices)
 }

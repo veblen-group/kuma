@@ -1,3 +1,4 @@
+use core::spot_prices::try_make_sorted_spot_prices;
 use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
@@ -7,10 +8,7 @@ use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
 use core::strategy::CrossChainSingleHop;
-use core::{
-    chain::Chain, collector, config::Config, signals, spot_prices::SpotPrices, state::pair::Pair,
-    strategy,
-};
+use core::{chain::Chain, collector, config::Config, signals, state::pair::Pair, strategy};
 
 use crate::cli::StrategyArgs;
 
@@ -173,45 +171,14 @@ impl Kuma {
         info!(
             chain = %strategy.slow_chain.name,
             prices.a_b = %precompute.prices_a_b,
-            prices.a_usdc = %precompute.prices_a_usdc,
-            prices.b_usdc = %precompute.prices_b_usdc,
+            prices.a_usdc = %precompute.prices_a_usdc.as_ref().map(|price| price.to_string()).unwrap_or("1".to_owned()),
+            prices.b_usdc = %precompute.prices_b_usdc.as_ref().map(|price| price.to_string()).unwrap_or("1".to_owned()),
             "✅ simulated USDC prices"
         );
 
         let fast_sorted_spot_prices =
-            core::strategy::simulation::make_sorted_spot_prices(&fast_state.pair_state, &fast_pair);
-
-        let fast_prices_a_usdc = SpotPrices::try_from_sorted_prices(
-            &fast_sorted_spot_prices,
-            fast_state.pair_state.block_height,
-            strategy.fast_chain.clone(),
-            strategy.fast_token_a_usdc.clone(),
-        )
-        .wrap_err_with(|| {
-            format!(
-                "{} block {} did not contain spot prices for {}",
-                strategy.fast_chain.name,
-                fast_state.pair_state.block_height,
-                strategy.fast_token_a_usdc
-            )
-        })?;
-        info!(chain = %strategy.fast_chain.name, token.prices = %fast_prices_a_usdc, "✅ fetched USDC prices");
-
-        let fast_prices_b_usdc = SpotPrices::try_from_sorted_prices(
-            &fast_sorted_spot_prices,
-            fast_state.pair_state.block_height,
-            strategy.fast_chain.clone(),
-            strategy.fast_token_b_usdc.clone(),
-        )
-        .wrap_err_with(|| {
-            format!(
-                "{} block {} did not contain spot prices for {}",
-                strategy.fast_chain.name,
-                fast_state.pair_state.block_height,
-                strategy.fast_token_b_usdc
-            )
-        })?;
-        info!(chain = %strategy.fast_chain.name, token.prices = %fast_prices_b_usdc, "✅ fetched USDC prices");
+            try_make_sorted_spot_prices(&fast_state.pair_state, &fast_pair)
+                .wrap_err("failed to make sorted spot prices")?;
 
         // compute arb signal
         let signal = strategy.generate_signal(

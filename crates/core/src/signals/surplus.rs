@@ -6,10 +6,8 @@ use num_traits::CheckedSub as _;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    signals::{bps_discount, try_mul_usdc_price},
-    spot_prices::SpotPrices,
-    state::pair::Pair,
-    strategy::Swap,
+    signals::bps_discount, spot_prices::SpotPrices, state::pair::Pair, strategy::Swap,
+    try_mul_usdc_price,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -24,8 +22,9 @@ impl Surplus {
     pub fn try_from_swaps(
         slow_sim: &Swap,
         fast_sim: &Swap,
-        prices_a_usdc: &SpotPrices,
-        prices_b_usdc: &SpotPrices,
+        // TODO: prices a_b in case a/b == usdc
+        prices_a_usdc: &Option<SpotPrices>,
+        prices_b_usdc: &Option<SpotPrices>,
         max_slippage_bps: u64,
     ) -> eyre::Result<Self> {
         // Calculate raw surplus
@@ -60,8 +59,18 @@ impl Surplus {
             .wrap_err("min surplus of token b cannot be negative")?;
 
         // Calculate USDC value
-        let surplus_a_usdc = try_mul_usdc_price(surplus_a.clone(), prices_a_usdc)?;
-        let surplus_b_usdc = try_mul_usdc_price(surplus_b.clone(), prices_b_usdc)?;
+        let surplus_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
+            try_mul_usdc_price(surplus_a.clone(), &prices_a_usdc)?
+        } else {
+            // TODO: prices a_b in case a/b == usdc
+            BigUint::ZERO
+        };
+        let surplus_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
+            try_mul_usdc_price(surplus_b.clone(), &prices_b_usdc)?
+        } else {
+            // TODO: prices a_b in case a/b == usdc
+            BigUint::ZERO
+        };
 
         Ok(Surplus {
             slow_pair: Pair::new(slow_sim.token_in.clone(), slow_sim.token_out.clone()),
