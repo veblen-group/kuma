@@ -741,7 +741,10 @@ mod tests {
         state: PairState,
     ) -> Swap {
         let pool_id = state::PoolId::from(pool_id);
-        let pool_state = state.states.get(&pool_id).unwrap();
+        let pool_state = state
+            .states
+            .get(&pool_id)
+            .expect(&format!("pool state not found for {}", pool_id));
         Swap::from_protocol_sim(&amount_in, token_in, token_out, pool_state.as_ref()).unwrap()
     }
 
@@ -1281,8 +1284,8 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
         // assert pepe->weth and weth->pepe legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
@@ -1292,11 +1295,11 @@ mod tests {
 
         let expected_slow_sim = precompute
             .pool_sims
-            .get(&PoolId::from("0x123"))
-            .unwrap()
+            .get(&PoolId::from("slow_main"))
+            .expect("main pool not found")
             .b_to_a
             .last()
-            .unwrap();
+            .expect("b_to_a swap not found");
         assert_eq!(signal.slow_swap_sim.amount_in, expected_slow_sim.amount_in);
         assert_eq!(
             signal.slow_swap_sim.amount_out,
@@ -1310,7 +1313,7 @@ mod tests {
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
-            "0x456",
+            "fast_main",
             expected_fast_amount_in,
             &make_base_pepe(),
             &make_base_weth(),
