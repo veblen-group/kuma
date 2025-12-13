@@ -30,6 +30,11 @@ impl ExpectedProfit {
         let min_slow_amount_out = bps_discount(&slow_sim.amount_out, max_slippage_bps);
         let min_fast_amount_out = bps_discount(&fast_sim.amount_out, max_slippage_bps);
 
+        // let (a_in, a_out, b_in, b_out) = {
+        // TODO: figure out tokens a/b
+        // };
+
+        // TODO: this isnt really token A/B
         let after_max_slippage_a = min_fast_amount_out
             .checked_sub(&slow_sim.amount_in)
             .wrap_err("min surplus of token a cannot be negative")?;
@@ -72,7 +77,12 @@ impl Display for ExpectedProfit {
             "Tokens Expected Profit: {} ({}) {} ({})
             Expected Profit USD: {}
             ",
-            self.token_amounts.0, "Token A", self.token_amounts.1, "Token B", self.usdc_amount,
+            // TODO: get token a/b from
+            self.token_amounts.0,
+            "Token A",
+            self.token_amounts.1,
+            "Token B",
+            self.usdc_amount,
         )
     }
 }

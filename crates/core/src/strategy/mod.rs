@@ -381,7 +381,6 @@ impl CrossChainSingleHop {
             );
 
             // make sims for mid+1
-            // TODO: usdc prices in here
             let next_signal = match self.try_signal_from_precompute(
                 slow_sims[mid + 1].clone(),
                 slow_protocol_component.clone(),
@@ -405,16 +404,13 @@ impl CrossChainSingleHop {
             trace!(
                 index = mid+1,
                 surplus = %next_signal.surplus,
-                expected_profit.a = %next_signal.expected_profit.token_amounts.0,
-                expected_profit.b = %next_signal.expected_profit.token_amounts.1,
+                expected_profit = %next_signal.expected_profit,
                 "Generated mid+1 candidate signal"
             );
 
             // compare the expected profits
             // TODO: move this out to a function that compares two signals?
-            if mid_signal.expected_profit.token_amounts.0
-                < next_signal.expected_profit.token_amounts.0
-            {
+            if mid_signal.expected_profit.usdc_amount < next_signal.expected_profit.usdc_amount {
                 // next is higher -> check to the right (try a higher amount_in)
                 trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
                 best_signal = Some(next_signal);
