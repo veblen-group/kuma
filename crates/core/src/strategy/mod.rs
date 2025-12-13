@@ -396,7 +396,9 @@ impl CrossChainSingleHop {
 
             // compare the expected profits
             // TODO: move this out to a function that compares two signals?
-            if mid_signal.expected_profit.usdc_amount < next_signal.expected_profit.usdc_amount {
+            if mid_signal.expected_profit.token_amounts.0
+                < next_signal.expected_profit.token_amounts.0
+            {
                 // next is higher -> check to the right (try a higher amount_in)
                 trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
                 best_signal = Some(next_signal);
@@ -573,6 +575,12 @@ mod tests {
 
     static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 
+    const PEPE_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+    const WETH_ADDRESS: &str = "0x0000000000000000000000000000000000000002";
+    const BASE_USDC_ADDRESS: &str = "0x0000000000000000000000000000000000000001";
+    const MAINNET_USDC_ADDRESS: &str = "0x0000000000000000000000000000000000000003";
+    const TEST_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+
     fn init_tracing() {
         TELEMETRY_INIT.get_or_init(|| {
             let _ = tracing_subscriber::fmt()
@@ -597,10 +605,10 @@ mod tests {
         });
     }
 
-    fn make_18_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
+    fn make_18_dec_token(chain: tycho_common::models::Chain, symbol: &str, address: &str) -> Token {
         Token::new(
             // 0x0..00 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000000").unwrap(),
+            &tycho_common::Bytes::from_str(address).expect("valid address"),
             symbol,
             18,
             1000,
@@ -610,10 +618,9 @@ mod tests {
         )
     }
 
-    fn make_6_dec_token(chain: tycho_common::models::Chain, symbol: &str) -> Token {
+    fn make_6_dec_token(chain: tycho_common::models::Chain, symbol: &str, address: &str) -> Token {
         Token::new(
-            // 0x0..03 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000099").unwrap(),
+            &tycho_common::Bytes::from_str(address).expect("valid address"),
             symbol,
             6,
             1000,
@@ -624,17 +631,25 @@ mod tests {
     }
 
     fn make_mainnet_pepe() -> Token {
-        make_18_dec_token(tycho_common::models::Chain::Ethereum, "PEPE")
+        make_18_dec_token(tycho_common::models::Chain::Ethereum, "PEPE", PEPE_ADDRESS)
+    }
+
+    fn make_mainnet_test_6_token() -> Token {
+        make_6_dec_token(tycho_common::models::Chain::Ethereum, "TEST", TEST_ADDRESS)
     }
 
     fn make_base_pepe() -> Token {
-        make_18_dec_token(tycho_common::models::Chain::Base, "PEPE")
+        make_18_dec_token(tycho_common::models::Chain::Base, "PEPE", PEPE_ADDRESS)
+    }
+
+    fn make_base_test_6_token() -> Token {
+        make_6_dec_token(tycho_common::models::Chain::Base, "TEST", TEST_ADDRESS)
     }
 
     fn make_mainnet_weth() -> Token {
         Token::new(
             // 0x0..02 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000002").unwrap(),
+            &tycho_common::Bytes::from_str(WETH_ADDRESS).unwrap(),
             "WETH",
             18,
             1000,
@@ -647,7 +662,7 @@ mod tests {
     fn make_mainnet_usdc() -> Token {
         Token::new(
             // 0x0..03 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000003").unwrap(),
+            &tycho_common::Bytes::from_str(MAINNET_USDC_ADDRESS).unwrap(),
             "USDC",
             6,
             1000,
@@ -660,7 +675,7 @@ mod tests {
     fn make_base_weth() -> Token {
         Token::new(
             // 0x0..02 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000002").unwrap(),
+            &tycho_common::Bytes::from_str(BASE_USDC_ADDRESS).unwrap(),
             "WETH",
             18,
             1000,
@@ -673,7 +688,7 @@ mod tests {
     fn make_base_usdc() -> Token {
         Token::new(
             // 0x0..01 address for uniswap zero2one pool order
-            &tycho_common::Bytes::from_str("0x0000000000000000000000000000000000000001").unwrap(),
+            &tycho_common::Bytes::from_str(BASE_USDC_ADDRESS).unwrap(),
             "USDC",
             6,
             1000,
@@ -850,7 +865,7 @@ mod tests {
     /// Creates a BlockState for the slow chain with different decimals and constant USDC prices.
     ///
     /// Constant USDC prices for different-decimals strategy:
-    /// - TEST (6 decimals)->USDC = 0.2 (5k TEST : 1k USDC)
+    /// - PEPE (6 decimals)->USDC = 0.2 (5k PEPE : 1k USDC)
     /// - WETH (18 decimals)->USDC = 3000 (1 WETH : 3000 USDC)
     ///
     /// Pool IDs created:
@@ -882,7 +897,7 @@ mod tests {
             strategy.slow_chain.name,
         );
 
-        // Constant USDC prices: TEST->USDC = 0.2 (5m TEST : 1m USDC)
+        // Constant USDC prices: PEPE->USDC = 0.2 (5m PEPE : 1m USDC)
         let token_b_usdc_state = make_single_univ2_pair_state(
             &strategy.slow_token_b_usdc,
             block_height,
@@ -927,7 +942,7 @@ mod tests {
             strategy.slow_chain.name,
         );
 
-        // Constant USDC prices: TEST->USDC = 0.2 (5k TEST : 1k USDC)
+        // Constant USDC prices: PEPE->USDC = 0.2 (5k PEPE : 1k USDC)
         let token_b_usdc_state = make_single_univ2_pair_state(
             &strategy.slow_token_b_usdc,
             block_height,
@@ -998,7 +1013,7 @@ mod tests {
 
     /// Creates a strategy that uses different number of decimals for tokens.
     /// Token A is weth 0x002
-    /// Token B is TEST 0x099
+    /// Token B is PEPE 0x099
     /// USDC is 0x003
     fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
         init_tracing();
@@ -1008,7 +1023,7 @@ mod tests {
         // so pair order is always (usdc, weth) for uniswap zero2one
         let slow_chain = Chain::eth_mainnet();
         let slow_usdc = make_mainnet_usdc();
-        let slow_token_b = make_6_dec_token(slow_chain.name, "TEST");
+        let slow_token_b = make_mainnet_test_6_token();
         let slow_pair = Pair::new(slow_token_b.clone(), make_mainnet_weth());
         let slow_token_a_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
         let slow_token_b_usdc = Pair::new(slow_token_b, slow_usdc.clone());
@@ -1019,7 +1034,7 @@ mod tests {
 
         let fast_chain = Chain::base_mainnet();
         let fast_usdc = make_base_usdc();
-        let fast_token_a = make_6_dec_token(fast_chain.name, "TEST");
+        let fast_token_a = make_base_test_6_token();
         let fast_pair = Pair::new(fast_token_a.clone(), make_base_weth());
         let fast_token_a_usdc = Pair::new(fast_token_a, fast_usdc.clone());
         let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
@@ -1352,11 +1367,11 @@ mod tests {
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
-        // weth -> TEST price is 200
+        // WETH -> TEST price is 200
         let slow_state =
             make_slow_block_state_different_decimals(&strategy, 2000, 10_000_000, 5_000);
 
-        // weth -> TEST price is 500
+        // WETH -> TEST price is 500
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 10_000_000, 2_000);
 
         let precompute = strategy
@@ -1374,18 +1389,18 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
-        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_usdc());
+        // assert test->weth and test->pepe legs
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_test_6_token());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
-        assert_eq!(signal.fast_swap_sim.token_out, make_base_usdc());
+        assert_eq!(signal.fast_swap_sim.token_out, make_base_test_6_token());
 
         let expected_slow_sim = precompute
             .pool_sims
-            .get(&PoolId::from("0x123"))
+            .get(&PoolId::from("slow_main"))
             .unwrap()
             .a_to_b
             .last()
@@ -1403,7 +1418,7 @@ mod tests {
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
-            "0x456",
+            "fast_main",
             expected_fast_amount_in,
             &make_base_weth(),
             &make_base_usdc(),
@@ -1443,10 +1458,10 @@ mod tests {
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
-        // weth -> TEST price is 0.5
+        // weth -> PEPE price is 0.5
         let slow_state = make_slow_block_state_different_decimals(&strategy, 2000, 5_000, 10_000);
 
-        // weth -> TEST price is 0.2
+        // weth -> PEPE price is 0.2
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1464,18 +1479,18 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(signal.slow_pool_id, state::PoolId::from("0x123"));
-        assert_eq!(signal.fast_pool_id, state::PoolId::from("0x456"));
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
         // assert pepe->weth and weth->pepe legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
-        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_usdc());
-        assert_eq!(signal.fast_swap_sim.token_in, make_base_usdc());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_test_6_token());
+        assert_eq!(signal.fast_swap_sim.token_in, make_base_test_6_token());
         assert_eq!(signal.fast_swap_sim.token_out, make_base_weth());
 
         let expected_slow_sim = precompute
             .pool_sims
-            .get(&PoolId::from("0x123"))
+            .get(&PoolId::from("slow_main"))
             .unwrap()
             .b_to_a
             .last()
@@ -1493,7 +1508,7 @@ mod tests {
 
         // assert fast amount out is calculated from the right pool
         let expected_fast_sim = simulate_swap_for_pool_id(
-            "0x456",
+            "fast_main",
             expected_fast_amount_in,
             &make_base_pepe(),
             &make_base_weth(),
