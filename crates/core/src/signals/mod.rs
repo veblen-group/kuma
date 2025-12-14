@@ -3,7 +3,6 @@ use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
 
 use color_eyre::eyre::{self, Context, Ok, OptionExt};
-use num_bigint::BigUint;
 
 use crate::{
     chain::Chain,
@@ -13,11 +12,11 @@ use crate::{
     strategy::Swap,
 };
 
+pub use profit::bps_discount;
+
 mod profit;
-mod surplus;
 
 pub use profit::ExpectedProfit;
-pub use surplus::Surplus;
 
 // TODO: rename to buy/sell? need to clarify the direction
 #[derive(Debug, Clone)]
@@ -51,7 +50,6 @@ pub struct CrossChainSingleHop {
     pub fast_height: u64,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
-    pub surplus: Surplus,
     pub expected_profit: ExpectedProfit,
 }
 
@@ -64,6 +62,7 @@ impl CrossChainSingleHop {
         slow_id: &state::PoolId,
         slow_height: u64,
         slow_sim: Swap,
+        slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
         fast_chain: &Chain,
@@ -79,17 +78,10 @@ impl CrossChainSingleHop {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
-        let surplus = Surplus::try_from_swaps(
-            &slow_sim,
-            &fast_sim,
-            &slow_prices_a_usdc,
-            &slow_prices_b_usdc,
-            max_slippage_bps,
-        )?;
-
         let expected_profit = ExpectedProfit::try_from_swaps(
             &slow_sim,
             &fast_sim,
+            &slow_prices_a_b,
             &slow_prices_a_usdc,
             &slow_prices_b_usdc,
             max_slippage_bps,
@@ -109,7 +101,6 @@ impl CrossChainSingleHop {
             fast_height,
             fast_pool_id: fast_id.clone(),
             fast_swap_sim: fast_sim,
-            surplus,
             expected_profit: expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
@@ -159,6 +150,7 @@ impl CrossChainSingleHop {
 
 impl Display for CrossChainSingleHop {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: get rid of this
         let max_slippage_slow = &self.slow_swap_sim.amount_out
             - bps_discount(&self.slow_swap_sim.amount_out, self.max_slippage_bps);
         let max_slippage_fast = &self.fast_swap_sim.amount_out
@@ -181,10 +173,8 @@ impl Display for CrossChainSingleHop {
                 ID: {}
                 Amount In: {}
                 Amount Out: {}
-                Max Slippage: {}
-            Tokens Expected Profit: {} ({}) {} ({})
-            Expected Profit USD: {}
-                Surplus: {}
+                Max Slippage bps: {}
+            Expected Profit: {}
             ",
             self.slow_chain,
             self.slow_pair,
@@ -200,17 +190,7 @@ impl Display for CrossChainSingleHop {
             self.fast_swap_sim.amount_in,
             self.fast_swap_sim.amount_out,
             max_slippage_fast,
-            self.expected_profit.token_amounts.0,
-            self.slow_pair.token_a().symbol,
-            self.expected_profit.token_amounts.1,
-            self.slow_pair.token_b().symbol,
-            self.expected_profit.usdc_amount,
-            self.surplus,
+            self.expected_profit
         )
     }
-}
-
-pub(crate) fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
-    let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
-    (amount * slippage_multiplier) / BigUint::from(10000u64)
 }

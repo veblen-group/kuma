@@ -254,6 +254,7 @@ impl CrossChainSingleHop {
                         precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
+                        &precompute.prices_a_b,
                         &precompute.prices_a_usdc,
                         &precompute.prices_b_usdc,
                         fast_state.states[&fast_id].as_ref(),
@@ -265,8 +266,7 @@ impl CrossChainSingleHop {
                         trace!(
                             slow_sim = %signal.slow_swap_sim,
                             fast_sim = %signal.fast_swap_sim,
-                            signal.surplus = ?signal.surplus,
-                            signal.expected_profit = ?signal.expected_profit,
+                            signal.expected_profit = %signal.expected_profit,
                             "found optimal swap for A->B (slow) and B->A (fast)"
                         );
                         Ok(signal)
@@ -282,6 +282,7 @@ impl CrossChainSingleHop {
                         precompute.pool_metadata[&slow_id].clone(),
                         &slow_id,
                         precompute.block_height,
+                        &precompute.prices_a_b,
                         &precompute.prices_a_usdc,
                         &precompute.prices_b_usdc,
                         fast_state.states[&fast_id].as_ref(),
@@ -293,8 +294,7 @@ impl CrossChainSingleHop {
                         trace!(
                             slow_sim = %signal.slow_swap_sim,
                             fast_sim = %signal.fast_swap_sim,
-                            signal.surplus = ?signal.surplus,
-                            signal.expected_profit = ?signal.expected_profit,
+                            signal.expected_profit = %signal.expected_profit,
                             "found optimal swap for B->A (slow) and A->B (fast)"
                         );
                         Ok(signal)
@@ -336,6 +336,7 @@ impl CrossChainSingleHop {
         slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
+        slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
         fast_state: &dyn ProtocolSim,
@@ -357,6 +358,7 @@ impl CrossChainSingleHop {
                 slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
+                slow_prices_a_b,
                 slow_prices_a_usdc,
                 slow_prices_b_usdc,
                 fast_state,
@@ -375,7 +377,6 @@ impl CrossChainSingleHop {
 
             trace!(
                 index = mid,
-                surplus = %mid_signal.surplus,
                 expected_profit = %mid_signal.expected_profit,
                 "Generated mid candidate signal"
             );
@@ -386,6 +387,7 @@ impl CrossChainSingleHop {
                 slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
+                slow_prices_a_b,
                 slow_prices_a_usdc,
                 slow_prices_b_usdc,
                 fast_state,
@@ -403,14 +405,27 @@ impl CrossChainSingleHop {
             };
             trace!(
                 index = mid+1,
-                surplus = %next_signal.surplus,
                 expected_profit = %next_signal.expected_profit,
                 "Generated mid+1 candidate signal"
             );
 
             // compare the expected profits
-            // TODO: move this out to a function that compares two signals?
-            if mid_signal.expected_profit.usdc_amount < next_signal.expected_profit.usdc_amount {
+            let mid_profit_usdc = match mid_signal.expected_profit.total_profit_usdc() {
+                Ok(profit) => profit,
+                Err(err) => {
+                    error!(index = mid+1, err = %err, profit = %mid_signal.expected_profit, "failed to calculate mid+1 signal profit");
+                    continue;
+                }
+            };
+            let next_profit_usdc = match next_signal.expected_profit.total_profit_usdc() {
+                Ok(profit) => profit,
+                Err(err) => {
+                    error!(index = mid+1, err = %err, profit = %next_signal.expected_profit, "failed to calculate next signal profit");
+                    continue;
+                }
+            };
+
+            if mid_profit_usdc < next_profit_usdc {
                 // next is higher -> check to the right (try a higher amount_in)
                 trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
                 best_signal = Some(next_signal);
@@ -462,6 +477,7 @@ impl CrossChainSingleHop {
         slow_protocol_component: Arc<ProtocolComponent>,
         slow_pool_id: &PoolId,
         slow_height: u64,
+        slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
         fast_state: &dyn ProtocolSim,
@@ -491,6 +507,7 @@ impl CrossChainSingleHop {
             slow_pool_id,
             slow_height,
             slow_sim.clone(),
+            slow_prices_a_b,
             slow_prices_a_usdc,
             slow_prices_b_usdc,
             &self.fast_chain,
@@ -571,7 +588,7 @@ mod tests {
     use super::*;
     use crate::{
         chain::Chain,
-        signals::{ExpectedProfit, Surplus},
+        signals::ExpectedProfit,
         state::{self, pair::PairState},
         strategy::{self, CrossChainSingleHop},
     };
@@ -1314,21 +1331,11 @@ mod tests {
         );
 
         assert_eq!(
-            signal.surplus,
-            Surplus::try_from_swaps(
-                &expected_slow_sim,
-                &expected_fast_sim,
-                &precompute.prices_a_usdc,
-                &precompute.prices_b_usdc,
-                strategy.max_slippage_bps
-            )
-            .unwrap()
-        );
-        assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
+                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1403,21 +1410,11 @@ mod tests {
         );
 
         assert_eq!(
-            signal.surplus,
-            Surplus::try_from_swaps(
-                &expected_slow_sim,
-                &expected_fast_sim,
-                &precompute.prices_a_usdc,
-                &precompute.prices_b_usdc,
-                strategy.max_slippage_bps
-            )
-            .unwrap()
-        );
-        assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
+                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1494,21 +1491,11 @@ mod tests {
         );
 
         assert_eq!(
-            signal.surplus,
-            Surplus::try_from_swaps(
-                &expected_slow_sim,
-                &expected_fast_sim,
-                &precompute.prices_a_usdc,
-                &precompute.prices_b_usdc,
-                strategy.max_slippage_bps
-            )
-            .unwrap()
-        );
-        assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
+                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1585,21 +1572,11 @@ mod tests {
         );
 
         assert_eq!(
-            signal.surplus,
-            Surplus::try_from_swaps(
-                &expected_slow_sim,
-                &expected_fast_sim,
-                &precompute.prices_a_usdc,
-                &precompute.prices_b_usdc,
-                strategy.max_slippage_bps
-            )
-            .unwrap()
-        );
-        assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
+                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,

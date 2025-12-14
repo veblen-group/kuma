@@ -45,6 +45,10 @@ impl Swap {
             gas_cost: sim_result.gas,
         })
     }
+
+    pub fn get_pair(&self) -> Pair {
+        Pair::new(self.token_in.clone(), self.token_out.clone())
+    }
 }
 
 impl Display for Swap {
@@ -64,7 +68,6 @@ impl Display for Swap {
 // NOTE: This is kind of an order book representation of the amm - the price at different depths
 #[derive(Debug, Clone)]
 pub struct PoolSteps {
-    #[allow(dead_code)]
     pub a_to_b: Vec<Swap>,
     pub b_to_a: Vec<Swap>,
 }

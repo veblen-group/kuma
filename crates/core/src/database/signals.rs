@@ -8,7 +8,7 @@ use tracing::instrument;
 use crate::{
     chain::Chain,
     config::TokenAddressesForChain,
-    signals::{self, Surplus},
+    signals,
     state::{PoolId, pair::Pair},
     strategy::Swap,
 };
@@ -31,6 +31,9 @@ impl SignalRepository {
 
     #[instrument(skip(self, signal))]
     pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<()> {
+        // TODO: should store this as amount_a_usdc, amount_b_usdc so it can be reconstructed later
+        let expected_profit_usdc = signal.expected_profit.total_profit_usdc()?;
+
         sqlx::query!(
             r#"
             INSERT INTO signals (
@@ -64,11 +67,11 @@ impl SignalRepository {
             &signal.fast_swap_sim.amount_in.to_string(),
             &signal.fast_swap_sim.amount_out.to_string(),
             &signal.fast_swap_sim.gas_cost.to_string(),
-            &signal.surplus.token_amounts.0.to_string(),
-            &signal.surplus.token_amounts.1.to_string(),
-            &signal.expected_profit.token_amounts.0.to_string(),
-            &signal.expected_profit.token_amounts.1.to_string(),
-            &signal.expected_profit.usdc_amount.to_string(),
+            &signal.expected_profit.surplus.0.to_string(),
+            &signal.expected_profit.surplus.1.to_string(),
+            &signal.expected_profit.min_token_amounts.0.to_string(),
+            &signal.expected_profit.min_token_amounts.1.to_string(),
+            &expected_profit_usdc.to_string(),
             signal.max_slippage_bps as i64,
             signal.congestion_risk_discount_bps as i64,
         )
@@ -161,6 +164,7 @@ struct SignalRow {
     fast_swap_amount_in: String,
     fast_swap_amount_out: String,
     fast_swap_gas_cost: String,
+    // TODO: change schema to match expected profit type
     surplus_a: String,
     surplus_b: String,
     expected_profit_a: String,
@@ -220,16 +224,10 @@ fn try_signal_from_row(
             .map_err(|e| eyre!("failed to parse surplus a from db: {e:}"))?;
         let b = BigUint::from_str(&row.surplus_b)
             .map_err(|e| eyre!("failed to parse surplus b from db: {e:}"))?;
-        // TODO: add usdc and slippage to db
-        Surplus {
-            slow_pair: slow_pair.clone(),
-            token_amounts: (a, b),
-            usdc_amounts: (BigUint::ZERO, BigUint::ZERO),
-            token_amounts_after_slippage: (BigUint::ZERO, BigUint::ZERO),
-        }
+        (a, b)
     };
 
-    let expected_profit_tokens = {
+    let min_token_amounts = {
         let a = BigUint::from_str(&row.expected_profit_a)
             .map_err(|e| eyre!("failed to parse expected profit a from db: {e:}"))?;
         let b = BigUint::from_str(&row.expected_profit_b)
@@ -237,14 +235,20 @@ fn try_signal_from_row(
         (a, b)
     };
 
+    // TODO: this should be stored in (a usdc profit, b usdc profit) form so it can be properly reconstructed
     let expected_profit_usdc = BigUint::from_str(&row.expected_profit_usdc)
         .map_err(|e| eyre!("failed to parse expected profit usdc from db: {e:}"))?;
 
     let expected_profit = signals::ExpectedProfit {
-        usdc_amount: expected_profit_usdc,
-        token_amounts: expected_profit_tokens,
-        token_a: slow_swap_sim.token_in.clone(),
-        token_b: slow_swap_sim.token_out.clone(),
+        surplus,
+        min_token_amounts,
+        // TODO: save usdc prices to db
+        usdc_prices: (0f64, 0f64),
+        // TODO: save max slippage token amounts to db
+        max_slippage_token_amounts: (BigUint::ZERO, BigUint::ZERO),
+        // TODO: save min usdc amounts to db
+        min_usdc_amounts: (expected_profit_usdc, BigUint::ZERO),
+        pair: slow_pair.clone(),
     };
 
     Ok(signals::CrossChainSingleHop {
@@ -258,7 +262,6 @@ fn try_signal_from_row(
         fast_height,
         max_slippage_bps,
         congestion_risk_discount_bps,
-        surplus,
         expected_profit,
         slow_pool_id,
         slow_swap_sim,

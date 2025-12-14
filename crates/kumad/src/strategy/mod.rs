@@ -157,6 +157,7 @@ impl Worker {
                 // Handle slow chain updates
                 Some(slow_state) = self.slow_stream.next() => {
                     // Start timer for 75% of block time
+                    // TODO: add this deadline to the signal metadata?
                     submission_deadline = Some(Instant::now() + submission_delay);
 
                     debug!(
