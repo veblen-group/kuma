@@ -55,7 +55,6 @@ impl BlockStateStream {
         block_rx: watch::Receiver<Arc<Option<Block>>>,
         usdc: Token,
     ) -> Self {
-        // TODO: handle token a/b being usdc by making those pairs optional
         let token_a_usdc_pair = if pair.token_a().symbol != "USDC" {
             Some(Pair::new(pair.token_a().clone(), usdc.clone()))
         } else {

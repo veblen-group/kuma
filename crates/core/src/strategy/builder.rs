@@ -50,23 +50,23 @@ impl Builder {
         let fast_usdc = Config::get_usdc_token(inventory[&fast_chain].keys())
             .ok_or_eyre("No USDC token found for fast chain")?;
 
-        let slow_token_a_usdc = if slow_pair.token_a().symbol == "USDC" {
+        let slow_token_a_usdc = if slow_pair.token_a().symbol != "USDC" {
             Some(Pair::new(slow_pair.token_a().clone(), slow_usdc.clone()))
         } else {
             None
         };
-        let slow_token_b_usdc = if slow_pair.token_b().symbol == "USDC" {
+        let slow_token_b_usdc = if slow_pair.token_b().symbol != "USDC" {
             Some(Pair::new(slow_pair.token_b().clone(), slow_usdc.clone()))
         } else {
             None
         };
 
-        let fast_token_a_usdc = if fast_pair.token_a().symbol == "USDC" {
+        let fast_token_a_usdc = if fast_pair.token_a().symbol != "USDC" {
             Some(Pair::new(fast_pair.token_a().clone(), fast_usdc.clone()))
         } else {
             None
         };
-        let fast_token_b_usdc = if fast_pair.token_b().symbol == "USDC" {
+        let fast_token_b_usdc = if fast_pair.token_b().symbol != "USDC" {
             Some(Pair::new(fast_pair.token_b().clone(), fast_usdc.clone()))
         } else {
             None

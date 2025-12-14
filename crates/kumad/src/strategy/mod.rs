@@ -183,11 +183,34 @@ impl Worker {
                         let prices_b_usdc = new_precompute.prices_b_usdc.clone();
 
                         async move {
+                            info!(
+                                chain = %self.strategy.slow_chain.name,
+                                block_height = %new_precompute.block_height,
+                                pair = %pair_a_b,
+                                prices = %prices_a_b,
+                                "📈 Saving spot prices to database"
+                            );
                             repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
+
                             if let (Some(pair_a_usdc), Some(prices_a_usdc)) = (pair_a_usdc, prices_a_usdc) {
+                                info!(
+                                    chain = %self.strategy.slow_chain.name,
+                                    block_height = %new_precompute.block_height,
+                                    pair = %pair_a_usdc,
+                                    prices = %prices_a_usdc,
+                                    "📈 Saving spot prices to database"
+                                );
                                 repo.insert(prices_a_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_a_usdc))?;
                             }
+
                             if let (Some(pair_b_usdc), Some(prices_b_usdc)) = (pair_b_usdc, prices_b_usdc) {
+                                info!(
+                                    chain = %self.strategy.slow_chain.name,
+                                    block_height = %new_precompute.block_height,
+                                    pair = %pair_b_usdc,
+                                    prices = %prices_b_usdc,
+                                    "📈 Saving spot prices to database"
+                                );
                                 repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
                             }
                             Ok(())
@@ -210,6 +233,13 @@ impl Worker {
                         let pair_a_b = self.strategy.fast_pair.clone();
 
                         async move {
+                            info!(
+                                chain = %self.strategy.fast_chain.name,
+                                block_height = %fast_state.pair_state.block_height,
+                                pair = %pair_a_b,
+                                prices = %prices_a_b,
+                                "📈 Saving spot prices to database"
+                            );
                             repo.insert(prices_a_b).await.wrap_err_with(|| format!("failed to write spot prices to db for {}", pair_a_b))?;
                             Ok(())
                         }

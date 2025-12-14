@@ -587,14 +587,28 @@ mod tests {
 
     static TELEMETRY_INIT: OnceLock<()> = OnceLock::new();
 
-    const PEPE_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
-    const TEST_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
-    const WETH_ADDRESS: &str = "0x0000000000000000000000000000000000000002";
-    const BASE_USDC_ADDRESS: &str = "0x0000000000000000000000000000000000000001";
-    const MAINNET_USDC_ADDRESS: &str = "0x0000000000000000000000000000000000000003";
+    // zero2one order: PEPE < TEST6 < USDC_BASE < WETH < USDC_MAINNET
+    // Pairs:
+    //  - PEPE/WETH
+    //  - PEPE/USDC_BASE
+    //  - PEPE/USDC_MAINNET
+    //
+    //  - TEST6/WETH
+    //  - TEST6/USDC_BASE
+    //  - TEST6/USDC_MAINNET
+    //
+    //  - USDC_BASE/WETH
+    //  - WETH/USDC_MAINNET
+    const PEPE_ADDRESS: &str = "0x0000000000000000000000000000000000000001";
+    const TEST6_ADDRESS: &str = "0x0000000000000000000000000000000000000002";
+    const WETH_ADDRESS: &str = "0x0000000000000000000000000000000000000100";
+    const USDC_BASE_ADDRESS: &str = "0x0000000000000000000000000000000000000010";
+    const USDC_MAINNET_ADDRESS: &str = "0x0000000000000000000000000000000000000110";
 
-    fn init_tracing() {
+    fn init_telemetry() {
         TELEMETRY_INIT.get_or_init(|| {
+            color_eyre::install().unwrap();
+
             let _ = tracing_subscriber::fmt()
                 .with_env_filter(
                     EnvFilter::from_default_env()
@@ -646,50 +660,54 @@ mod tests {
         make_18_dec_token(tycho_common::models::Chain::Ethereum, "PEPE", PEPE_ADDRESS)
     }
 
-    fn make_mainnet_test_6_token() -> Token {
-        make_6_dec_token(tycho_common::models::Chain::Ethereum, "TEST", TEST_ADDRESS)
-    }
-
     fn make_base_pepe() -> Token {
         make_18_dec_token(tycho_common::models::Chain::Base, "PEPE", PEPE_ADDRESS)
     }
 
+    fn make_mainnet_test_6_token() -> Token {
+        make_6_dec_token(
+            tycho_common::models::Chain::Ethereum,
+            "TEST6",
+            TEST6_ADDRESS,
+        )
+    }
+
     fn make_base_test_6_token() -> Token {
-        make_6_dec_token(tycho_common::models::Chain::Base, "TEST", TEST_ADDRESS)
+        make_6_dec_token(tycho_common::models::Chain::Base, "TEST6", TEST6_ADDRESS)
     }
 
     fn make_mainnet_weth() -> Token {
         make_18_dec_token(tycho_common::models::Chain::Ethereum, "WETH", WETH_ADDRESS)
     }
 
-    fn make_mainnet_usdc() -> Token {
-        make_6_dec_token(
-            tycho_common::models::Chain::Ethereum,
-            "USDC",
-            MAINNET_USDC_ADDRESS,
-        )
-    }
-
     fn make_base_weth() -> Token {
         make_18_dec_token(tycho_common::models::Chain::Base, "WETH", WETH_ADDRESS)
     }
 
+    fn make_mainnet_usdc() -> Token {
+        make_6_dec_token(
+            tycho_common::models::Chain::Ethereum,
+            "USDC",
+            USDC_MAINNET_ADDRESS,
+        )
+    }
+
     fn make_base_usdc() -> Token {
-        make_6_dec_token(tycho_common::models::Chain::Base, "USDC", BASE_USDC_ADDRESS)
+        make_6_dec_token(tycho_common::models::Chain::Base, "USDC", USDC_BASE_ADDRESS)
     }
 
     fn scale_by_decimals(amount: &BigUint, decimals: u32) -> BigUint {
         amount * BigUint::from(10u64).pow(decimals)
     }
 
-    fn make_univ2_protocol_sim(reserve_a: &BigUint, reserve_b: &BigUint) -> Arc<dyn ProtocolSim> {
+    fn make_univ2_protocol_sim(reserve_0: &BigUint, reserve_1: &BigUint) -> Arc<dyn ProtocolSim> {
         use std::str::FromStr;
         use tycho_simulation::evm::protocol::uniswap_v2::state::UniswapV2State;
 
-        let reserve_a_u256 = alloy::primitives::U256::from_str(&reserve_a.to_string()).unwrap();
-        let reserve_b_u256 = alloy::primitives::U256::from_str(&reserve_b.to_string()).unwrap();
+        let reserve_0_u256 = alloy::primitives::U256::from_str(&reserve_0.to_string()).unwrap();
+        let reserve_1_u256 = alloy::primitives::U256::from_str(&reserve_1.to_string()).unwrap();
 
-        Arc::new(UniswapV2State::new(reserve_a_u256, reserve_b_u256))
+        Arc::new(UniswapV2State::new(reserve_0_u256, reserve_1_u256))
     }
 
     fn make_single_univ2_pair_state(
@@ -700,13 +718,21 @@ mod tests {
         reserve_b: u64,
         chain: tycho_common::models::Chain,
     ) -> PairState {
+        let (reserve0, reserve1) = {
+            let reserve_a = scale_by_decimals(&BigUint::from(reserve_a), pair.token_a().decimals);
+            let reserve_b = scale_by_decimals(&BigUint::from(reserve_b), pair.token_b().decimals);
+
+            if pair.token_a().address < pair.token_b().address {
+                (reserve_a, reserve_b)
+            } else {
+                (reserve_b, reserve_a)
+            }
+        };
+
         PairState {
             states: HashMap::from([(
                 state::PoolId::from(pool_id),
-                make_univ2_protocol_sim(
-                    &scale_by_decimals(&BigUint::from(reserve_a), pair.token_a().decimals),
-                    &scale_by_decimals(&BigUint::from(reserve_b), pair.token_b().decimals),
-                ),
+                make_univ2_protocol_sim(&reserve0, &reserve1),
             )]),
             block_height,
             modified_pools: Arc::new(HashSet::from([state::PoolId::from(pool_id)])),
@@ -982,30 +1008,39 @@ mod tests {
     }
 
     /// Creates a strategy that uses the same number of decimals for all tokens.
-    /// Token A is pepe 0x000
-    /// Token B is weth 0x002
-    /// USDC is 0x003
+    ///
+    /// Token A = PEPE, Slow Address = 0x000, Fast Address = 0x000
+    /// Token B = WETH, Slow Address = 0x100, Fast Address = 0x100
+    /// Pair = PEPE/WETH, Slow zero2one = PEPE/WETH, Fast zero2one = PEPE/WETH
+    ///
+    /// USDC Slow Address = 0x110, Fast Address = 0x010
+    /// Slow zero2one: Token A -> PEPE/USDC, Token B -> WETH/USDC
+    /// Fast zero2one: Token A -> PEPE/USDC, Token B -> USDC/WETH
     fn make_same_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
-        init_tracing();
+        init_telemetry();
 
-        // custom pepe addr 0x0..0
-        // custom weth addr 0x0..2
-        // so pair order is always (pepe, weth) for uniswap zero2one
+        // WETH = 0x100, PEPE = 0x000, USDC = 0x110
         let slow_chain = Chain::eth_mainnet();
+        // Pair = PEPE/WETH, zero2one = PEPE/WETH
         let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
-        let slow_usdc = make_mainnet_usdc();
-        let slow_token_a_usdc = Pair::new(make_mainnet_pepe(), slow_usdc.clone());
-        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
+        // zero2one = PEPE/USDC
+        let slow_token_a_usdc = Pair::new(make_mainnet_pepe(), make_mainnet_usdc());
+        // zero2one = WETH/USDC
+        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
         );
 
+        // WETH = 0x100, PEPE = 0x000, USDC = 0x110
         let fast_chain = Chain::base_mainnet();
+        // Pair = PEPE/WETH, zero2one = PEPE/WETH
         let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
-        let fast_usdc = make_base_usdc();
-        let fast_token_a_usdc = Pair::new(make_base_pepe(), fast_usdc.clone());
-        let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
+        // zero2one = PEPE/USDC
+        let fast_token_a_usdc = Pair::new(make_base_pepe(), make_base_usdc());
+        // zero2one = USDC/WETH
+        let fast_token_b_usdc = Pair::new(make_base_weth(), make_base_usdc());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
@@ -1013,11 +1048,11 @@ mod tests {
 
         Arc::new(CrossChainSingleHop {
             slow_chain,
-            slow_usdc,
+            slow_usdc: make_mainnet_usdc(),
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
-            fast_usdc,
+            fast_usdc: make_base_usdc(),
             fast_pair,
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
@@ -1032,32 +1067,38 @@ mod tests {
     }
 
     /// Creates a strategy that uses different number of decimals for tokens.
-    /// Token A is weth 0x002
-    /// Token B is PEPE 0x099
-    /// USDC is 0x003
+    ///
+    /// Token A = WETH, Slow Address = 0x100, Fast Address = 0x100
+    /// Token B = TEST6, Slow Address = 0x002, Fast Address = 0x002
+    /// Pair = TEST6/WETH, Slow zero2one = TEST6/WETH, Fast zero2one = TEST6/WETH
+    ///
+    /// USDC Slow Address = 0x110, Fast Address = 0x010
+    /// USDC Slow zero2one: Token A -> WETH/USDC, Token B -> TEST6/USDC
+    /// USDC Fast zero2one: Token A -> USDC/WETH, Token B -> TEST6/USDC
     fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
-        init_tracing();
+        init_telemetry();
 
-        // custom weth addr 0x0..2
-        // custom test addr 0x0..99
-        // so pair order is always (weth, test) for uniswap zero2one
+        // WETH = 0x100, TEST6 = 0x002, USDC = 0x110
         let slow_chain = Chain::eth_mainnet();
-        let slow_usdc = make_mainnet_usdc();
-        let slow_token_b = make_mainnet_test_6_token();
-        let slow_pair = Pair::new(slow_token_b.clone(), make_mainnet_weth());
-        let slow_token_a_usdc = Pair::new(make_mainnet_weth(), slow_usdc.clone());
-        let slow_token_b_usdc = Pair::new(slow_token_b, slow_usdc.clone());
+        // Pair = TEST6/WETH, zero2one = TEST6/WETH
+        let slow_pair = Pair::new(make_mainnet_weth(), make_mainnet_test_6_token());
+        // zero2one = WETH/USDC
+        let slow_token_a_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+        // zero2one = TEST6/USDC
+        let slow_token_b_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
         );
 
+        // WETH = 0x100, TEST6 = 0x002, USDC = 0x010
         let fast_chain = Chain::base_mainnet();
-        let fast_usdc = make_base_usdc();
-        let fast_token_a = make_base_test_6_token();
-        let fast_pair = Pair::new(fast_token_a.clone(), make_base_weth());
-        let fast_token_a_usdc = Pair::new(fast_token_a, fast_usdc.clone());
-        let fast_token_b_usdc = Pair::new(make_base_weth(), fast_usdc.clone());
+        // Pair = TEST6/WETH, zero2one = TEST6/WETH
+        let fast_pair = Pair::new(make_base_weth(), make_base_test_6_token());
+        // zero2one = USDC/WETH
+        let fast_token_a_usdc = Pair::new(make_base_weth(), make_base_usdc());
+        // zero2one = TEST6/USDC
+        let fast_token_b_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),
@@ -1065,11 +1106,11 @@ mod tests {
 
         Arc::new(CrossChainSingleHop {
             slow_chain,
-            slow_usdc,
+            slow_usdc: make_mainnet_usdc(),
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
-            fast_usdc,
+            fast_usdc: make_base_usdc(),
             fast_pair,
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
