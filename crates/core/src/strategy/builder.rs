@@ -1,8 +1,9 @@
-use color_eyre::eyre::{self};
+use color_eyre::eyre::{self, OptionExt};
 
 use crate::{
     chain::Chain,
     config::{Config, InventoriesForChain},
+    state::pair::Pair,
     strategy::CrossChainSingleHop,
 };
 
@@ -44,16 +45,49 @@ impl Builder {
             inventory[&fast_chain][fast_pair.token_b()].clone(),
         );
 
+        let slow_usdc = Config::get_usdc_token(inventory[&slow_chain].keys())
+            .ok_or_eyre("No USDC token found for slow chain")?;
+        let fast_usdc = Config::get_usdc_token(inventory[&fast_chain].keys())
+            .ok_or_eyre("No USDC token found for fast chain")?;
+
+        let slow_token_a_usdc = if slow_pair.token_a().symbol != "USDC" {
+            Some(Pair::new(slow_pair.token_a().clone(), slow_usdc.clone()))
+        } else {
+            None
+        };
+        let slow_token_b_usdc = if slow_pair.token_b().symbol != "USDC" {
+            Some(Pair::new(slow_pair.token_b().clone(), slow_usdc.clone()))
+        } else {
+            None
+        };
+
+        let fast_token_a_usdc = if fast_pair.token_a().symbol != "USDC" {
+            Some(Pair::new(fast_pair.token_a().clone(), fast_usdc.clone()))
+        } else {
+            None
+        };
+        let fast_token_b_usdc = if fast_pair.token_b().symbol != "USDC" {
+            Some(Pair::new(fast_pair.token_b().clone(), fast_usdc.clone()))
+        } else {
+            None
+        };
+
         Ok(CrossChainSingleHop {
             slow_pair: slow_pair.clone(),
+            slow_usdc,
             slow_chain: slow_chain.clone(),
             fast_pair: fast_pair.clone(),
+            fast_usdc,
             fast_chain: fast_chain.clone(),
             slow_inventory,
             fast_inventory,
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            slow_token_a_usdc,
+            slow_token_b_usdc,
+            fast_token_a_usdc,
+            fast_token_b_usdc,
         })
     }
 }

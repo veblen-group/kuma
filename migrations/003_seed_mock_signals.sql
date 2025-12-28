@@ -8,6 +8,7 @@ INSERT INTO signals (
     fast_swap_token_in_symbol, fast_swap_token_out_symbol,
     fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
     surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+    expected_profit_usdc
     max_slippage_bps, congestion_risk_discount_bps
 ) VALUES
     (
@@ -18,6 +19,7 @@ INSERT INTO signals (
         'WETH', 'USDC',
         '5', '10200', '20',
         '200', '200', '180', '180',
+        '50',
         50, 20
     ),
     (

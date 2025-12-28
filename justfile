@@ -82,7 +82,7 @@ db-prepare:
 ##############################
 # Run the API backend server
 backend:
-  exec cargo run --bin kuma-backend
+  cargo run --bin kuma-backend
 
 # Test the API backend endpoints
 backend-test endpoint="spot_prices" pair="USDC-WETH" page="1" page_size="10":

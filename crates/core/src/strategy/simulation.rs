@@ -9,18 +9,11 @@ use std::fmt::Display;
 use color_eyre::eyre::{self, Context as _, eyre};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 use tycho_simulation::{
     tycho_common::models::token::Token, tycho_core::simulation::protocol_sim::ProtocolSim,
 };
 
-use crate::{
-    signals::Direction,
-    state::{
-        PoolId,
-        pair::{Pair, PairState},
-    },
-};
+use crate::{signals::Direction, state::pair::Pair};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Swap {
@@ -52,6 +45,10 @@ impl Swap {
             gas_cost: sim_result.gas,
         })
     }
+
+    pub fn get_pair(&self) -> Pair {
+        Pair::new(self.token_in.clone(), self.token_out.clone())
+    }
 }
 
 impl Display for Swap {
@@ -71,7 +68,6 @@ impl Display for Swap {
 // NOTE: This is kind of an order book representation of the amm - the price at different depths
 #[derive(Debug, Clone)]
 pub struct PoolSteps {
-    #[allow(dead_code)]
     pub a_to_b: Vec<Swap>,
     pub b_to_a: Vec<Swap>,
 }
@@ -134,29 +130,4 @@ impl PoolSteps {
 
         Ok(sims)
     }
-}
-
-// NOTE: these are analogous to midprice
-pub fn make_sorted_spot_prices(state: &PairState, pair: &Pair) -> Vec<(PoolId, f64)> {
-    let mut spots: Vec<(PoolId, f64)> = state
-        .states
-        .iter()
-        .filter_map(|(id, pool)| {
-            let spot_price = pool.spot_price(pair.token_a(), pair.token_b());
-            match spot_price {
-                Ok(price) => Some((id.clone(), price)),
-                Err(err) => {
-                    debug!(
-                        error = %err,
-                        pair = %pair,
-                        "failed to get spot price, skipping pool"
-                    );
-                    None
-                }
-            }
-        })
-        .collect();
-
-    spots.sort_by(|(_, spot_price), (_, other_spot_price)| spot_price.total_cmp(other_spot_price));
-    spots
 }

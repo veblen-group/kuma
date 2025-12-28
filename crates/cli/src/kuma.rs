@@ -1,3 +1,4 @@
+use core::spot_prices::try_make_sorted_spot_prices;
 use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
@@ -6,10 +7,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
-use core::{
-    chain::Chain, collector, config::Config, signals, state::pair::Pair,
-    strategy::CrossChainSingleHop,
-};
+use core::strategy::CrossChainSingleHop;
+use core::{chain::Chain, collector, config::Config, signals, state::pair::Pair, strategy};
 
 use crate::cli::StrategyArgs;
 
@@ -48,7 +47,7 @@ impl Kuma {
 
         info!("Parsed {} chains from config:", tokens_by_chain.len());
 
-        for (chain, _tokens) in &tokens_by_chain {
+        for chain in tokens_by_chain.keys() {
             info!(chain.name = %chain.name,
                         chain.id = %chain.metadata.id(),
                         "🔗 Initialized chain info from config");
@@ -62,8 +61,6 @@ impl Kuma {
 
         let Config {
             tycho_api_key,
-            add_tvl_threshold,
-            remove_tvl_threshold,
             max_slippage_bps,
             congestion_risk_discount_bps,
             binary_search_steps,
@@ -75,21 +72,13 @@ impl Kuma {
             strategy_config.fast_chain,
             &tokens_by_chain,
         );
-        let slow_pair = pairs.get(&slow_chain).expect(&format!(
-            "could not find pair info for {:}",
-            slow_chain.name
-        ));
-        let fast_pair = pairs.get(&fast_chain).expect(&format!(
-            "could not find pair info for {:}",
-            fast_chain.name
-        ));
 
         // set up tycho stream collectors
         let (slow_block_handle, slow_eth_handle, slow_tycho_handle) = collector::Builder {
             tycho_url: slow_chain.tycho_url.clone(),
             tycho_api_key: tycho_api_key.to_string(),
-            add_tvl_threshold,
-            remove_tvl_threshold,
+            add_tvl_threshold: slow_chain.add_tvl_threshold,
+            remove_tvl_threshold: slow_chain.remove_tvl_threshold,
             token_addrs: tokens_by_chain[&slow_chain].clone(),
             chain: slow_chain.clone(),
             shutdown_token: shutdown_token.clone(),
@@ -100,8 +89,8 @@ impl Kuma {
         let (fast_block_handle, fast_eth_handle, fast_tycho_handle) = collector::Builder {
             tycho_url: fast_chain.tycho_url.clone(),
             tycho_api_key: tycho_api_key.to_string(),
-            add_tvl_threshold,
-            remove_tvl_threshold,
+            add_tvl_threshold: fast_chain.add_tvl_threshold,
+            remove_tvl_threshold: fast_chain.remove_tvl_threshold,
             token_addrs: tokens_by_chain[&fast_chain].clone(),
             chain: fast_chain.clone(),
             shutdown_token: shutdown_token.clone(),
@@ -109,34 +98,29 @@ impl Kuma {
         .build()
         .wrap_err("failed to start tycho collector for chain : {fast_chain}")?;
 
-        // initialize single hop strategy
-        let slow_inventory = (
-            inventory[&slow_chain][slow_pair.token_a()].clone(),
-            inventory[&slow_chain][slow_pair.token_b()].clone(),
-        );
-        let fast_inventory = (
-            inventory[&fast_chain][fast_pair.token_a()].clone(),
-            inventory[&fast_chain][fast_pair.token_b()].clone(),
-        );
+        let slow_pair = pairs
+            .get(&slow_chain)
+            .unwrap_or_else(|| panic!("could not find pair info for {:}", slow_chain.name));
 
-        let strategy = CrossChainSingleHop {
-            slow_pair: slow_pair.clone(),
+        let strategy = strategy::Builder {
+            token_a: slow_pair.token_a().symbol.clone(),
+            token_b: slow_pair.token_b().symbol.clone(),
             slow_chain: slow_chain.clone(),
-            fast_pair: fast_pair.clone(),
             fast_chain: fast_chain.clone(),
-            slow_inventory,
-            fast_inventory,
+            inventory,
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
-        };
+        }
+        .build()
+        .wrap_err("failed to build strategy")?;
 
         Ok(Self {
             all_tokens: tokens_by_chain,
             slow_chain,
             slow_pair: slow_pair.clone(),
             fast_chain,
-            fast_pair: fast_pair.clone(),
+            fast_pair: strategy.fast_pair.clone(),
             slow_block_handle,
             slow_eth_handle,
             slow_tycho_handle,
@@ -161,11 +145,12 @@ impl Kuma {
         } = self;
 
         info!(command = "generating signal");
+        // TODO: use strategy worker?
 
-        let mut slow_chain_states = slow_block_handle.get_pair_state_stream(&slow_pair);
-        let mut fast_chain_states = fast_block_handle.get_pair_state_stream(&fast_pair);
-
-        // TODO: run until found signal
+        let mut slow_chain_states =
+            slow_block_handle.get_block_state_stream(slow_pair.clone(), strategy.slow_usdc.clone());
+        let mut fast_chain_states =
+            fast_block_handle.get_block_state_stream(fast_pair.clone(), strategy.fast_usdc.clone());
         // read state from stream
         let slow_state = slow_chain_states
             .next()
@@ -176,17 +161,31 @@ impl Kuma {
             .await
             .expect("chain b stream should yield initial block");
 
-        info!(block = %slow_state.block_height, chain = %slow_chain.name, "reaped initial block");
-        info!(block = %fast_state.block_height, chain = %fast_chain.name, "reaped initial block");
+        info!(block = %slow_state.pair_state.block_height, chain = %slow_chain.name, "reaped initial block");
+        info!(block = %fast_state.pair_state.block_height, chain = %fast_chain.name, "reaped initial block");
 
         // precompute data for signal
-        let precompute = strategy.precompute(slow_state);
-
+        let precompute = strategy.try_precompute(slow_state, None)?;
         info!(block_height = %precompute.block_height, chain = %slow_chain.name, "✅ precomputed data");
+
+        info!(
+            chain = %strategy.slow_chain.name,
+            prices.a_b = %precompute.prices_a_b,
+            prices.a_usdc = %precompute.prices_a_usdc.as_ref().map(|price| price.to_string()).unwrap_or("1".to_owned()),
+            prices.b_usdc = %precompute.prices_b_usdc.as_ref().map(|price| price.to_string()).unwrap_or("1".to_owned()),
+            "✅ simulated USDC prices"
+        );
+
         let fast_sorted_spot_prices =
-            core::strategy::simulation::make_sorted_spot_prices(&fast_state, &fast_pair);
+            try_make_sorted_spot_prices(&fast_state.pair_state, &fast_pair)
+                .wrap_err("failed to make sorted spot prices")?;
+
         // compute arb signal
-        let signal = strategy.generate_signal(&precompute, fast_state, fast_sorted_spot_prices)?;
+        let signal = strategy.generate_signal(
+            &precompute,
+            fast_state.pair_state,
+            fast_sorted_spot_prices,
+        )?;
 
         info!(signal = ?signal, "📊 generated signal");
 

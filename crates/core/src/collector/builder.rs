@@ -67,7 +67,7 @@ impl Builder {
 
         let worker = collector::Worker {
             chain: chain.clone(),
-            block_tx: block_tx,
+            block_tx,
             shutdown_token: shutdown_token.clone(),
             block_sim_rx: tycho_worker_handle.get_block_sim_rx(),
             eth_rx: eth_worker_handle.get_block_changes_stream(),
