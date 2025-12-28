@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display},
+    hash::Hash,
     str::FromStr,
 };
 
@@ -9,7 +10,7 @@ use color_eyre::eyre::{self, Context, eyre};
 use serde::{Deserialize, Serialize};
 use tycho_simulation::evm::tycho_models;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Chain {
     pub name: tycho_models::Chain,
     pub metadata: alloy_chains::Chain,
@@ -19,6 +20,8 @@ pub struct Chain {
     pub permit2_address: Address,
     #[serde(skip)]
     pub private_key: String,
+    pub add_tvl_threshold: f64,
+    pub remove_tvl_threshold: f64,
 }
 
 impl Chain {
@@ -29,6 +32,8 @@ impl Chain {
         tycho_url: &str,
         permit2_address: &str,
         private_key: &str,
+        add_tvl_threshold: f64,
+        remove_tvl_threshold: f64,
     ) -> eyre::Result<Self> {
         let name = tycho_models::Chain::from_str(name)
             .wrap_err("failed to parse chain name into tycho::models::Chain")?;
@@ -55,6 +60,8 @@ impl Chain {
             tycho_url: tycho_url.to_string(),
             permit2_address,
             private_key: private_key.to_string(),
+            add_tvl_threshold,
+            remove_tvl_threshold,
         })
     }
 
@@ -80,6 +87,8 @@ impl Chain {
                 .expect("Couldn't convert to address"),
             private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
                 .to_string(),
+            add_tvl_threshold: 5.0,
+            remove_tvl_threshold: 1.0,
         }
     }
 
@@ -95,6 +104,8 @@ impl Chain {
                 .expect("Couldn't convert to address"),
             private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
                 .to_string(),
+            add_tvl_threshold: 5.0,
+            remove_tvl_threshold: 1.0,
         }
     }
 
@@ -111,6 +122,8 @@ impl Chain {
                 .expect("Couldn't convert to address"),
             private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
                 .to_string(),
+            add_tvl_threshold: 0.1,
+            remove_tvl_threshold: 0.1,
         }
     }
 }
@@ -120,3 +133,18 @@ impl Display for Chain {
         write!(f, "{} (id={})", self.name, self.chain_id())
     }
 }
+
+impl Hash for Chain {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.metadata.hash(state);
+        self.rpc_url.hash(state);
+        self.rpc_ws_url.hash(state);
+        self.tycho_url.hash(state);
+        self.permit2_address.hash(state);
+        self.private_key.hash(state);
+        // ignore f64 fields
+    }
+}
+
+impl Eq for Chain {}

@@ -4,7 +4,6 @@
 //! handling EIP712 signature generation and ABI encoding for the Tycho router contract.
 
 use std::str::FromStr as _;
-use std::u64;
 
 use alloy::consensus::EthereumTxEnvelope;
 use alloy::network::EthereumWallet;
@@ -62,7 +61,7 @@ impl Trade {
 
     // Prepare the trade by creating the transaction requests for both chains
     pub async fn prepare(&self) -> eyre::Result<(SignedTransaction, SignedTransaction)> {
-        let slow_tx_request = get_tx_request(&self.slow_tx(), &self.slow_tx().chain)
+        let slow_tx_request = get_tx_request(self.slow_tx(), &self.slow_tx().chain)
             .await
             .wrap_err("Failed to create transaction request for slow chain")?;
         let fast_tx_request = get_tx_request(self.fast_tx(), &self.fast_tx().chain)

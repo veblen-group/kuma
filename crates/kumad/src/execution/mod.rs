@@ -135,8 +135,7 @@ impl Worker {
                         strategy.fast_chain = %signal.fast_chain.name,
                         signal.slow_height = signal.slow_height,
                         signal.fast_height = signal.fast_height,
-                        signal.expected_profit = %signal.expected_profit.0,
-                        signal.expected_profit_b = %signal.expected_profit.1,
+                        %signal.expected_profit,
                         "💰 Received trade signal. executing cross-chain arbitrage",
                     );
 

@@ -33,12 +33,6 @@ pub struct Config {
     /// API key for Tycho Indexer
     pub tycho_api_key: String,
 
-    /// Threshold for adding TVL to the system
-    pub add_tvl_threshold: f64,
-
-    /// Threshold for removing TVL from the system
-    pub remove_tvl_threshold: f64,
-
     /// Congestion risk discount factor (0.0 - 1.0)
     pub congestion_risk_discount_bps: u64,
 
@@ -59,6 +53,7 @@ pub type PairForChain = HashMap<Chain, Pair>;
 
 impl Config {
     /// Load configuration from environment and optional config file
+    #[allow(clippy::result_large_err)]
     pub fn load() -> Result<Self, figment::Error> {
         let config: Config = Figment::new()
             .merge(Yaml::file("kuma.yaml"))
@@ -79,6 +74,8 @@ impl Config {
                      tycho_url,
                      permit2_address,
                      private_key,
+                     add_tvl_threshold,
+                     remove_tvl_threshold,
                  }| {
                     Chain::new(
                         name,
@@ -87,6 +84,8 @@ impl Config {
                         tycho_url,
                         permit2_address,
                         private_key,
+                        *add_tvl_threshold,
+                        *remove_tvl_threshold,
                     )
                     .wrap_err("failed to parse chain info")
                 },
@@ -119,23 +118,24 @@ impl Config {
                     token_config.decimals,
                     token_config.tax,
                     &token_config.gas.clone(),
-                    chain.name.clone(),
+                    chain.name,
                     token_config.quality,
                 );
 
                 let inventory = token_config
                     .inventory
                     .get(&chain.name)
-                    .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?
-                    .clone();
+                    .ok_or_eyre("token inventory for {symbol} on chain {chain.name} not found")?;
 
                 let token_inventory = BigUint::from_str(inventory.as_str())
                     .wrap_err("Failed to parse inventory for {token.symbol} on {chain.name}")?;
 
                 if let Some(token_inventories) = inventories_by_chain.get_mut(&chain) {
-                    match token_inventories.insert(token.clone(), token_inventory) {
-                        Some(_) => return Err(eyre!("duplicate token inventory")),
-                        None => (),
+                    if token_inventories
+                        .insert(token.clone(), token_inventory)
+                        .is_some()
+                    {
+                        return Err(eyre!("duplicate token inventory"));
                     }
                 } else {
                     inventories_by_chain.insert(
@@ -152,6 +152,14 @@ impl Config {
         Ok((tokens_by_chain, inventories_by_chain))
     }
 
+    /// Get USDC token for given chain
+    pub fn get_usdc_token<'a>(tokens: impl Iterator<Item = &'a Token>) -> Option<Token> {
+        tokens
+            .into_iter()
+            .find(|token| token.symbol.eq_ignore_ascii_case("USDC"))
+            .cloned()
+    }
+
     /// Get trading pairs for given token symbols across configured chains
     pub fn get_chain_pairs(
         token_a: &str,
@@ -163,10 +171,10 @@ impl Config {
         for (chain, tokens) in tokens_for_chain {
             let a = tokens
                 .keys()
-                .find(|token| token.symbol.to_ascii_uppercase() == token_a.to_ascii_uppercase());
+                .find(|token| token.symbol.eq_ignore_ascii_case(token_a));
             let b = tokens
                 .keys()
-                .find(|token| token.symbol.to_ascii_uppercase() == token_b.to_ascii_uppercase());
+                .find(|token| token.symbol.eq_ignore_ascii_case(token_b));
 
             match (a, b) {
                 (None, _) | (_, None) => {
@@ -241,7 +249,14 @@ pub struct ChainConfig {
 
     /// Private key for signing transactions
     pub private_key: String,
+
+    /// Threshold for adding TVL to the system
+    pub add_tvl_threshold: f64,
+
+    /// Threshold for removing TVL from the system
+    pub remove_tvl_threshold: f64,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyConfig {
     pub token_a: String,
