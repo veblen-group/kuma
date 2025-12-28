@@ -35,6 +35,13 @@ pub struct TokenBalances {
 }
 
 impl TokenBalances {
+    pub fn get_balance(&self, token: &Token) -> BigUint {
+        self.balances
+            .get(&Address::from_slice(&token.address))
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub async fn get_curr_balances(
         account_addr: Address,
         token_addrs: Vec<Address>,
@@ -52,7 +59,7 @@ impl TokenBalances {
         for token in &tokens {
             let start: U256 = token.balanceOf(account_addr).call().await?;
             let current_balance = BigUint::from_bytes_be(&start.to_be_bytes::<32usize>());
-            balances.insert(token.address().clone(), current_balance);
+            balances.insert(*token.address(), current_balance);
         }
 
         let from_filter = Filter::new()

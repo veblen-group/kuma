@@ -1,22 +1,18 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
-    pin::Pin,
     sync::Arc,
-    task::{self, Poll},
 };
 
-use crate::state::{self, block::Block};
-use futures::{Stream, StreamExt};
+use crate::state::{self};
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
-use tokio_stream::wrappers::WatchStream;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_common::models::token::Token,
     tycho_core::simulation::protocol_sim::ProtocolSim,
 };
 
 /// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
+/// TODO: it isnt normalized to zero2one, its normalized by symbol order
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pair(Token, Token);
 
@@ -58,51 +54,6 @@ pub struct PairState {
     pub block_height: u64,
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
     pub modified_pools: Arc<HashSet<state::PoolId>>,
-
     pub unmodified_pools: Arc<HashSet<state::PoolId>>,
-
-    #[allow(dead_code)]
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
-}
-
-#[derive(Debug)]
-pub struct PairStateStream {
-    pair: Pair,
-    block_rx: WatchStream<Arc<Option<Block>>>,
-}
-
-impl PairStateStream {
-    pub fn from_block_rx(pair: Pair, block_rx: watch::Receiver<Arc<Option<Block>>>) -> Self {
-        Self {
-            pair,
-            block_rx: WatchStream::from_changes(block_rx),
-        }
-    }
-}
-
-impl Stream for PairStateStream {
-    type Item = PairState;
-
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut task::Context<'_>,
-    ) -> task::Poll<Option<Self::Item>> {
-        // check watch receiver for new block
-        let block_poll = self.block_rx.poll_next_unpin(cx);
-
-        match block_poll {
-            // Stream itself isn't ready, propagate pending state
-            Poll::Pending => Poll::Pending,
-            // Stream has ended, end our stream too
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Ready(Some(block)) => match block.as_ref() {
-                Some(block) => {
-                    let state = block.sims.get_pair_state(&self.pair);
-                    Poll::Ready(Some(state))
-                }
-                // Only start yielding values after the initial block is received
-                None => Poll::Pending,
-            },
-        }
-    }
 }

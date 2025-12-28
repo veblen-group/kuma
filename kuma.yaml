@@ -11,10 +11,6 @@ binary_search_steps: 8192
 congestion_risk_discount_bps: 0
 max_slippage_bps: 25
 
-# Tycho simulation stream filter
-add_tvl_threshold: 5.0
-remove_tvl_threshold: 1.0
-
 # Token configurations with addresses on multiple chains
 tokens:
   UNI:
@@ -100,6 +96,9 @@ chains:
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
+    # Tycho simulation stream filter
+    add_tvl_threshold: 5.0
+    remove_tvl_threshold: 1.0
 
   - name: base
     rpc_url: "https://base-mainnet.g.alchemy.com/v2/"
@@ -107,6 +106,9 @@ chains:
     tycho_url: "tycho-base-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
+    # Tycho simulation stream filter
+    add_tvl_threshold: 5.0
+    remove_tvl_threshold: 1.0
 
   - name: unichain
     rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/"
@@ -114,6 +116,9 @@ chains:
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
+    # Tycho simulation stream filter
+    add_tvl_threshold: 0.1
+    remove_tvl_threshold: 0.1
 
 # tycho simulation
 tycho_api_key: ""

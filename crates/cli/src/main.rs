@@ -67,13 +67,12 @@ async fn main() -> ExitCode {
     // Wait for either command completion or interrupt signal
     let result = select! {
         res = command_jh => {
-            // TODO: make sure this is correct
-            res.and_then(|commands_result| {
+            res.map(|commands_result| {
                 match commands_result {
-                    Ok(_) => Ok(ExitCode::SUCCESS),
+                    Ok(_) => ExitCode::SUCCESS,
                     Err(e) => {
                         error!(error=%e, "command failed");
-                        Ok(ExitCode::FAILURE)
+                        ExitCode::FAILURE
                     },
                 }
             })

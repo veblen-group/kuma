@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS signals (
     surplus_b TEXT NOT NULL,
     expected_profit_a TEXT NOT NULL,
     expected_profit_b TEXT NOT NULL,
+    expected_profit_usdc TEXT NOT NULL,
     max_slippage_bps uint_bps NOT NULL,
     congestion_risk_discount_bps uint_bps NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
