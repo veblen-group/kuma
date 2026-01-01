@@ -80,8 +80,8 @@ impl Future for Handle {
 
 struct Worker {
     strategy: strategy::CrossChainSingleHop,
-    slow_stream: PairStateStream,
-    fast_stream: PairStateStream,
+    slow_stream: BlockStateStream,
+    fast_stream: BlockStateStream,
     signal_tx: mpsc::Sender<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,

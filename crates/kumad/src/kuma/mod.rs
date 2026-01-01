@@ -108,7 +108,7 @@ impl Kuma {
                 .expect("chain metadata for average block time not found");
 
             let (strategy_handle, signal_rx) = strategy::Builder {
-                strategy,
+                strategy_config,
                 slow_stream,
                 fast_stream,
                 slow_block_time,
