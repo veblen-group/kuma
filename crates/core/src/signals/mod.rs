@@ -133,6 +133,10 @@ impl CrossChainSingleHop {
                 .clone();
             create_solution(slow_component, slow_swap_sim, slow_chain.signer().clone())?
         };
+        let slow_unsigned_tx =
+            UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
+                .wrap_err("Failed to create unsigned transaction from slow solution")?;
+        // TODO: make  sure gas cost is less than expected profit (in usdc)
 
         let fast_solution = {
             let fast_component = fast_protocol_component
@@ -143,14 +147,11 @@ impl CrossChainSingleHop {
             create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
         };
 
-        let slow_unsigned_tx =
-            UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
-                .wrap_err("Failed to create unsigned transaction from slow solution")?;
         let fast_unsigned_tx =
             UnsignedTransaction::try_from_solution(&fast_solution, fast_chain)
                 .wrap_err("Failed to create unsigned transaction from fast solution")?;
+        // TODO: make  sure gas cost is less than expected profit (in usdc)
 
-        // add gas prices and sign transactions
         Ok(Trade::new(self.clone(), slow_unsigned_tx, fast_unsigned_tx))
     }
 }

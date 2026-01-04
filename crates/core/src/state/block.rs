@@ -39,6 +39,7 @@ pub struct BlockState {
     pub token_a_balance: BigUint,
     pub token_b_usdc_state: Option<PairState>,
     pub token_b_balance: BigUint,
+    // TODO: add basefee
 }
 
 #[derive(Debug)]
@@ -106,7 +107,7 @@ impl Stream for BlockStateStream {
                     let token_a_balance = block.token_balances.get_balance(self.pair.token_a());
                     let token_b_balance = block.token_balances.get_balance(self.pair.token_b());
 
-                    // TODO: add gas price from header
+                    // TODO: add basefee
 
                     Poll::Ready(Some(BlockState {
                         pair_state,
@@ -114,6 +115,7 @@ impl Stream for BlockStateStream {
                         token_b_usdc_state,
                         token_a_balance,
                         token_b_balance,
+                        // TODO: add basefee
                     }))
                 }
                 // Only start yielding values after the initial block is received

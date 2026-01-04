@@ -49,6 +49,8 @@ impl Kuma {
 
         let mut signal_rxs = vec![];
 
+        // TODO: make eth l1 eth price collector
+
         for StrategyConfig {
             token_a,
             token_b,
@@ -101,12 +103,15 @@ impl Kuma {
                 strategy_config.fast_usdc.clone(),
             );
 
+            // TODO: eth l1 gas price stream
+
             let slow_block_time = strategy_config
                 .slow_chain
                 .metadata
                 .average_blocktime_hint()
                 .expect("chain metadata for average block time not found");
 
+            // TODO: pass eth l1 gas price stream
             let (strategy_handle, signal_rx) = strategy::Builder {
                 strategy_config,
                 slow_stream,

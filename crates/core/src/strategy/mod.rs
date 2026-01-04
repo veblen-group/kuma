@@ -186,6 +186,8 @@ impl CrossChainSingleHop {
             None
         };
 
+        // TODO: Use eth_usdc price and basefee
+
         Ok(Precomputes {
             block_height,
             prices_a_b,
