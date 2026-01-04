@@ -7,3 +7,4 @@ pub mod signals;
 pub mod spot_prices;
 pub mod state;
 pub mod strategy;
+pub mod trade;

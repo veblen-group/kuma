@@ -14,7 +14,7 @@ use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest
 use alloy::signers::Signature;
 use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
-use color_eyre::eyre::{self, Context as _, ContextCompat, Ok};
+use color_eyre::eyre::{self, Context as _, ContextCompat};
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
@@ -33,60 +33,13 @@ use tycho_simulation::protocol::models::ProtocolComponent;
 use crate::chain::Chain;
 use crate::strategy::Swap;
 
-pub struct Trade {
-    slow_tx_req: UnsignedTransaction,
-    fast_tx_req: UnsignedTransaction,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SignedTransaction {
     tx: EthereumTxEnvelope<alloy::consensus::TxEip4844Variant>,
 }
 
-impl Trade {
-    pub(crate) fn new(slow: UnsignedTransaction, fast: UnsignedTransaction) -> Self {
-        Trade {
-            slow_tx_req: slow,
-            fast_tx_req: fast,
-        }
-    }
-
-    pub fn slow_tx(&self) -> &UnsignedTransaction {
-        &self.slow_tx_req
-    }
-
-    pub fn fast_tx(&self) -> &UnsignedTransaction {
-        &self.fast_tx_req
-    }
-
-    // Prepare the trade by creating the transaction requests for both chains
-    pub async fn prepare(&self) -> eyre::Result<(SignedTransaction, SignedTransaction)> {
-        let slow_tx_request = get_tx_request(self.slow_tx(), &self.slow_tx().chain)
-            .await
-            .wrap_err("Failed to create transaction request for slow chain")?;
-        let fast_tx_request = get_tx_request(self.fast_tx(), &self.fast_tx().chain)
-            .await
-            .wrap_err("Failed to create transaction request for fast chain")?;
-        Ok((slow_tx_request, fast_tx_request))
-    }
-
-    // Execute the trade by sending the transactions to their respective chains
-    pub async fn run(self) -> eyre::Result<(TransactionReceipt, TransactionReceipt)> {
-        let slow_tx = execute_tx(self.slow_tx(), &self.slow_tx().chain)
-            .await
-            .wrap_err("Failed to execute slow transaction")?;
-
-        let fast_tx = execute_tx(self.fast_tx(), &self.fast_tx().chain)
-            .await
-            .wrap_err("Failed to execute fast transaction")?;
-
-        Ok((slow_tx, fast_tx))
-    }
-}
-
 pub struct UnsignedTransaction {
     tx: TransactionRequest,
-    chain: Chain,
 }
 
 impl UnsignedTransaction {
@@ -107,10 +60,7 @@ impl UnsignedTransaction {
                 data: None,
             })
             .value(biguint_to_u256(&tx.value));
-        Ok(UnsignedTransaction {
-            tx: tx_request,
-            chain: chain.clone(),
-        })
+        Ok(UnsignedTransaction { tx: tx_request })
     }
 }
 
