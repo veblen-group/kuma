@@ -7,6 +7,7 @@ use color_eyre::eyre::{self, eyre};
 use routes::spot_prices;
 use tower_http::cors::CorsLayer;
 use tracing::info;
+use routes::trades;
 
 use std::sync::Arc;
 
@@ -33,6 +34,7 @@ pub async fn spawn(config: Config) -> eyre::Result<()> {
     let app = Router::new()
         .nest("/spot_prices", spot_prices::routes())
         .nest("/signals", routes::signals::routes())
+        .nest("/trades", trades::routes())
         .layer(cors)
         .with_state(state);
 

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use color_eyre::eyre::{self};
-use tokio::sync::broadcast;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use kuma_core::{database, signals, strategy};
@@ -9,8 +9,10 @@ use kuma_core::{database, signals, strategy};
 use super::{Handle, Worker};
 
 pub struct Builder {
-    pub signal_rxs:
-        HashMap<strategy::CrossChainSingleHop, broadcast::Receiver<signals::CrossChainSingleHop>>,
+    pub signal_rxs: HashMap<
+        strategy::CrossChainSingleHop,
+        mpsc::Receiver<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
+    >,
     pub db: database::Handle,
 }
 

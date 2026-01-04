@@ -1,5 +1,3 @@
-//! Trade execution module for executing cross-chain arbitrage trades
-
 use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre::{self, WrapErr as _};
@@ -7,9 +5,13 @@ use futures::{
     Future, FutureExt,
     future::{Fuse, FusedFuture as _},
     pin_mut,
-    stream::{FuturesUnordered, StreamExt},
+    stream::{FuturesUnordered, StreamExt, select_all},
 };
-use tokio::{select, sync::broadcast};
+use tokio::{
+    select,
+    sync::{mpsc, oneshot},
+};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
@@ -65,8 +67,10 @@ impl Future for Handle {
 }
 
 struct Worker {
-    signal_rxs:
-        HashMap<strategy::CrossChainSingleHop, broadcast::Receiver<signals::CrossChainSingleHop>>,
+    signal_rxs: HashMap<
+        strategy::CrossChainSingleHop,
+        mpsc::Receiver<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
+    >,
     shutdown_token: CancellationToken,
     #[allow(dead_code)]
     db: database::Handle,
@@ -78,19 +82,20 @@ impl Worker {
         info!("Starting trade execution system",);
 
         // Create a stream of signal receivers that maintain connections
-        let mut signal_stream = FuturesUnordered::new();
-        for (strategy, mut rx) in self.signal_rxs.into_iter() {
-            signal_stream.push(async move {
-                rx.recv()
-                    .await
-                    .map(|signal| (strategy, signal))
-                    .wrap_err("Failed to receive signal")
-            });
-        }
+        let broadcasts = self
+            .signal_rxs
+            .into_iter()
+            // Map the HashMap values (the receivers) into streams
+            .map(|(_, rx)| ReceiverStream::new(rx))
+            .collect::<FuturesUnordered<_>>();
+        let mut signal_stream = select_all(broadcasts);
+
+        let mut db_writes: FuturesUnordered<
+            Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
+        > = FuturesUnordered::new();
 
         let curr_trade = Fuse::terminated();
         pin_mut!(curr_trade);
-        let mut curr_strategy = None;
 
         loop {
             select! {
@@ -104,38 +109,28 @@ impl Worker {
                 // Prioritize handling in-flight trade results to free up for next signal
                 trade_result = &mut curr_trade, if !curr_trade.is_terminated() => {
                     debug!("Trade execution worker received trade result");
-
-                    let(slow_receipt, fast_receipt) = match trade_result {
-                        Ok(receipts) => receipts,
+                    let trade_result = match trade_result {
+                        Ok(trade_result) => trade_result,
                         Err(err) => {
                             error!(%err, "Failed to receive trade result");
                             continue;
                         }
                     };
 
-                    // TODO: clean up this log
-                    info!(?slow_receipt, ?fast_receipt, ?curr_strategy, "✅ Successfully executed cross-chain arbitrage trade for strategy");
+                    let repo = self.db.trade_repository();
+                    db_writes.push(
+                        async move {
+                            repo.insert_trade_result(trade_result)
+                                .await
+                                .wrap_err("failed to write trade result to database")
+                        }.boxed()
+                    );
                 }
 
                 // If no running trade, process next generated signal
-                Some(result) = signal_stream.next(), if curr_trade.is_terminated() => {
-                    let (strategy, signal) = match result {
-                        Ok((strategy, signal)) => (strategy, signal),
-                        Err(err) => {
-                            error!(%err, "Failed to receive signal from channel");
-                            continue;
-                        }
-                    };
-
+                Some((signal, id_rx)) = signal_stream.next(), if curr_trade.is_terminated() => {
                     info!(
-                        // TODO: display funcs for signal and strategy
-                        strategy.token_a = %strategy.token_a_symbol(),
-                        strategy.token_b = %strategy.token_b_symbol(),
-                        strategy.slow_chain = %signal.slow_chain.name,
-                        strategy.fast_chain = %signal.fast_chain.name,
-                        signal.slow_height = signal.slow_height,
-                        signal.fast_height = signal.fast_height,
-                        %signal.expected_profit,
+                        %signal,
                         "💰 Received trade signal. executing cross-chain arbitrage",
                     );
 
@@ -147,15 +142,20 @@ impl Worker {
                         }
                     };
 
-                    curr_trade.set(trade.run().fuse());
-                    curr_strategy = Some(strategy);
+                    curr_trade.set(trade.run(id_rx).fuse());
+                },
 
+                Some(res) = db_writes.next() => {
+                    if let Err(e) = res {
+                        error!("DB insert failed: {:?}", e);
+                    }
                 }
 
                 else => {
                     info!("All strategy signal channels closed, shutting down trade execution worker");
                     break Ok(());
                 }
+
             }
         }
     }

@@ -30,11 +30,8 @@ impl SignalRepository {
     }
 
     #[instrument(skip(self, signal))]
-    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<()> {
-        // TODO: should store this as amount_a_usdc, amount_b_usdc so it can be reconstructed later
-        let expected_profit_usdc = signal.expected_profit.total_profit_usdc()?;
-
-        sqlx::query!(
+    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<i64> {
+        let id = sqlx::query!(
             r#"
             INSERT INTO signals (
                 slow_chain, slow_height, slow_pool_id,
@@ -44,12 +41,12 @@ impl SignalRepository {
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
-                expected_profit_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23
+                $14, $15, $16, $17, $18, $19, $20, $21, $22
             )
+            RETURNING id
             "#,
             &signal.slow_chain.name.to_string(),
             signal.slow_height as i64,
@@ -71,14 +68,14 @@ impl SignalRepository {
             &signal.expected_profit.surplus.1.to_string(),
             &signal.expected_profit.min_token_amounts.0.to_string(),
             &signal.expected_profit.min_token_amounts.1.to_string(),
-            &expected_profit_usdc.to_string(),
             signal.max_slippage_bps as i64,
             signal.congestion_risk_discount_bps as i64,
         )
-        .execute(self.pool.as_ref())
-        .await?;
+        .fetch_one(self.pool.as_ref())
+        .await?
+        .id;
 
-        Ok(())
+        Ok(id)
     }
 
     #[instrument(skip(self))]
@@ -123,7 +120,6 @@ impl SignalRepository {
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
                 surplus_a, surplus_b, expected_profit_a, expected_profit_b,
-                expected_profit_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             FROM signals
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
@@ -145,6 +141,34 @@ impl SignalRepository {
             .map(|r| try_signal_from_row(r, &self.tokens_config))
             .collect()
     }
+
+    pub async fn get_by_id(
+        &self,
+        signal_id: i64,
+    ) -> eyre::Result<Option<signals::CrossChainSingleHop>> {
+        let row = sqlx::query_as!(
+            SignalRow,
+            r#"
+            SELECT
+                slow_chain, slow_height, slow_pool_id,
+                fast_chain, fast_height, fast_pool_id,
+                slow_swap_token_in_symbol, slow_swap_token_out_symbol,
+                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
+                fast_swap_token_in_symbol, fast_swap_token_out_symbol,
+                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
+                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                max_slippage_bps, congestion_risk_discount_bps
+            FROM signals
+            WHERE id = $1
+            "#,
+            signal_id,
+        )
+        .fetch_optional(&*self.pool)
+        .await?;
+
+        row.map(|r| try_signal_from_row(r, &self.tokens_config))
+            .transpose()
+    }
 }
 
 struct SignalRow {
@@ -164,12 +188,10 @@ struct SignalRow {
     fast_swap_amount_in: String,
     fast_swap_amount_out: String,
     fast_swap_gas_cost: String,
-    // TODO: change schema to match expected profit type
     surplus_a: String,
     surplus_b: String,
     expected_profit_a: String,
     expected_profit_b: String,
-    expected_profit_usdc: String,
     max_slippage_bps: i64,
     congestion_risk_discount_bps: i64,
 }
@@ -236,8 +258,11 @@ fn try_signal_from_row(
     };
 
     // TODO: this should be stored in (a usdc profit, b usdc profit) form so it can be properly reconstructed
-    let expected_profit_usdc = BigUint::from_str(&row.expected_profit_usdc)
-        .map_err(|e| eyre!("failed to parse expected profit usdc from db: {e:}"))?;
+    let expected_profit_usdc_a = BigUint::from_str(&row.expected_profit_a)
+        .map_err(|e| eyre!("failed to parse expected a profit usdc from db: {e:}"))?;
+
+    let expected_profit_usdc_b = BigUint::from_str(&row.expected_profit_b)
+        .map_err(|e| eyre!("failed to parse expected b profit usdc from db: {e:}"))?;
 
     let expected_profit = signals::ExpectedProfit {
         surplus,
@@ -246,8 +271,7 @@ fn try_signal_from_row(
         usdc_prices: (0f64, 0f64),
         // TODO: save max slippage token amounts to db
         max_slippage_token_amounts: (BigUint::ZERO, BigUint::ZERO),
-        // TODO: save min usdc amounts to db
-        min_usdc_amounts: (expected_profit_usdc, BigUint::ZERO),
+        min_usdc_amounts: (expected_profit_usdc_a, expected_profit_usdc_b),
         pair: slow_pair.clone(),
     };
 
