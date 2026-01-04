@@ -3,76 +3,54 @@ use std::{
     fmt::{self, Display},
 };
 
-use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256},
-    providers::Provider,
-    rpc::types::Filter,
-    sol,
-    sol_types::SolEvent as _,
-};
-use color_eyre::eyre::{self, Context as _};
+use alloy::{primitives::Address, providers::Provider, rpc::types::Filter};
+use color_eyre::eyre::{self, Context as _, OptionExt as _};
 use num_bigint::BigUint;
+use tracing::trace;
 use tycho_simulation::tycho_core::models::token::Token;
 
-// Taken from https://github.com/OpenZeppelin/openzeppelin-contracts/blob/3790c59623e99cb0272ddf84e6a17a5979d06b35/contracts/token/ERC20/IERC20.sol
-sol!(
-    #[sol(rpc)]
-    contract IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-        event Transfer(address indexed from, address indexed to, uint256 value);
-    }
-);
+use crate::state::erc20::{IERC20Contract, Transfer, latest_from_filter, latest_to_filter};
 
 #[derive(Debug, Clone)]
 pub struct TokenBalances {
     account_addr: Address,
     // TODO: keep the address -> symbol for display purposes, but prob under an arc for cheaper clones
     tokens: HashMap<Address, Token>,
-    balances: HashMap<Address, BigUint>,
+    balances: HashMap<Token, BigUint>,
     to_filter: Filter,
     from_filter: Filter,
 }
 
 impl TokenBalances {
     pub fn get_balance(&self, token: &Token) -> BigUint {
-        self.balances
-            .get(&Address::from_slice(&token.address))
-            .cloned()
-            .unwrap_or_default()
+        self.balances.get(&token).cloned().unwrap_or_default()
     }
 
     pub async fn get_curr_balances(
         account_addr: Address,
-        token_addrs: Vec<Address>,
+        token_addrs: HashMap<Address, Token>,
         provider: impl Provider + Clone,
     ) -> eyre::Result<Self> {
         // get token contract handle
-        let tokens = token_addrs
-            .iter()
+        let token_contracts = token_addrs
+            .keys()
             .cloned()
-            .map(|addr| IERC20::new(addr, provider.clone()))
+            .map(|addr| IERC20Contract::new(addr, provider.clone()))
             .collect::<Vec<_>>();
 
         // get initial balances
         let mut balances = HashMap::new();
-        for token in &tokens {
-            let start: U256 = token.balanceOf(account_addr).call().await?;
-            let current_balance = BigUint::from_bytes_be(&start.to_be_bytes::<32usize>());
-            balances.insert(*token.address(), current_balance);
+        for contract in &token_contracts {
+            let current_balance = contract.balance_of(account_addr).await?;
+            let token = token_addrs
+                .get(&contract.address)
+                .ok_or_eyre("missing token metadata for contract")?;
+            balances.insert(token.clone(), current_balance);
         }
 
-        let from_filter = Filter::new()
-            .address(token_addrs.clone())
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic1(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
+        let from_filter = latest_from_filter(account_addr, token_addrs.keys().cloned().collect());
 
-        let to_filter = Filter::new()
-            .address(token_addrs)
-            .event(IERC20::Transfer::SIGNATURE)
-            .topic2(account_addr)
-            .from_block(BlockNumberOrTag::Latest);
+        let to_filter = latest_to_filter(account_addr, token_addrs.keys().cloned().collect());
 
         Ok(Self {
             account_addr,
@@ -91,15 +69,18 @@ impl TokenBalances {
             .wrap_err("failed to get transfer logs to account addr")?;
 
         for log in to_logs {
-            // decode log
-            let event = log
-                .log_decode::<IERC20::Transfer>()
-                .wrap_err("failed to parse transfer event")?;
-            let IERC20::Transfer { from: _, to, value } = event.inner.data;
-            let value = BigUint::from_bytes_be(&value.to_be_bytes::<32>());
+            let contract_addr = log.address();
+            let Some(token) = self.tokens.get(&contract_addr) else {
+                trace!(addrss = %contract_addr, "transfer event for unknown token, skipping");
+                continue;
+            };
+            let transfer =
+                Transfer::try_from_log(token, log).wrap_err("failed to parse transfer log")?;
 
             // update balance
-            self.balances.entry(to).and_modify(|curr| *curr += value);
+            self.balances
+                .entry(token.clone())
+                .and_modify(|curr| *curr += transfer.amount);
         }
 
         let from_logs = provider
@@ -108,15 +89,18 @@ impl TokenBalances {
             .wrap_err("failed to get transfer logs from account addr")?;
 
         for log in from_logs {
-            // decode log
-            let event = log
-                .log_decode::<IERC20::Transfer>()
-                .wrap_err("failed to parse transfer event")?;
-            let IERC20::Transfer { from, to: _, value } = event.inner.data;
-            let value = BigUint::from_bytes_be(&value.to_be_bytes::<32>());
+            let contract_addr = log.address();
+            let Some(token) = self.tokens.get(&contract_addr) else {
+                trace!(addrss = %contract_addr, "transfer event for unknown token, skipping");
+                continue;
+            };
+            let transfer =
+                Transfer::try_from_log(token, log).wrap_err("failed to parse transfer log")?;
 
             // update balance
-            self.balances.entry(from).and_modify(|curr| *curr -= value);
+            self.balances
+                .entry(token.clone())
+                .and_modify(|curr| *curr -= transfer.amount);
         }
 
         Ok(())
@@ -128,7 +112,7 @@ impl Display for TokenBalances {
         let balances = self
             .balances
             .iter()
-            .map(|(addr, bal)| format!("{}: {}", self.tokens[addr].symbol, bal))
+            .map(|(token, bal)| format!("{}: {}", token.symbol, bal))
             .collect::<Vec<_>>()
             .join(", ");
         write!(

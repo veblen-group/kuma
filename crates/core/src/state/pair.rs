@@ -35,7 +35,7 @@ impl Pair {
     }
 
     pub fn in_token_vec(&self, tokens: &[Token]) -> bool {
-        tokens.contains(&self.0) && tokens.contains(&self.1)
+        tokens.contains(&self.token_a) && tokens.contains(&self.token_b)
     }
 
     pub fn token_a(&self) -> &Token {
@@ -62,9 +62,9 @@ impl Display for Pair {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{}-{}", // ({}, {})",
-            self.0.symbol,
-            self.1.symbol, // self.0.address, self.1.address
+            "{}-{}",             // ({}, {})",
+            self.token_a.symbol, // self.token_a.address,
+            self.token_b.symbol, //self.token_b.address
         )
     }
 }
