@@ -2,6 +2,7 @@ use core::{config::Config, signals::CrossChainSingleHop};
 use std::{fs, path::PathBuf};
 
 use color_eyre::eyre::{self, Context as _};
+use tokio::sync::oneshot;
 use tracing::info;
 
 #[derive(clap::Args, Debug, Clone)]
@@ -35,7 +36,13 @@ impl Execute {
         signal.fast_chain.private_key = fast_signer.private_key.clone();
 
         let trade = signal.try_promote()?;
-        let result = trade.run().await?;
+
+        let (tx, rx) = oneshot::channel();
+        // For CLI execution, we just send a dummy ID as there's no actual database insertion here.
+        // In the real kumad daemon, this would be the ID returned from the signal insertion.
+        let _ = tx.send(0i64).map_err(|_| eyre::eyre!("failed to send dummy signal id"))?;
+
+        let result = trade.run(rx).await?;
         info!("Execution result: {:?}", debug(&result));
         Ok(())
     }

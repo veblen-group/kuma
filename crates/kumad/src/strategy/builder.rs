@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use color_eyre::eyre::{self};
-use tokio::sync::broadcast;
+use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 use kuma_core::{database, signals, state::block::BlockStateStream, strategy};
@@ -17,7 +17,12 @@ pub struct Builder {
 }
 
 impl Builder {
-    pub fn build(self) -> eyre::Result<Handle> {
+    pub fn build(
+        self,
+    ) -> eyre::Result<(
+        Handle,
+        mpsc::Receiver<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
+    )> {
         let Self {
             strategy_config: strategy,
             slow_stream,
@@ -27,7 +32,8 @@ impl Builder {
         } = self;
 
         // Create broadcast channel for signals
-        let (signal_tx, signal_rx) = broadcast::channel::<signals::CrossChainSingleHop>(256);
+        let (signal_tx, signal_rx) =
+            mpsc::channel::<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>(256);
 
         let shutdown_token = CancellationToken::new();
 
@@ -43,11 +49,13 @@ impl Builder {
 
         let worker_handle = tokio::task::spawn(async move { worker.run().await });
 
-        Ok(Handle {
-            strategy: strategy.clone(),
-            shutdown_token,
-            worker_handle: Some(worker_handle),
+        Ok((
+            Handle {
+                strategy: strategy.clone(),
+                shutdown_token,
+                worker_handle: Some(worker_handle),
+            },
             signal_rx,
-        })
+        ))
     }
 }

@@ -11,9 +11,11 @@ use crate::{
 
 pub use signals::*;
 pub use spot_prices::*;
+pub use trade::*;
 
 mod signals;
 mod spot_prices;
+mod trade;
 
 #[derive(Debug, Clone)]
 pub struct Handle {
@@ -60,6 +62,10 @@ impl Handle {
 
     pub fn signal_repository(&self) -> SignalRepository {
         SignalRepository::new(Arc::clone(&self.pool), Arc::clone(&self.token_configs))
+    }
+
+    pub fn trade_repository(&self) -> TradeRepository {
+        TradeRepository::new(Arc::clone(&self.pool), Arc::clone(&self.token_configs))
     }
 }
 

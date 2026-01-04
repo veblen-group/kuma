@@ -1,5 +1,8 @@
 import { SignalTable } from "@/components/signals/table";
 import { SpotPriceTable } from "@/components/spot_prices/table";
+import { SuccessfulTradeResultTable } from "@/components/successful_trades/table";
+import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
+import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -57,6 +60,33 @@ export default function Home() {
         </CardHeader>
         <CardContent>
           <SignalTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Successful Trades</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SuccessfulTradeResultTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Failed Trades</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FailedOnSlowTradeResultTable />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stuck Trades</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FailedOnFastTradeResultTable />
         </CardContent>
       </Card>
     </main>

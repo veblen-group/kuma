@@ -63,3 +63,45 @@ CREATE INDEX IF NOT EXISTS idx_signals_fast_token_in_symbol ON signals(fast_swap
 CREATE INDEX IF NOT EXISTS idx_signals_fast_token_out_symbol ON signals(fast_swap_token_out_symbol);
 
 CREATE INDEX IF NOT EXISTS idx_signals_created_at ON signals(created_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS failed_on_slow_chain_trade (
+    id BIGSERIAL PRIMARY KEY,
+    signal_id BIGINT NOT NULL REFERENCES signals(id), -- Changed to NOT NULL
+    slow_tx_hash VARCHAR(66), -- 0x + 64 hex chars, nullable
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_failed_on_slow_chain_trade_signal_id ON failed_on_slow_chain_trade(signal_id);
+CREATE INDEX IF NOT EXISTS idx_failed_on_slow_chain_trade_slow_tx_hash ON failed_on_slow_chain_trade(slow_tx_hash);
+CREATE INDEX IF NOT EXISTS idx_failed_on_slow_chain_trade_created_at ON failed_on_slow_chain_trade(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS failed_on_fast_chain_trade (
+    id BIGSERIAL PRIMARY KEY,
+    signal_id BIGINT NOT NULL REFERENCES signals(id),
+    slow_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
+    fast_tx_hash VARCHAR(66), -- 0x + 64 hex chars, nullable
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_failed_on_fast_chain_trade_signal_id ON failed_on_fast_chain_trade(signal_id);
+CREATE INDEX IF NOT EXISTS idx_failed_on_fast_chain_trade_slow_tx_hash ON failed_on_fast_chain_trade(slow_tx_hash);
+CREATE INDEX IF NOT EXISTS idx_failed_on_fast_chain_trade_fast_tx_hash ON failed_on_fast_chain_trade(fast_tx_hash);
+CREATE INDEX IF NOT EXISTS idx_failed_on_fast_chain_trade_created_at ON failed_on_fast_chain_trade(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS successful_trade (
+    id BIGSERIAL PRIMARY KEY,
+    signal_id BIGINT NOT NULL REFERENCES signals(id),
+    slow_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
+    fast_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
+    realized_profit_str TEXT NOT NULL, -- BigUint as string
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_successful_trade_signal_id ON successful_trade(signal_id);
+CREATE INDEX IF NOT EXISTS idx_successful_trade_slow_tx_hash ON successful_trade(slow_tx_hash);
+CREATE INDEX IF NOT EXISTS idx_successful_trade_fast_tx_hash ON successful_trade(fast_tx_hash);
+CREATE INDEX IF NOT EXISTS idx_successful_trade_created_at ON successful_trade(created_at DESC);

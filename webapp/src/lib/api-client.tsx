@@ -1,6 +1,6 @@
 'use client';
 
-import { SpotPrice, Signal, PaginatedResponse } from "@/lib/types";
+import { SpotPrice, Signal, TradeResult, PaginatedResponse } from "@/lib/types";
 import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
@@ -54,6 +54,30 @@ class ApiClient {
       page_size: (params.pageSize ?? 10).toString()
     });
   }
+
+  async getSuccessfulTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
+    return this.request<TradeResult>('/trades/successful', {
+      pair: params.pair,
+      page: (params.page ?? 1).toString(),
+      page_size: (params.pageSize ?? 10).toString()
+    });
+  }
+
+  async getFailedOnSlowTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
+    return this.request<TradeResult>('/trades/failed-on-slow', {
+      pair: params.pair,
+      page: (params.page ?? 1).toString(),
+      page_size: (params.pageSize ?? 10).toString()
+    });
+  }
+
+  async getFailedOnFastTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
+    return this.request<TradeResult>('/trades/failed-on-fast', {
+      pair: params.pair,
+      page: (params.page ?? 1).toString(),
+      page_size: (params.pageSize ?? 10).toString()
+    });
+  }
 }
 
 export const apiClient = new ApiClient();
@@ -81,6 +105,45 @@ export function useSignals(params: FetchParams, options?: Partial<UseQueryOption
       params.pageSize ?? 10
     ],
     queryFn: () => apiClient.getSignals(params),
+  });
+}
+
+export function useSuccessfulTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
+  return useQuery<PaginatedResponse<TradeResult>>({
+    ...options,
+    queryKey: [
+      'successful_trades',
+      params.pair,
+      params.page ?? 1,
+      params.pageSize ?? 10
+    ],
+    queryFn: () => apiClient.getSuccessfulTradeResults(params),
+  });
+}
+
+export function useFailedOnSlowTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
+  return useQuery<PaginatedResponse<TradeResult>>({
+    ...options,
+    queryKey: [
+      'failed_on_slow_trades',
+      params.pair,
+      params.page ?? 1,
+      params.pageSize ?? 10
+    ],
+    queryFn: () => apiClient.getFailedOnSlowTradeResults(params),
+  });
+}
+
+export function useFailedOnFastTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
+  return useQuery<PaginatedResponse<TradeResult>>({
+    ...options,
+    queryKey: [
+      'failed_on_fast_trades',
+      params.pair,
+      params.page ?? 1,
+      params.pageSize ?? 10
+    ],
+    queryFn: () => apiClient.getFailedOnFastTradeResults(params),
   });
 }
 

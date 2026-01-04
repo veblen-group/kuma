@@ -8,7 +8,11 @@ use std::{pin::Pin, time::Duration};
 
 use color_eyre::eyre::{self, WrapErr as _, eyre};
 use futures::{Future, FutureExt as _, stream::FuturesUnordered};
-use tokio::{select, sync::broadcast, time::Instant};
+use tokio::{
+    select,
+    sync::{mpsc, oneshot},
+    time::Instant,
+};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
@@ -27,7 +31,6 @@ pub struct Handle {
     shutdown_token: CancellationToken,
     worker_handle: Option<tokio::task::JoinHandle<eyre::Result<()>>>,
     strategy: strategy::CrossChainSingleHop,
-    signal_rx: broadcast::Receiver<signals::CrossChainSingleHop>,
 }
 
 impl Handle {
@@ -43,10 +46,6 @@ impl Handle {
             return Err(e.into());
         }
         Ok(())
-    }
-
-    pub fn get_signal_rx(&self) -> broadcast::Receiver<signals::CrossChainSingleHop> {
-        self.signal_rx.resubscribe()
     }
 
     pub fn strategy_config(&self) -> strategy::CrossChainSingleHop {
@@ -83,7 +82,7 @@ struct Worker {
     strategy: strategy::CrossChainSingleHop,
     slow_stream: BlockStateStream,
     fast_stream: BlockStateStream,
-    signal_tx: broadcast::Sender<signals::CrossChainSingleHop>,
+    signal_tx: mpsc::Sender<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,
     db: database::Handle,
@@ -126,7 +125,7 @@ impl Worker {
         let submission_delay = self.slow_block_time.mul_f64(0.75);
         let mut submission_deadline = None;
         let mut precompute: Option<Precomputes> = None;
-        let mut curr_signal = None;
+        let mut curr_signal: Option<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)> = None;
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
         > = FuturesUnordered::new();
@@ -148,10 +147,11 @@ impl Worker {
                         futures::future::pending().await
                     }
                 }, if curr_signal.is_some() => {
-                    let signal = curr_signal.take().expect("Signal checked to be Some");
+                    let (signal, id_rx) = curr_signal.take().expect("Signal checked to be Some");
                     debug!(%signal, "📡 Emitting signal");
 
-                    self.signal_tx.send(signal).wrap_err("Signal sent")?;
+                    self.signal_tx.send((signal, id_rx)).await
+                        .wrap_err("failed to send signal to emitter")?;
                 }
 
                 // Handle slow chain updates
@@ -259,14 +259,20 @@ impl Worker {
                                 let json_signal = serde_json::to_string(&signal).wrap_err("failed to serialize signal to json")?;
                                 info!(%json_signal, "Serialized signal to json");
 
-                                curr_signal = Some(signal.clone());
+                                let (id_tx, id_rx) = oneshot::channel();
+                                curr_signal = Some((signal.clone(), id_rx));
 
                                 // Save generated signal to db and update it for emission
                                 let repo = self.db.signal_repository();
                                 db_writes.push(async move {
-                                    repo.insert(signal.clone()).await.map_err(|e| {
+                                    let id = repo.insert(signal.clone()).await.map_err(|e| {
                                         eyre!("failed to write signal to db: {e:}")
-                                    })
+                                    })?;
+
+                                    id_tx.send(id).map_err(|e| {
+                                        eyre!("failed to send signal id to channel: {e:}")
+                                    })?;
+                                    Ok(())
                                 }.boxed());
                             }
                             Err(e) => {
