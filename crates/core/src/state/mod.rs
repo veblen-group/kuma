@@ -6,6 +6,7 @@ pub mod balances;
 pub mod block;
 pub mod erc20;
 pub mod pair;
+pub mod swap;
 pub mod tycho;
 
 // TODO: maybe some address sanitization?

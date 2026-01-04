@@ -291,6 +291,9 @@ fn try_signal_from_row(
         slow_swap_sim,
         fast_pool_id,
         fast_swap_sim,
+        slow_prices_a_b: todo!(),
+        slow_prices_a_usdc: todo!(),
+        slow_prices_b_usdc: todo!(),
     })
 }
 

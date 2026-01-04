@@ -1,6 +1,5 @@
 use alloy::rpc::types::TransactionReceipt;
 use color_eyre::eyre::{self, WrapErr as _};
-use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tracing::{error, instrument};
@@ -8,7 +7,8 @@ use tracing::{error, instrument};
 use crate::{
     database::{TradeFailedOnFastRow, TradeFailedOnSlowRow, TradeSuccessRow},
     encoder::{SignedTransaction, UnsignedTransaction, execute_tx, get_tx_request},
-    signals::{self, CrossChainSingleHop},
+    signals::{self, CrossChainSingleHop, RealizedProfit},
+    state,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -55,7 +55,7 @@ pub struct TradeSuccess {
     signal_id: i64,
     slow_receipt: TransactionReceipt,
     fast_receipt: TransactionReceipt,
-    realized_profit: BigUint,
+    realized_profit: RealizedProfit,
 }
 
 impl TradeSuccess {
@@ -64,7 +64,7 @@ impl TradeSuccess {
             signal_id: self.signal_id,
             slow_tx_hash: self.slow_receipt.transaction_hash.to_string(),
             fast_tx_hash: self.fast_receipt.transaction_hash.to_string(),
-            realized_profit_str: self.realized_profit.to_string(),
+            realized_profit_str: self.realized_profit.total_usdc.to_string(),
         }
     }
 }
@@ -188,17 +188,35 @@ impl Trade {
         }))
     }
 
-    fn check_transaction_success(_receipt: &TransactionReceipt) -> eyre::Result<()> {
-        // TODO: check transaction didnt revert
-        Ok(())
+    fn check_transaction_success(receipt: &TransactionReceipt) -> eyre::Result<()> {
+        if receipt.status() {
+            Ok(())
+        } else {
+            Err(eyre::eyre!("transaction reverted"))
+        }
     }
 
     fn calculate_realized_profit(
         &self,
-        _slow_receipt: &TransactionReceipt,
-        _fast_receipt: &TransactionReceipt,
-    ) -> eyre::Result<BigUint> {
-        // TODO: calculate realized profit
-        Ok(BigUint::from(0u32))
+        slow_receipt: &TransactionReceipt,
+        fast_receipt: &TransactionReceipt,
+    ) -> eyre::Result<RealizedProfit> {
+        let slow_swap =
+            state::swap::Swap::try_from_receipts(&slow_receipt, self.signal.slow_swap_sim.clone())
+                .wrap_err("failed to parse slow swap from receipt")?;
+        let fast_swap =
+            state::swap::Swap::try_from_receipts(&fast_receipt, self.signal.fast_swap_sim.clone())
+                .wrap_err("failed to parse fast swap from receipt")?;
+
+        let profit = RealizedProfit::try_from_swaps(
+            &slow_swap,
+            &fast_swap,
+            &self.signal.slow_prices_a_b,
+            &self.signal.slow_prices_a_usdc,
+            &self.signal.slow_prices_b_usdc,
+        )
+        .wrap_err("failed to calculate realized profit")?;
+
+        Ok(profit)
     }
 }

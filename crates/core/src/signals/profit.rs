@@ -4,8 +4,106 @@ use num_rational::BigRational;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-use crate::{spot_prices::SpotPrices, state::pair::Pair, strategy::Swap};
+use crate::{
+    spot_prices::SpotPrices,
+    state::{pair::Pair, swap::Swap as StateSwap},
+    strategy::Swap,
+};
 use num_traits::{CheckedAdd as _, CheckedMul as _, CheckedSub as _, FromPrimitive as _};
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RealizedProfit {
+    /// Total profit in USDC after converting surplus tokens using pessimistic prices
+    pub total_usdc: BigUint,
+    /// Surplus amounts in token A and token B respectively
+    pub surplus: (BigUint, BigUint),
+    /// The token pair for which the profit was realized
+    pub pair: Pair,
+    /// The slow chain swap that generated the profit
+    pub slow_swap: StateSwap,
+    /// The fast chain swap that generated the profit
+    pub fast_swap: StateSwap,
+    /// Token A -> USDC and Token B -> USDC prices used to calculate realized profit
+    pub usdc_prices: (f64, f64),
+}
+
+impl RealizedProfit {
+    /// Calculate realized profit from slow and fast chain swaps and spot prices.
+    ///
+    /// Calculates the realized profit by:
+    /// 1. Determining the surplus amounts of each token (output - input)
+    /// 2. Converting these surplus amounts to USDC using pessimistic prices
+    /// 3. Summing the USDC values to get the total realized profit
+    ///
+    /// Returns a RealizedProfit struct containing
+    /// - Total USDC profit
+    /// - Surplus token amounts
+    /// - The token pair
+    /// - The slow and fast chain swaps
+    /// - The USDC prices used for conversion
+    pub fn try_from_swaps(
+        slow_swap: &StateSwap,
+        fast_swap: &StateSwap,
+        prices_a_b: &SpotPrices,
+        prices_a_usdc: &Option<SpotPrices>,
+        prices_b_usdc: &Option<SpotPrices>,
+    ) -> eyre::Result<Self> {
+        let slow_pair = slow_swap.get_pair();
+        let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_swap, fast_swap)?;
+        let surplus = try_surplus(amounts_a, amounts_b, &slow_pair)?;
+
+        let usdc_prices = try_usdc_prices(prices_a_b, prices_a_usdc, prices_b_usdc)?;
+
+        let min_usdc_amounts = {
+            let a_usdc = try_mul_biguint_f64(&surplus.0, usdc_prices.0)?;
+            let b_usdc = try_mul_biguint_f64(&surplus.1, usdc_prices.1)?;
+            (a_usdc, b_usdc)
+        };
+
+        let total_amount = min_usdc_amounts
+            .0
+            .checked_add(&min_usdc_amounts.1)
+            .wrap_err_with(|| {
+                format!(
+                    "total_profit_usdc failed: min_usdc_amounts {} + {}",
+                    min_usdc_amounts.0, min_usdc_amounts.1
+                )
+            })?;
+
+        Ok(RealizedProfit {
+            total_usdc: total_amount,
+            usdc_prices: (usdc_prices.0, usdc_prices.1),
+            pair: slow_pair.clone(),
+            surplus,
+            slow_swap: slow_swap.clone(),
+            fast_swap: fast_swap.clone(),
+        })
+    }
+
+    fn try_amounts_by_tokens_a_b<'a>(
+        slow_sim: &'a StateSwap,
+        fast_sim: &'a StateSwap,
+    ) -> eyre::Result<((&'a BigUint, &'a BigUint), (&'a BigUint, &'a BigUint))> {
+        let pair = slow_sim.get_pair();
+        if pair.token_a().symbol == slow_sim.token_in.symbol {
+            Ok((
+                (&slow_sim.amount_in, &fast_sim.amount_out),
+                (&fast_sim.amount_in, &slow_sim.amount_out),
+            ))
+        } else if pair.token_b().symbol == slow_sim.token_in.symbol {
+            Ok((
+                (&fast_sim.amount_in, &slow_sim.amount_out),
+                (&slow_sim.amount_in, &fast_sim.amount_out),
+            ))
+        } else {
+            Err(eyre::eyre!(
+                "pair tokens {} don't match swap tokens: {:?}",
+                pair,
+                slow_sim
+            ))
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ExpectedProfit {
@@ -53,7 +151,7 @@ impl ExpectedProfit {
         let pair = slow_sim.get_pair();
 
         // Step 1: Calculate raw surplus (output - input for each token)
-        let surplus = Self::try_surplus(amounts_a, amounts_b, &pair)?;
+        let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
 
         // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
         let max_slippage_token_amounts =
@@ -69,21 +167,7 @@ impl ExpectedProfit {
 
         // Step 4: Determine pessimistic USDC prices for each token
         // If direct USDC pricing is available use it; otherwise fall back to the A-B pair pricing
-        let usdc_prices = {
-            let price_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
-                prices_a_usdc.try_pessimistic_usdc_price()?
-            } else {
-                prices_a_b.try_pessimistic_usdc_price()?
-            };
-
-            let price_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
-                prices_b_usdc.try_pessimistic_usdc_price()?
-            } else {
-                prices_a_b.try_pessimistic_usdc_price()?
-            };
-
-            (price_a_usdc, price_b_usdc)
-        };
+        let usdc_prices = try_usdc_prices(prices_a_b, prices_a_usdc, prices_b_usdc)?;
 
         // Step 5: Convert minimum token amounts to USDC using pessimistic prices
         let min_usdc_amounts = {
@@ -125,33 +209,6 @@ impl ExpectedProfit {
                 slow_sim
             ))
         }
-    }
-
-    fn try_surplus(
-        (in_a, out_a): (&BigUint, &BigUint),
-        (in_b, out_b): (&BigUint, &BigUint),
-        pair: &Pair,
-    ) -> eyre::Result<(BigUint, BigUint)> {
-        // out_a - in_a
-        let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
-            format!(
-                "min_out_a {} cannot be less than in_a {} for token {}",
-                out_a,
-                in_a,
-                pair.token_a().symbol,
-            )
-        })?;
-
-        // out_b - in_b
-        let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
-            format!(
-                "min_out_b {} cannot be less than in_b {} for token {}",
-                out_b,
-                in_b,
-                pair.token_b().symbol,
-            )
-        })?;
-        Ok((amount_a, amount_b))
     }
 
     fn try_max_slippage_amounts(
@@ -260,4 +317,54 @@ fn try_mul_biguint_f64(amount: &BigUint, price: f64) -> eyre::Result<BigUint> {
         .ok_or_eyre("failed to multiply surplus a by usdc price")?;
 
     Ok(amount_usdc)
+}
+
+fn try_surplus(
+    (in_a, out_a): (&BigUint, &BigUint),
+    (in_b, out_b): (&BigUint, &BigUint),
+    pair: &Pair,
+) -> eyre::Result<(BigUint, BigUint)> {
+    // out_a - in_a
+    let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
+        format!(
+            "min_out_a {} cannot be less than in_a {} for token {}",
+            out_a,
+            in_a,
+            pair.token_a().symbol,
+        )
+    })?;
+
+    // out_b - in_b
+    let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
+        format!(
+            "min_out_b {} cannot be less than in_b {} for token {}",
+            out_b,
+            in_b,
+            pair.token_b().symbol,
+        )
+    })?;
+    Ok((amount_a, amount_b))
+}
+
+fn try_usdc_prices(
+    prices_a_b: &SpotPrices,
+    prices_a_usdc: &Option<SpotPrices>,
+    prices_b_usdc: &Option<SpotPrices>,
+) -> Result<(f64, f64), eyre::Error> {
+    let usdc_prices = {
+        let price_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
+            prices_a_usdc.try_pessimistic_usdc_price()?
+        } else {
+            prices_a_b.try_pessimistic_usdc_price()?
+        };
+
+        let price_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
+            prices_b_usdc.try_pessimistic_usdc_price()?
+        } else {
+            prices_a_b.try_pessimistic_usdc_price()?
+        };
+
+        (price_a_usdc, price_b_usdc)
+    };
+    Ok(usdc_prices)
 }

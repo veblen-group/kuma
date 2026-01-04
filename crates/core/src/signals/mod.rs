@@ -18,6 +18,7 @@ pub use profit::bps_discount;
 mod profit;
 
 pub use profit::ExpectedProfit;
+pub use profit::RealizedProfit;
 
 // TODO: rename to buy/sell? need to clarify the direction
 #[derive(Debug, Clone)]
@@ -49,6 +50,9 @@ pub struct CrossChainSingleHop {
     pub fast_pool_id: state::PoolId,
     pub fast_swap_sim: Swap,
     pub fast_height: u64,
+    pub slow_prices_a_b: SpotPrices,
+    pub slow_prices_a_usdc: Option<SpotPrices>,
+    pub slow_prices_b_usdc: Option<SpotPrices>,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
     pub expected_profit: ExpectedProfit,
@@ -102,6 +106,9 @@ impl CrossChainSingleHop {
             fast_height,
             fast_pool_id: fast_id.clone(),
             fast_swap_sim: fast_sim,
+            slow_prices_a_b: slow_prices_a_b.clone(),
+            slow_prices_a_usdc: slow_prices_a_usdc.clone(),
+            slow_prices_b_usdc: slow_prices_b_usdc.clone(),
             expected_profit: expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
