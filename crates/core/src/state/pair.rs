@@ -14,14 +14,23 @@ use tycho_simulation::{
 /// Represents a pair of tokens, normalized to Uniswap's zero2one direction.
 /// TODO: it isnt normalized to zero2one, its normalized by symbol order
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Pair(Token, Token);
+pub struct Pair {
+    pub token_a: Token,
+    pub token_b: Token,
+}
 
 impl Pair {
-    pub fn new(token_a: Token, token_b: Token) -> Self {
-        if token_a.symbol < token_b.symbol {
-            Self(token_a, token_b)
+    pub fn new(maybe_a: Token, maybe_b: Token) -> Self {
+        if maybe_a.symbol < maybe_b.symbol {
+            Self {
+                token_a: maybe_a,
+                token_b: maybe_b,
+            }
         } else {
-            Self(token_b, token_a)
+            Self {
+                token_b: maybe_b,
+                token_a: maybe_a,
+            }
         }
     }
 
@@ -30,11 +39,22 @@ impl Pair {
     }
 
     pub fn token_a(&self) -> &Token {
-        &self.0
+        // TODO: zero2one token 0
+        &self.token_a
     }
 
     pub fn token_b(&self) -> &Token {
-        &self.1
+        // TODO: zero2one token 0
+        &self.token_b
+    }
+
+    pub fn zero2one(token_a: Token, token_b: Token) -> (Token, Token) {
+        // TODO: how to compare addrs
+        if token_a.address < token_b.address {
+            (token_a, token_b)
+        } else {
+            (token_b, token_a)
+        }
     }
 }
 
