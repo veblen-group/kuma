@@ -80,6 +80,7 @@ impl RealizedProfit {
         })
     }
 
+    /// Return two tuples of (amount_in, amount_out) for token A, B respectively
     fn try_amounts_by_tokens_a_b<'a>(
         slow_sim: &'a StateSwap,
         fast_sim: &'a StateSwap,

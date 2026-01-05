@@ -3,10 +3,14 @@ use std::str::FromStr as _;
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
 use num_bigint::BigUint;
+use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
 
-use crate::{state::pair::Pair, strategy};
+use crate::{
+    state::{erc20::Transfer, pair::Pair},
+    strategy,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Swap {
@@ -31,20 +35,21 @@ impl Swap {
             let token_out_addr = Address::from_slice(&swap.token_out.address);
 
             if contract_address == token_in_addr {
-                let _to = "to".to_string();
-                let amount = BigUint::from_str("0").unwrap();
-                let _from = "from".to_string();
-                amount_in += amount;
+                let transfer = Transfer::try_from_log(&swap.token_in, log.clone())?;
+
+                amount_in = amount_in.checked_add(&transfer.amount).ok_or_else(|| {
+                    eyre::eyre!("overflow when adding amount_in in swap from receipts")
+                })?;
             }
 
             if contract_address == token_out_addr {
-                let _to = "to".to_string();
-                let amount = BigUint::from_str("0").unwrap();
-                let _from = "from".to_string();
-                amount_out += amount;
+                let transfer = Transfer::try_from_log(&swap.token_out, log.clone())?;
+                amount_out = amount_out.checked_add(&transfer.amount).ok_or_else(|| {
+                    eyre::eyre!("overflow when adding amount_out in swap from receipts")
+                })?;
             }
         }
-        // get amount in and amount out from logs based on pairs
+
         Ok(Swap {
             token_in: swap.token_in,
             amount_in: amount_in,
