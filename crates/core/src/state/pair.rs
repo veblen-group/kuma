@@ -17,11 +17,11 @@ use tycho_simulation::{
 pub struct Pair(Token, Token);
 
 impl Pair {
-    pub fn new(token_a: Token, token_b: Token) -> Self {
-        if token_a.symbol < token_b.symbol {
-            Self(token_a, token_b)
+    pub fn new(maybe_a: Token, maybe_b: Token) -> Self {
+        if maybe_a.symbol < maybe_b.symbol {
+            Self(maybe_a, maybe_b)
         } else {
-            Self(token_b, token_a)
+            Self(maybe_b, maybe_a)
         }
     }
 
@@ -36,6 +36,15 @@ impl Pair {
     pub fn token_b(&self) -> &Token {
         &self.1
     }
+
+    pub fn zero2one(token_a: Token, token_b: Token) -> (Token, Token) {
+        // TODO: how to compare addrs
+        if token_a.address < token_b.address {
+            (token_a, token_b)
+        } else {
+            (token_b, token_a)
+        }
+    }
 }
 
 impl Display for Pair {
@@ -43,8 +52,7 @@ impl Display for Pair {
         write!(
             f,
             "{}-{}", // ({}, {})",
-            self.0.symbol,
-            self.1.symbol, // self.0.address, self.1.address
+            self.0.symbol, self.1.symbol,
         )
     }
 }
