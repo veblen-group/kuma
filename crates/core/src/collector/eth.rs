@@ -3,7 +3,7 @@
 //! Subscribes to block headers and tracks token balance changes for a configured account address
 //! by monitoring transfer logs. Provides a stream of `(Header, TokenBalances)` tuples.
 
-use std::{pin::Pin, str::FromStr, sync::Arc};
+use std::{collections::HashMap, pin::Pin, str::FromStr, sync::Arc};
 
 use alloy::{
     primitives::Address,
@@ -145,13 +145,13 @@ impl Worker {
             .wrap_err("failed to connect to eth provider websocket")?;
 
         let addrs = token_addrs
-            .keys()
-            .map(|addr_bytes| {
+            .iter()
+            .map(|(addr_bytes, token)| {
                 let addr = Address::from_str(&addr_bytes.to_string())
                     .wrap_err("Failed to parse address")?;
-                Ok(addr)
+                Ok((addr, token.clone()))
             })
-            .collect::<eyre::Result<Vec<_>>>()?;
+            .collect::<eyre::Result<HashMap<_, _>>>()?;
 
         let curr_token_balances = Arc::new(Mutex::new(
             TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?,
