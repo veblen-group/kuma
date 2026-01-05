@@ -25,6 +25,15 @@ pub struct SpotPrices {
 }
 
 impl SpotPrices {
+    /// Create SpotPrices from precomputed spot price data.
+    ///
+    /// Extracts the minimum and maximum spot prices from the precomputed sorted prices array
+    /// and creates a SpotPrices struct for the given pair and chain.
+    ///
+    /// # Arguments
+    /// * `precompute` - Precomputed data containing sorted spot prices (min to max)
+    /// * `chain` - The blockchain network for which these prices apply
+    /// * `pair` - The token pair for which spot prices are calculated
     pub fn from_precompute(precompute: &Precomputes, chain: Chain, pair: Pair) -> Self {
         let min = precompute.sorted_prices_a_b[0].clone();
         let max = precompute.sorted_prices_a_b[precompute.sorted_prices_a_b.len() - 1].clone();
@@ -39,6 +48,19 @@ impl SpotPrices {
         }
     }
 
+    /// Create SpotPrices from a pre-sorted list of spot prices.
+    ///
+    /// Takes a sorted array of (PoolId, price) tuples where the price represents
+    /// the amount of token_b per unit of token_a, and extracts the minimum and maximum values.
+    ///
+    /// # Arguments
+    /// * `sorted_spot_prices` - A sorted slice of (PoolId, price) tuples
+    /// * `block_height` - The block height at which these prices are valid
+    /// * `chain` - The blockchain network for which these prices apply
+    /// * `pair` - The token pair for which spot prices are calculated
+    ///
+    /// # Errors
+    /// Returns an error if the sorted_spot_prices slice is empty.
     pub fn try_from_sorted_prices(
         sorted_spot_prices: &[(PoolId, f64)],
         block_height: u64,
@@ -61,12 +83,33 @@ impl SpotPrices {
         })
     }
 
+    /// Create SpotPrices by extracting and sorting spot prices from a pair's state.
+    ///
+    /// Retrieves the current spot price for the token pair from all available pools,
+    /// sorts them, and creates a SpotPrices struct containing the minimum and maximum prices.
+    /// Skips any pools that fail to calculate a valid spot price.
+    ///
+    /// # Arguments
+    /// * `state` - The current state of the pair containing all pool states
+    /// * `pair` - The token pair for which spot prices are calculated
+    /// * `chain` - The blockchain network for which these prices apply
+    ///
+    /// # Errors
+    /// Returns an error if no valid spot prices can be extracted from the pair state.
     pub fn try_from_pair_state(state: &PairState, pair: Pair, chain: Chain) -> eyre::Result<Self> {
         let sorted_spot_prices = try_make_sorted_spot_prices(state, &pair)?;
 
         SpotPrices::try_from_sorted_prices(&sorted_spot_prices, state.block_height, chain, pair)
     }
 
+    /// Get the pessimistic (worst-case) USDC price for one of the tokens in this pair.
+    ///
+    /// For a USDC pair, returns the appropriate pessimistic price:
+    /// - If token_a is USDC: returns the minimum price (worst case when receiving USDC)
+    /// - If token_b is USDC: returns the maximum price (worst case when receiving token_a)
+    ///
+    /// # Errors
+    /// Returns an error if neither token in the pair is USDC.
     pub fn try_pessimistic_usdc_price(&self) -> eyre::Result<f64> {
         if "USDC" == self.pair.token_a().symbol {
             Ok(self.min_price)
@@ -88,7 +131,23 @@ impl Display for SpotPrices {
     }
 }
 
-// NOTE: these are analogous to midprice
+/// Extract and sort spot prices for a token pair from all pools in a pair state.
+///
+/// Iterates through all pools in the pair state, calculates the spot price of token_a
+/// in terms of token_b for each pool, and returns them sorted in ascending order.
+/// Pools that fail to calculate a valid spot price are silently skipped with a warning logged.
+///
+/// The spot prices are analogous to the mid-price across all available pools.
+///
+/// # Arguments
+/// * `state` - The current state of the pair containing all pool states
+/// * `pair` - The token pair for which spot prices are calculated (price of token_a in terms of token_b)
+///
+/// # Returns
+/// A vector of (PoolId, price) tuples sorted by price in ascending order
+///
+/// # Errors
+/// Returns an error if no valid spot prices can be extracted from any pool.
 pub fn try_make_sorted_spot_prices(
     state: &PairState,
     pair: &Pair,

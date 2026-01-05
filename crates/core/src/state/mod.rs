@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod balances;
 pub mod block;
+pub mod erc20;
 pub mod pair;
 pub mod tycho;
 
