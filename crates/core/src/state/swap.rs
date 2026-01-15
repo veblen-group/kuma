@@ -1,5 +1,3 @@
-use std::str::FromStr as _;
-
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
 use num_bigint::BigUint;
@@ -27,26 +25,28 @@ impl Swap {
         receipt: &TransactionReceipt, // should be trade log
         swap: strategy::Swap,
     ) -> eyre::Result<Self> {
-        let mut amount_in = BigUint::from_str("0").unwrap();
-        let mut amount_out = BigUint::from_str("0").unwrap();
+        let mut amount_in = BigUint::default();
+        let mut amount_out = BigUint::default();
+
+        let token_in_addr = Address::from_slice(&swap.token_in.address);
+        let token_out_addr = Address::from_slice(&swap.token_out.address);
+
         for log in receipt.logs() {
-            let contract_address = log.address();
-            let token_in_addr = Address::from_slice(&swap.token_in.address);
-            let token_out_addr = Address::from_slice(&swap.token_out.address);
+            let contract = log.address();
 
-            if contract_address == token_in_addr {
+            if contract == token_in_addr {
                 let transfer = Transfer::try_from_log(&swap.token_in, log.clone())?;
-
-                amount_in = amount_in.checked_add(&transfer.amount).ok_or_else(|| {
-                    eyre::eyre!("overflow when adding amount_in in swap from receipts")
-                })?;
+                amount_in = amount_in
+                    .checked_add(&transfer.amount)
+                    .ok_or_else(|| eyre::eyre!("overflow adding amount_in"))?;
+                continue;
             }
 
-            if contract_address == token_out_addr {
+            if contract == token_out_addr {
                 let transfer = Transfer::try_from_log(&swap.token_out, log.clone())?;
-                amount_out = amount_out.checked_add(&transfer.amount).ok_or_else(|| {
-                    eyre::eyre!("overflow when adding amount_out in swap from receipts")
-                })?;
+                amount_out = amount_out
+                    .checked_add(&transfer.amount)
+                    .ok_or_else(|| eyre::eyre!("overflow adding amount_out"))?;
             }
         }
 
