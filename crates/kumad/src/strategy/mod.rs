@@ -125,7 +125,6 @@ impl Worker {
         let submission_delay = self.slow_block_time.mul_f64(0.75);
         let mut submission_deadline = None;
 
-        // TODO: curr eth_usdc price
         let mut precompute: Option<Precomputes> = None;
         let mut curr_signal: Option<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)> = None;
 
@@ -157,8 +156,6 @@ impl Worker {
                         .wrap_err("failed to send signal to emitter")?;
                 }
 
-                // TODO: handle eth usdc price updates
-
                 // Handle slow chain updates
                 Some(slow_state) = self.slow_stream.next() => {
                     // Start timer for 75% of block time
@@ -172,7 +169,6 @@ impl Worker {
 
                     // Generate precomputes
                     // TODO: reuse unmodified precomputes if possible
-                    // TODO: require curr eth_usdc price and use basefee from slowstate
                     let new_precompute = self.strategy.try_precompute(slow_state, None)?;
                     debug!(
                         block.height = new_precompute.block_height,
@@ -266,12 +262,10 @@ impl Worker {
                         }
                     }.boxed());
 
-                    // TODO: require eth usdc price
                     // try to generate signal if precompute is available
                     if let Some(precompute) = precompute.as_ref() {
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
 
-                        // TODO: use eth_usdc price amd basefee from fast block
                         match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b) {
                             Ok(signal) => {
                                 info!(
