@@ -13,12 +13,6 @@ use num_traits::{CheckedAdd as _, CheckedMul as _, CheckedSub as _, FromPrimitiv
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RealizedProfit {
-    /// Total profit in USDC after converting surplus tokens using pessimistic prices
-    pub total_usdc: BigUint,
-    /// USDC value of the token amounts
-    pub usdc_amounts: (BigUint, BigUint),
-    /// Surplus amounts in token A and token B respectively
-    pub surplus: (BigUint, BigUint),
     /// The token pair for which the profit was realized
     pub pair: Pair,
     /// The slow chain swap that generated the profit
@@ -26,10 +20,23 @@ pub struct RealizedProfit {
     /// The fast chain swap that generated the profit
     pub fast_swap: state::Swap,
     /// Token A -> USDC and Token B -> USDC prices used to calculate realized profit
-    pub usdc_prices: (f64, f64),
+    pub token_usdc_prices: (f64, f64),
+    /// TODO: docstring
+    pub gas_price_usdc: f64,
+    /// TODO: docstring
+    pub gas_amount_eth: BigUint,
+    /// TODO: docstring
+    pub gas_amount_usdc: BigUint,
+    /// Surplus amounts in token A and token B respectively
+    pub surplus: (BigUint, BigUint),
+    /// USDC value of the token amounts
+    pub usdc_amounts: (BigUint, BigUint),
+    /// Total profit in USDC after converting surplus tokens using pessimistic prices
+    pub total_usdc: BigUint,
 }
 
 impl RealizedProfit {
+    // TODO: update docstring
     /// Calculate realized profit from slow and fast chain swaps and spot prices.
     ///
     /// Calculates the realized profit by:
@@ -46,20 +53,19 @@ impl RealizedProfit {
     pub fn try_from_swaps(
         slow_swap: &state::Swap,
         fast_swap: &state::Swap,
-        prices_a_usdc: &Option<SpotPrices>,
-        prices_b_usdc: &Option<SpotPrices>,
+        prices_a_usdc: Option<SpotPrices>,
+        prices_b_usdc: Option<SpotPrices>,
+        prices_eth_usdc: Option<SpotPrices>,
     ) -> eyre::Result<Self> {
         let slow_pair = slow_swap.get_pair();
         let (amounts_a, amounts_b) =
             Self::try_amounts_by_tokens_a_b(slow_swap, fast_swap, &slow_pair)?;
         let surplus = try_surplus(amounts_a, amounts_b, &slow_pair)?;
 
-        let (price_a_usdc, price_b_usdc) = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
-
-        let usdc_amounts = {
-            let a_usdc = try_mul_biguint_f64(&surplus.0, price_a_usdc)?;
-            let b_usdc = try_mul_biguint_f64(&surplus.1, price_b_usdc)?;
-            (a_usdc, b_usdc)
+        let (usdc_amounts, token_usdc_prices) = {
+            let (a_usdc, price_a_usdc) = try_mul_amount_usdc_price(&surplus.0, &prices_a_usdc)?;
+            let (b_usdc, price_b_usdc) = try_mul_amount_usdc_price(&surplus.1, &prices_b_usdc)?;
+            ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
         };
 
         let total_usdc = usdc_amounts
@@ -72,14 +78,26 @@ impl RealizedProfit {
                 )
             })?;
 
+        let gas_amount_eth = slow_swap.gas_cost_eth.clone() + fast_swap.gas_cost_eth.clone();
+        // TODO: remove this option after providing gas prices
+        let (gas_amount_usdc, gas_price_usdc) = match prices_eth_usdc {
+            Some(prices_eth_usdc) => {
+                try_mul_amount_usdc_price(&gas_amount_eth, &Some(prices_eth_usdc))?
+            }
+            None => (gas_amount_eth.clone(), 1.0f64),
+        };
+
         Ok(RealizedProfit {
             total_usdc,
-            usdc_prices: (price_a_usdc, price_b_usdc),
+            token_usdc_prices,
             pair: slow_pair.clone(),
             surplus,
             usdc_amounts,
             slow_swap: slow_swap.clone(),
             fast_swap: fast_swap.clone(),
+            gas_amount_eth,
+            gas_price_usdc,
+            gas_amount_usdc,
         })
     }
 
@@ -118,7 +136,7 @@ pub struct ExpectedProfit {
     /// Minimum amount of tokens after deducting max slippage from surplus and applying congestion discount
     pub min_token_amounts: (BigUint, BigUint),
     /// Token A -> USDC and Token B -> USDC prices used to calculate minimum USDC amount
-    pub usdc_prices: (f64, f64),
+    pub token_usdc_prices: (f64, f64),
     /// USDC value of the minimum token amounts
     pub min_usdc_amounts: (BigUint, BigUint),
     pub pair: Pair,
@@ -168,22 +186,20 @@ impl ExpectedProfit {
             congestion_risk_discount_bps,
         )?;
 
-        // Step 4: Determine pessimistic USDC prices for each token
-        // If direct USDC pricing is available use it; otherwise fall back to the A-B pair pricing
-        let usdc_prices = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
-
-        // Step 5: Convert minimum token amounts to USDC using pessimistic prices
-        let min_usdc_amounts = {
-            let a_usdc = try_mul_biguint_f64(&min_token_amounts.0, usdc_prices.0)?;
-            let b_usdc = try_mul_biguint_f64(&min_token_amounts.1, usdc_prices.1)?;
-            (a_usdc, b_usdc)
+        // Step 4: Determine pessimistic USDC prices for each token andonvert minimum token amounts to USDC
+        let (min_usdc_amounts, token_usdc_prices) = {
+            let (a_usdc, price_a_usdc) =
+                try_mul_amount_usdc_price(&min_token_amounts.0, &prices_a_usdc)?;
+            let (b_usdc, price_b_usdc) =
+                try_mul_amount_usdc_price(&min_token_amounts.1, &prices_b_usdc)?;
+            ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
         };
 
         Ok(ExpectedProfit {
             surplus,
             max_slippage_token_amounts,
             min_token_amounts,
-            usdc_prices,
+            token_usdc_prices,
             min_usdc_amounts,
             pair,
         })
@@ -296,8 +312,8 @@ impl Display for ExpectedProfit {
             self.max_slippage_token_amounts.1,
             self.min_token_amounts.0,
             self.min_token_amounts.1,
-            self.usdc_prices.0,
-            self.usdc_prices.1,
+            self.token_usdc_prices.0,
+            self.token_usdc_prices.1,
         )
     }
 }
@@ -307,9 +323,15 @@ pub fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     (amount * slippage_multiplier) / BigUint::from(10000u64)
 }
 
-fn try_mul_biguint_f64(amount: &BigUint, price: f64) -> eyre::Result<BigUint> {
+// TODO: adjust for decimals
+fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Result<BigUint> {
     let price = BigRational::from_f64(price)
         .ok_or_eyre("failed to convert token A USDC price to BigRational")?;
+
+    let decimal_adjustment = BigRational::new(
+        1i128,
+        10i128.pow(pair.token_a().decimals - pair.token_b().decimals),
+    );
 
     // TODO: are these conversions safe?
     let amount_usdc = price
@@ -349,11 +371,8 @@ fn try_surplus(
     Ok((amount_a, amount_b))
 }
 
-fn try_usdc_prices(
-    prices_a_usdc: &Option<SpotPrices>,
-    prices_b_usdc: &Option<SpotPrices>,
-) -> Result<(f64, f64), eyre::Error> {
-    let price_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
+fn try_usdc_prices(prices_usdc: &Option<SpotPrices>) -> f64 {
+    let price_usdc = if let Some(prices_a_usdc) = prices_usdc {
         // if A != USDC, A->USDC
         prices_a_usdc.min_price
     } else {
@@ -361,13 +380,21 @@ fn try_usdc_prices(
         1.0f64
     };
 
-    let price_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
-        // if B != USDC, B->USDC
-        prices_b_usdc.min_price
-    } else {
-        // if B = USDC, A->B
-        1.0f64
-    };
+    price_usdc
+}
 
-    Ok((price_a_usdc, price_b_usdc))
+fn try_mul_amount_usdc_price(
+    amount: &BigUint,
+    prices: &Option<SpotPrices>,
+) -> eyre::Result<(BigUint, f64)> {
+    // If direct USDC pricing is available use it; otherwise this is USDC
+    match prices {
+        Some(prices) => {
+            let price = prices.min_price;
+            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
+
+            Ok((amount_usdc, price))
+        }
+        None => Ok((amount.clone(), 1.0f64)),
+    }
 }

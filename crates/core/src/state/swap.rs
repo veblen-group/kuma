@@ -4,7 +4,8 @@ use crate::{
 };
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint};
+use num_rational::BigRational;
 use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
@@ -15,8 +16,7 @@ pub struct Swap {
     pub amount_in: BigUint,
     pub token_out: Token,
     pub amount_out: BigUint,
-    #[allow(dead_code)]
-    pub gas_cost: u64,
+    pub gas_cost_eth: BigUint,
 }
 
 impl Swap {
@@ -46,12 +46,17 @@ impl Swap {
             }
         }
 
+        let gas_units = BigUint::from(receipt.gas_used);
+        let wei_per_gas = BigUint::from(receipt.effective_gas_price);
+        // cost in wei, e.g. 5 × 10^14 wei = 500,000 Gwei ~ 0.0005 ETH
+        let gas_cost_eth = gas_units * wei_per_gas;
+
         Ok(Swap {
             token_in: swap.token_in,
             amount_in: amount_in,
             token_out: swap.token_out,
             amount_out: amount_out,
-            gas_cost: receipt.gas_used * receipt.effective_gas_price as u64,
+            gas_cost_eth,
         })
     }
 

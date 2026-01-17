@@ -42,6 +42,7 @@ impl Pair {
             // if A = USDC, B->USDC
             (self.token_b(), self.token_a())
         } else if self.token_b().symbol == "USDC" {
+            // if B = USDC, A->USDC
             (self.token_a(), self.token_b())
         } else {
             // else A->B
