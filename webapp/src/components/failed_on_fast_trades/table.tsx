@@ -19,10 +19,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
 import { useFailedOnFastTradeResults } from "@/lib/api-client"
+import { TradeResultTableProps } from "../successful_trades/table"
 
-export function FailedOnFastTradeResultTable() {
-  const selectedPair = "WETH-USDC" // Fixed pair for trade results
-
+export function FailedOnFastTradeResultTable({ pair }: TradeResultTableProps) {
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -32,7 +31,7 @@ export function FailedOnFastTradeResultTable() {
     data, isLoading, isError, error, refetch
   } = useFailedOnFastTradeResults(
     {
-      pair: selectedPair,
+      pair: pair,
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize
     },

@@ -69,7 +69,7 @@ export default function Home() {
           <CardTitle>Successful Trades</CardTitle>
         </CardHeader>
         <CardContent>
-          <SuccessfulTradeResultTable />
+          <SuccessfulTradeResultTable pair={selectedPair} />
         </CardContent>
       </Card>
 
@@ -78,7 +78,7 @@ export default function Home() {
           <CardTitle>Failed Trades</CardTitle>
         </CardHeader>
         <CardContent>
-          <FailedOnSlowTradeResultTable />
+          <FailedOnSlowTradeResultTable pair={selectedPair} />
         </CardContent>
       </Card>
 
@@ -87,7 +87,7 @@ export default function Home() {
           <CardTitle>Stuck Trades</CardTitle>
         </CardHeader>
         <CardContent>
-          <FailedOnFastTradeResultTable />
+          <FailedOnFastTradeResultTable pair={selectedPair} />
         </CardContent>
       </Card>
     </main>
