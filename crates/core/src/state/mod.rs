@@ -6,8 +6,10 @@ pub mod balances;
 pub mod block;
 pub mod erc20;
 pub mod pair;
+pub mod swap;
 pub mod tycho;
 
+pub use swap::Swap;
 // TODO: maybe some address sanitization?
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PoolId(String);

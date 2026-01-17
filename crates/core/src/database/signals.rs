@@ -268,7 +268,7 @@ fn try_signal_from_row(
         surplus,
         min_token_amounts,
         // TODO: save usdc prices to db
-        usdc_prices: (0f64, 0f64),
+        token_usdc_prices: (0f64, 0f64),
         // TODO: save max slippage token amounts to db
         max_slippage_token_amounts: (BigUint::ZERO, BigUint::ZERO),
         min_usdc_amounts: (expected_profit_usdc_a, expected_profit_usdc_b),
@@ -291,6 +291,9 @@ fn try_signal_from_row(
         slow_swap_sim,
         fast_pool_id,
         fast_swap_sim,
+        slow_prices_a_b: todo!(),
+        slow_prices_a_usdc: todo!(),
+        slow_prices_b_usdc: todo!(),
     })
 }
 
