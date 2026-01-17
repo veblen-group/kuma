@@ -209,10 +209,10 @@ impl Trade {
                 .wrap_err("failed to parse fast swap from receipt")?;
 
         let profit = RealizedProfit::try_from_swaps(
-            slow_swap,
-            fast_swap,
-            &self.signal.slow_prices_a_usdc,
-            &self.signal.slow_prices_b_usdc,
+            &slow_swap,
+            &fast_swap,
+            self.signal.slow_prices_a_usdc.clone(),
+            self.signal.slow_prices_b_usdc.clone(),
             None, // TODO: provide eth_usdc prices
         )
         .wrap_err("failed to calculate realized profit")?;

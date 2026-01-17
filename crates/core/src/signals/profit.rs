@@ -323,23 +323,47 @@ pub fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     (amount * slippage_multiplier) / BigUint::from(10000u64)
 }
 
-// TODO: adjust for decimals
+/// Multiply a token amount by its USDC price, accounting for token decimals.
+///
+/// Token amounts are stored as integers scaled by their decimals.
+/// For example: 1 token with 18 decimals = 10^18 units, 1 USDC (6 decimals) = 10^6 units
+///
+/// This function normalizes the amount for the decimal difference between tokens,
+/// then multiplies by the price to get USDC value.
 fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Result<BigUint> {
-    let price = BigRational::from_f64(price)
-        .ok_or_eyre("failed to convert token A USDC price to BigRational")?;
+    let price =
+        BigRational::from_f64(price).ok_or_eyre("failed to convert price to BigRational")?;
 
-    let decimal_adjustment = BigRational::new(
-        1i128,
-        10i128.pow(pair.token_a().decimals - pair.token_b().decimals),
-    );
+    // Get tokens ordered with non-USDC token first
+    let (token_a, token_b) = pair.token_a_b_adjusted_for_usdc();
+    let decimals_diff = (token_a.decimals as i32) - (token_b.decimals as i32);
 
-    // TODO: are these conversions safe?
-    let amount_usdc = price
-        .checked_mul(&BigRational::from_integer(BigInt::from(amount.clone())))
-        .wrap_err("surplus of token a cannot be converted to USDC")?
+    // Create decimal adjustment to normalize amount for the decimal difference
+    // Example: if token_a has 18 decimals and token_b (USDC) has 6 decimals:
+    //   decimals_diff = 12
+    //   adjustment = 1 / 10^12 (divide the amount by 10^12)
+    let decimal_adjustment = if decimals_diff >= 0 {
+        // token_a has more decimals: divide by 10^decimals_diff
+        BigRational::new(BigInt::from(1), BigInt::from(10).pow(decimals_diff as u32))
+    } else {
+        // token_a has fewer decimals: multiply by 10^|decimals_diff|
+        BigRational::new(
+            BigInt::from(10).pow((decimals_diff.abs()) as u32),
+            BigInt::from(1),
+        )
+    };
+
+    // Normalize the amount and multiply by price: (amount * adjustment) * price
+    let amount_rational = BigRational::from_integer(BigInt::from(amount.clone()));
+
+    let amount_usdc = amount_rational
+        .checked_mul(&price)
+        .wrap_err("failed to multiply amount by price")?
+        .checked_mul(&decimal_adjustment)
+        .wrap_err("failed to adjust amount * price by decimals")?
         .to_integer()
         .to_biguint()
-        .ok_or_eyre("failed to multiply surplus a by usdc price")?;
+        .ok_or_eyre("failed to convert USDC amount to BigUint")?;
 
     Ok(amount_usdc)
 }
@@ -369,18 +393,6 @@ fn try_surplus(
         )
     })?;
     Ok((amount_a, amount_b))
-}
-
-fn try_usdc_prices(prices_usdc: &Option<SpotPrices>) -> f64 {
-    let price_usdc = if let Some(prices_a_usdc) = prices_usdc {
-        // if A != USDC, A->USDC
-        prices_a_usdc.min_price
-    } else {
-        // if A = USDC, B->A
-        1.0f64
-    };
-
-    price_usdc
 }
 
 fn try_mul_amount_usdc_price(

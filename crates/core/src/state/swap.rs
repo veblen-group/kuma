@@ -4,8 +4,7 @@ use crate::{
 };
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
-use num_bigint::{BigInt, BigUint};
-use num_rational::BigRational;
+use num_bigint::{BigUint};
 use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
