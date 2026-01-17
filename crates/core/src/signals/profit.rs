@@ -6,8 +6,8 @@ use std::fmt::Display;
 
 use crate::{
     spot_prices::SpotPrices,
-    state::{pair::Pair, swap::Swap as StateSwap},
-    strategy::Swap,
+    state::{self, pair::Pair},
+    strategy,
 };
 use num_traits::{CheckedAdd as _, CheckedMul as _, CheckedSub as _, FromPrimitive as _};
 
@@ -20,9 +20,9 @@ pub struct RealizedProfit {
     /// The token pair for which the profit was realized
     pub pair: Pair,
     /// The slow chain swap that generated the profit
-    pub slow_swap: StateSwap,
+    pub slow_swap: state::Swap,
     /// The fast chain swap that generated the profit
-    pub fast_swap: StateSwap,
+    pub fast_swap: state::Swap,
     /// Token A -> USDC and Token B -> USDC prices used to calculate realized profit
     pub usdc_prices: (f64, f64),
 }
@@ -42,8 +42,8 @@ impl RealizedProfit {
     /// - The slow and fast chain swaps
     /// - The USDC prices used for conversion
     pub fn try_from_swaps(
-        slow_swap: &StateSwap,
-        fast_swap: &StateSwap,
+        slow_swap: &state::Swap,
+        fast_swap: &state::Swap,
         prices_a_b: &SpotPrices,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
@@ -82,8 +82,8 @@ impl RealizedProfit {
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively
     fn try_amounts_by_tokens_a_b<'a>(
-        slow_sim: &'a StateSwap,
-        fast_sim: &'a StateSwap,
+        slow_sim: &'a state::Swap,
+        fast_sim: &'a state::Swap,
     ) -> eyre::Result<((&'a BigUint, &'a BigUint), (&'a BigUint, &'a BigUint))> {
         let pair = slow_sim.get_pair();
         if pair.token_a().symbol == slow_sim.token_in.symbol {
@@ -139,8 +139,8 @@ impl ExpectedProfit {
     /// - USDC prices used for conversion
     /// - Final minimum USDC amounts achievable for the arbitrage
     pub fn try_from_swaps(
-        slow_sim: &Swap,
-        fast_sim: &Swap,
+        slow_sim: &strategy::Swap,
+        fast_sim: &strategy::Swap,
         prices_a_b: &SpotPrices,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
@@ -189,8 +189,8 @@ impl ExpectedProfit {
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively
     fn try_amounts_by_tokens_a_b<'a>(
-        slow_sim: &'a Swap,
-        fast_sim: &'a Swap,
+        slow_sim: &'a strategy::Swap,
+        fast_sim: &'a strategy::Swap,
     ) -> eyre::Result<((&'a BigUint, &'a BigUint), (&'a BigUint, &'a BigUint))> {
         let pair = slow_sim.get_pair();
         if pair.token_a().symbol == slow_sim.token_in.symbol {

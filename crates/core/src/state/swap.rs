@@ -1,14 +1,13 @@
+use crate::{
+    state::{erc20::Transfer, pair::Pair},
+    strategy,
+};
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
 use num_bigint::BigUint;
 use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
-
-use crate::{
-    state::{erc20::Transfer, pair::Pair},
-    strategy,
-};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Swap {
