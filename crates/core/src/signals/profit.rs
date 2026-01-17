@@ -15,6 +15,8 @@ use num_traits::{CheckedAdd as _, CheckedMul as _, CheckedSub as _, FromPrimitiv
 pub struct RealizedProfit {
     /// Total profit in USDC after converting surplus tokens using pessimistic prices
     pub total_usdc: BigUint,
+    /// USDC value of the token amounts
+    pub usdc_amounts: (BigUint, BigUint),
     /// Surplus amounts in token A and token B respectively
     pub surplus: (BigUint, BigUint),
     /// The token pair for which the profit was realized
@@ -54,19 +56,19 @@ impl RealizedProfit {
 
         let (price_a_usdc, price_b_usdc) = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
 
-        let min_usdc_amounts = {
+        let usdc_amounts = {
             let a_usdc = try_mul_biguint_f64(&surplus.0, price_a_usdc)?;
             let b_usdc = try_mul_biguint_f64(&surplus.1, price_b_usdc)?;
             (a_usdc, b_usdc)
         };
 
-        let total_usdc = min_usdc_amounts
+        let total_usdc = usdc_amounts
             .0
-            .checked_add(&min_usdc_amounts.1)
+            .checked_add(&usdc_amounts.1)
             .wrap_err_with(|| {
                 format!(
                     "total_profit_usdc failed: min_usdc_amounts {} + {}",
-                    min_usdc_amounts.0, min_usdc_amounts.1
+                    usdc_amounts.0, usdc_amounts.1
                 )
             })?;
 
@@ -75,6 +77,7 @@ impl RealizedProfit {
             usdc_prices: (price_a_usdc, price_b_usdc),
             pair: slow_pair.clone(),
             surplus,
+            usdc_amounts,
             slow_swap: slow_swap.clone(),
             fast_swap: fast_swap.clone(),
         })
