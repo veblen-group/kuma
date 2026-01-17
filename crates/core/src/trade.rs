@@ -1,12 +1,16 @@
 use alloy::rpc::types::TransactionReceipt;
-use color_eyre::eyre::{self, WrapErr as _};
+use color_eyre::eyre::{self, OptionExt as _, WrapErr as _, eyre};
+use num_bigint::BigUint;
+use num_traits::CheckedMul as _;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tracing::{error, instrument};
 
 use crate::{
     database::{TradeFailedOnFastRow, TradeFailedOnSlowRow, TradeSuccessRow},
-    encoder::{SignedTransaction, UnsignedTransaction, execute_tx, get_tx_request},
+    encoder::{
+        SignedTransaction, UnsignedTransaction, estimate_gas_amount, execute_tx, get_tx_request,
+    },
     signals::{self, CrossChainSingleHop, RealizedProfit},
     state,
 };
@@ -104,16 +108,12 @@ impl Trade {
         &self.fast_tx_req
     }
 
-    pub fn signal(&self) -> &CrossChainSingleHop {
-        &self.signal
-    }
-
     // Prepare the trade by creating the transaction requests for both chains
     pub async fn prepare(&self) -> eyre::Result<(SignedTransaction, SignedTransaction)> {
-        let slow_tx_request = get_tx_request(self.slow_tx(), &self.signal().slow_chain)
+        let slow_tx_request = get_tx_request(self.slow_tx(), &self.signal.slow_chain)
             .await
             .wrap_err("Failed to create transaction request for slow chain")?;
-        let fast_tx_request = get_tx_request(self.fast_tx(), &self.signal().fast_chain)
+        let fast_tx_request = get_tx_request(self.fast_tx(), &self.signal.fast_chain)
             .await
             .wrap_err("Failed to create transaction request for fast chain")?;
         Ok((slow_tx_request, fast_tx_request))
@@ -122,7 +122,26 @@ impl Trade {
     // Execute the trade by sending the transactions to their respective chains
     #[instrument(skip(self), fields(slow_chain = %self.signal.slow_chain.name, fast_chain = %self.signal.fast_chain.name))]
     pub async fn run(self, mut id_rx: oneshot::Receiver<i64>) -> eyre::Result<TradeResult> {
-        let slow_receipt = match execute_tx(self.slow_tx(), &self.signal().slow_chain).await {
+        let slow_gas_amount = BigUint::from(
+            estimate_gas_amount(self.slow_tx_req.clone(), &self.signal.slow_chain).await?,
+        );
+        let fast_gas_amount = BigUint::from(
+            estimate_gas_amount(self.fast_tx_req.clone(), &self.signal.fast_chain).await?,
+        );
+
+        let gas_cost_eth = slow_gas_amount + fast_gas_amount;
+        let gas_cost_usdc = gas_cost_eth
+            .checked_mul(&self.signal.base_fee_usdc)
+            .ok_or_eyre("failed to multiply gas cost by base_fee_usdc")?;
+
+        let expected_profit_usdc = self.signal.expected_profit.min_total_amount_usdc.clone();
+
+        if gas_cost_usdc > expected_profit_usdc {
+            return Err(eyre!(
+                "estimated transactions gas cost exceeds expected profit"
+            ));
+        }
+        let slow_receipt = match execute_tx(&self.slow_tx_req, &self.signal.slow_chain).await {
             Ok(receipt) => receipt,
             Err(error) => {
                 error!(
@@ -151,7 +170,7 @@ impl Trade {
             }));
         }
 
-        let fast_receipt = match execute_tx(self.fast_tx(), &self.signal().fast_chain).await {
+        let fast_receipt = match execute_tx(self.fast_tx(), &self.signal.fast_chain).await {
             Ok(receipt) => receipt,
             Err(error) => {
                 error!(chain = %self.signal.fast_chain.name, %error, "failed to submit  transaction to fast chain");
@@ -180,7 +199,7 @@ impl Trade {
         let realized_profit = self.calculate_realized_profit(&slow_receipt, &fast_receipt)?;
 
         Ok(TradeResult::Successful(TradeSuccess {
-            signal: self.signal,
+            signal: self.signal.clone(),
             signal_id,
             slow_receipt,
             fast_receipt,

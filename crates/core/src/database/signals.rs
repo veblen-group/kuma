@@ -302,6 +302,9 @@ fn try_signal_from_row(
         slow_prices_a_usdc: None, // TODO: save prices to db
         slow_prices_b_usdc: None, // TODO: save prices to db
         slow_prices_a_b,
+        slow_prices_eth_usdc: None,     // TODO
+        base_fee_eth: BigUint::zero(),  // TODO
+        base_fee_usdc: BigUint::zero(), // TODO
     })
 }
 

@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use color_eyre::eyre::{self, Context, eyre};
+use color_eyre::eyre::{self, Context, ContextCompat, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, error, instrument, trace, warn};
 use tycho_common::models::token::Token;
@@ -37,8 +37,10 @@ pub struct Precomputes {
     pub sorted_prices_a_b: Vec<(PoolId, f64)>,
     pub pool_sims: HashMap<state::PoolId, simulation::PoolSteps>,
     pub pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
+    pub prices_eth_usdc: Option<SpotPrices>,
     pub prices_a_usdc: Option<SpotPrices>,
     pub prices_b_usdc: Option<SpotPrices>,
+    pub base_fee: u64,
 }
 
 // Implementation of the arbitrage strategy
@@ -47,6 +49,8 @@ pub struct CrossChainSingleHop {
     // TODO: make a (chain, pair, inventory) tuple?
     pub slow_pair: Pair,
     pub slow_usdc: Token,
+    pub slow_eth: Token,
+    pub slow_eth_usdc: Option<Pair>,
     pub slow_token_a_usdc: Option<Pair>,
     pub slow_token_b_usdc: Option<Pair>,
     pub slow_chain: Chain,
@@ -186,7 +190,35 @@ impl CrossChainSingleHop {
             None
         };
 
-        // TODO: Use eth_usdc price and basefee
+        let prices_eth_usdc = if let (Some(eth_usdc), Some(eth_usdc_state)) =
+            (&self.slow_eth_usdc, &state.eth_usdc_state)
+        {
+            let prices_eth_usdc = SpotPrices::try_from_pair_state(
+                eth_usdc_state,
+                eth_usdc.clone(),
+                self.slow_chain.clone(),
+            )
+            .wrap_err_with(|| {
+                format!(
+                    "failed to simulate spot prices for {} on {}",
+                    eth_usdc, self.slow_chain
+                )
+            })?;
+            trace!(
+                %prices_eth_usdc,
+                block.height = prices_eth_usdc.block_height,
+                chain.name = %self.slow_chain.name,
+                "✅ Generated ETH-USDC spot prices"
+            );
+            Some(prices_eth_usdc)
+        } else {
+            trace!(pair = %self.slow_pair, "Skipping spot price simulation for ETH == USDC");
+            None
+        };
+
+        let base_fee = state
+            .base_fee
+            .wrap_err("base fee not available for block")?;
 
         Ok(Precomputes {
             block_height,
@@ -194,8 +226,10 @@ impl CrossChainSingleHop {
             sorted_prices_a_b,
             pool_sims,
             pool_metadata: state.pair_state.metadata.clone(),
+            prices_eth_usdc,
             prices_a_usdc,
             prices_b_usdc,
+            base_fee,
         })
     }
 
@@ -260,11 +294,13 @@ impl CrossChainSingleHop {
                             &precompute.prices_a_b,
                             &precompute.prices_a_usdc,
                             &precompute.prices_b_usdc,
+                            &precompute.prices_eth_usdc,
                             fast_state.states[&fast_id].as_ref(),
                             fast_state.metadata[&fast_id].clone(),
                             &fast_id,
                             fast_state.block_height,
                             &self.fast_inventory.1,
+                            0, // TODO: basefee
                         )
                         .wrap_err("no optimal signal for A->B (slow) and B->A (fast)")?;
                     trace!(
@@ -285,11 +321,13 @@ impl CrossChainSingleHop {
                             &precompute.prices_a_b,
                             &precompute.prices_a_usdc,
                             &precompute.prices_b_usdc,
+                            &precompute.prices_eth_usdc,
                             fast_state.states[&fast_id].as_ref(),
                             fast_state.metadata[&fast_id].clone(),
                             &fast_id,
                             fast_state.block_height,
                             &self.fast_inventory.0,
+                            0, // TODO: basefee
                         )
                         .wrap_err("no optimal signal for B->A (slow) and A->B (fast)")?;
                     trace!(
@@ -332,11 +370,15 @@ impl CrossChainSingleHop {
         slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
+        slow_prices_eth_usdc: &Option<SpotPrices>,
+        // slow_basefee: u64,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
+        // fast_basefee: u64,
+        basefee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // Binary search to find the optimal signal. The search assumes the profit function is
         // unimodal (has a single peak) over the slow_sims array. At each step, we compare the
@@ -357,11 +399,15 @@ impl CrossChainSingleHop {
                     slow_prices_a_b,
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
+                    slow_prices_eth_usdc,
+                    // slow_basefee,
                     fast_state,
                     fast_protocol_component,
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
+                    // fast_basefee,
+                    basefee,
                 )
                 .wrap_err("failed to create signal from single precompute")?;
             return Ok(signal);
@@ -383,11 +429,15 @@ impl CrossChainSingleHop {
                     slow_prices_a_b,
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
+                    slow_prices_eth_usdc,
+                    // slow_basefee,
                     fast_state,
                     fast_protocol_component.clone(),
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
+                    // fast_basefee,
+                    basefee,
                 )
                 .inspect_err(|err| {
                     trace!(index = mid, %err, "failed to create mid signal");
@@ -407,11 +457,15 @@ impl CrossChainSingleHop {
                     slow_prices_a_b,
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
+                    slow_prices_eth_usdc,
+                    // slow_basefee,
                     fast_state,
                     fast_protocol_component.clone(),
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
+                    // fast_basefee,
+                    basefee,
                 )
                 .inspect_err(|err| {
                     trace!(index = next, %err, "failed to create next signal");
@@ -483,11 +537,13 @@ impl CrossChainSingleHop {
         slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
+        slow_prices_eth_usdc: &Option<SpotPrices>,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
+        base_fee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         let fast_sim = match self.swap_from_precompute(
             slow_sim.clone(),
@@ -513,6 +569,7 @@ impl CrossChainSingleHop {
             slow_prices_a_b,
             slow_prices_a_usdc,
             slow_prices_b_usdc,
+            slow_prices_eth_usdc,
             &self.fast_chain,
             &self.fast_pair,
             fast_protocol_component,
@@ -521,6 +578,7 @@ impl CrossChainSingleHop {
             fast_sim.clone(),
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
+            base_fee,
         )
         .map_err(|err| {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
@@ -841,12 +899,29 @@ mod tests {
             None
         };
 
+        // Constant ETH gas price: ETH->USDC = 3000 (1 ETH : 3000 USDC)
+        let eth_usdc_state = if let Some(slow_token_b_usdc) = &strategy.slow_token_b_usdc {
+            let eth_usdc_state = make_single_univ2_pair_state(
+                slow_token_b_usdc,
+                block_height,
+                "slow_eth_usdc",
+                1,
+                3_000,
+                strategy.slow_chain.name,
+            );
+            Some(eth_usdc_state)
+        } else {
+            None
+        };
+
         state::block::BlockState {
             pair_state,
             token_a_usdc_state,
             token_a_balance: BigUint::from(0u64),
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
+            eth_usdc_state,
+            base_fee: Some(0u64),
         }
     }
 
@@ -896,12 +971,29 @@ mod tests {
             None
         };
 
+        // Constant ETH gas price: ETH->USDC = 3000 (1 ETH : 3000 USDC)
+        let eth_usdc_state = if let Some(fast_token_b_usdc) = &strategy.fast_token_b_usdc {
+            let eth_usdc_state = make_single_univ2_pair_state(
+                fast_token_b_usdc,
+                block_height,
+                "fast_eth_usdc",
+                1,
+                3_000,
+                strategy.fast_chain.name,
+            );
+            Some(eth_usdc_state)
+        } else {
+            None
+        };
+
         state::block::BlockState {
             pair_state,
             token_a_usdc_state,
             token_a_balance: BigUint::from(0u64),
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
+            eth_usdc_state,
+            base_fee: Some(0u64),
         }
     }
 
@@ -960,12 +1052,29 @@ mod tests {
             None
         };
 
+        // Constant ETH gas price: ETH->USDC = 3000 (1 ETH : 3000 USDC)
+        let eth_usdc_state = if let Some(token_b_usdc_pair) = &strategy.slow_token_b_usdc {
+            let eth_usdc_state = make_single_univ2_pair_state(
+                token_b_usdc_pair,
+                block_height,
+                "slow_eth_usdc",
+                1,
+                3_000,
+                strategy.slow_chain.name,
+            );
+            Some(eth_usdc_state)
+        } else {
+            None
+        };
+
         state::block::BlockState {
             pair_state,
             token_a_usdc_state,
             token_a_balance: BigUint::from(0u64),
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
+            eth_usdc_state,
+            base_fee: Some(0u64),
         }
     }
 
@@ -1015,12 +1124,29 @@ mod tests {
             None
         };
 
+        // Constant ETH gas price: ETH->USDC = 3000 (1 ETH : 3000 USDC)
+        let eth_usdc_state = if let Some(pair) = &strategy.fast_token_b_usdc {
+            let state = make_single_univ2_pair_state(
+                pair,
+                block_height,
+                "fast_eth_usdc",
+                1,
+                3_000,
+                strategy.slow_chain.name,
+            );
+            Some(state)
+        } else {
+            None
+        };
+
         state::block::BlockState {
             pair_state,
             token_a_usdc_state,
             token_a_balance: BigUint::from(0u64),
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
+            eth_usdc_state,
+            base_fee: Some(0u64),
         }
     }
 
@@ -1058,6 +1184,7 @@ mod tests {
         let fast_token_a_usdc = Pair::new(make_base_pepe(), make_base_usdc());
         // zero2one = USDC/WETH
         let fast_token_b_usdc = Pair::new(make_base_weth(), make_base_usdc());
+
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(150u64), fast_pair.token_b().decimals),
@@ -1066,6 +1193,7 @@ mod tests {
         Arc::new(CrossChainSingleHop {
             slow_chain,
             slow_usdc: make_mainnet_usdc(),
+            slow_eth: make_mainnet_weth(),
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
@@ -1075,6 +1203,7 @@ mod tests {
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
             binary_search_steps: 16,
+            slow_eth_usdc: Some(fast_token_b_usdc.clone()),
             slow_token_a_usdc: Some(slow_token_a_usdc),
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
@@ -1111,6 +1240,8 @@ mod tests {
         let slow_token_a_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
         // zero2one = WETH/USDC
         let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+        // zero2one = WETH/USDC
+        let slow_eth_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -1132,6 +1263,7 @@ mod tests {
         Arc::new(CrossChainSingleHop {
             slow_chain,
             slow_usdc: make_mainnet_usdc(),
+            slow_eth: make_mainnet_weth(),
             slow_pair,
             slow_inventory: available_inventory_slow,
             fast_chain,
@@ -1141,6 +1273,7 @@ mod tests {
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
             binary_search_steps: 16,
+            slow_eth_usdc: Some(slow_eth_usdc),
             slow_token_a_usdc: Some(slow_token_a_usdc),
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),

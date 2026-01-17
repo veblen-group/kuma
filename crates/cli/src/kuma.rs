@@ -147,10 +147,16 @@ impl Kuma {
         info!(command = "generating signal");
         // TODO: use strategy worker?
 
-        let mut slow_chain_states =
-            slow_block_handle.get_block_state_stream(slow_pair.clone(), strategy.slow_usdc.clone());
-        let mut fast_chain_states =
-            fast_block_handle.get_block_state_stream(fast_pair.clone(), strategy.fast_usdc.clone());
+        let mut slow_chain_states = slow_block_handle.get_block_state_stream(
+            slow_pair.clone(),
+            strategy.slow_usdc.clone(),
+            strategy.slow_eth.clone(),
+        );
+        let mut fast_chain_states = fast_block_handle.get_block_state_stream(
+            fast_pair.clone(),
+            strategy.fast_usdc.clone(),
+            strategy.slow_eth.clone(),
+        );
         // read state from stream
         let slow_state = slow_chain_states
             .next()

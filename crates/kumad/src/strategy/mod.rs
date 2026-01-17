@@ -181,10 +181,13 @@ impl Worker {
 
                     let repo = self.db.spot_price_repository();
                     db_writes.push({
+
+                        let pair_eth_usdc = self.strategy.slow_eth_usdc.clone();
                         let pair_a_b = self.strategy.slow_pair.clone();
                         let pair_a_usdc = self.strategy.slow_token_a_usdc.clone();
                         let pair_b_usdc = self.strategy.slow_token_b_usdc.clone();
 
+                        let prices_eth_usdc = new_precompute.prices_eth_usdc.clone();
                         let prices_a_b = new_precompute.prices_a_b.clone();
                         let prices_a_usdc = new_precompute.prices_a_usdc.clone();
                         let prices_b_usdc = new_precompute.prices_b_usdc.clone();
@@ -219,6 +222,17 @@ impl Worker {
                                     "📈 Saving spot prices to database"
                                 );
                                 repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
+                            }
+
+                            if let (Some(pair_eth_usdc), Some(prices_eth_usdc)) = (pair_eth_usdc, prices_eth_usdc) {
+                                info!(
+                                    chain = %self.strategy.slow_chain.name,
+                                    block_height = %new_precompute.block_height,
+                                    pair = %pair_eth_usdc,
+                                    prices = %prices_eth_usdc,
+                                    "📈 Saving ETH-USDC spot prices to database"
+                                );
+                                repo.insert(prices_eth_usdc).await.wrap_err_with(|| eyre!("failed to write ETH-USDC spot prices to db for {}", pair_eth_usdc))?;
                             }
                             Ok(())
                         }

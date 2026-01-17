@@ -38,6 +38,7 @@ pub struct SignedTransaction {
     tx: EthereumTxEnvelope<alloy::consensus::TxEip4844Variant>,
 }
 
+#[derive(Debug, Clone)]
 pub struct UnsignedTransaction {
     tx: TransactionRequest,
 }
@@ -82,6 +83,23 @@ pub async fn get_tx_request(
         .wrap_err("failed filling tx")?
         .try_into_envelope()?;
     Ok(SignedTransaction { tx })
+}
+
+// TODO: docstring
+pub async fn estimate_gas_amount(
+    transaction: UnsignedTransaction,
+    chain: &Chain,
+) -> eyre::Result<u64> {
+    let wallet = EthereumWallet::new(chain.signer().clone());
+    let provider = alloy::providers::ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);
+
+    // TODO: use basefee from signal here instead of fetching from rpc
+    provider
+        .estimate_gas(transaction.tx)
+        .await
+        .wrap_err("could not estimate gas amount")
 }
 
 // used for execution

@@ -246,6 +246,7 @@ impl ExpectedProfit {
         }
     }
 
+    // TODO: docstring
     fn try_max_slippage_amounts(
         out_a: &BigUint,
         out_b: &BigUint,
@@ -269,6 +270,7 @@ impl ExpectedProfit {
         Ok((amount_a, amount_b))
     }
 
+    // TODO: docstring
     fn apply_congestion_discount(
         surplus: &(BigUint, BigUint),
         max_slippage_token_amounts: &(BigUint, BigUint),
@@ -322,18 +324,58 @@ impl Display for ExpectedProfit {
     }
 }
 
+// TODO: docstring
 pub fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
     (amount * slippage_multiplier) / BigUint::from(10000u64)
 }
 
-/// Multiply a token amount by its USDC price, accounting for token decimals.
-///
-/// Token amounts are stored as integers scaled by their decimals.
-/// For example: 1 token with 18 decimals = 10^18 units, 1 USDC (6 decimals) = 10^6 units
-///
-/// This function normalizes the amount for the decimal difference between tokens,
-/// then multiplies by the price to get USDC value.
+// TODO: docstring
+fn try_surplus(
+    (in_a, out_a): (&BigUint, &BigUint),
+    (in_b, out_b): (&BigUint, &BigUint),
+    pair: &Pair,
+) -> eyre::Result<(BigUint, BigUint)> {
+    // out_a - in_a
+    let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
+        format!(
+            "min_out_a {} cannot be less than in_a {} for token {}",
+            out_a,
+            in_a,
+            pair.token_a().symbol,
+        )
+    })?;
+
+    // out_b - in_b
+    let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
+        format!(
+            "min_out_b {} cannot be less than in_b {} for token {}",
+            out_b,
+            in_b,
+            pair.token_b().symbol,
+        )
+    })?;
+    Ok((amount_a, amount_b))
+}
+
+// TODO: docstring
+pub fn try_mul_amount_usdc_price(
+    amount: &BigUint,
+    prices: &Option<SpotPrices>,
+) -> eyre::Result<(BigUint, f64)> {
+    // If direct USDC pricing is available use it; otherwise this is USDC
+    match prices {
+        Some(prices) => {
+            let price = prices.min_price;
+            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
+
+            Ok((amount_usdc, price))
+        }
+        None => Ok((amount.clone(), 1.0f64)),
+    }
+}
+
+// TODO: docstring
 fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Result<BigUint> {
     let price =
         BigRational::from_f64(price).ok_or_eyre("failed to convert price to BigRational")?;
@@ -370,47 +412,4 @@ fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Resul
         .ok_or_eyre("failed to convert USDC amount to BigUint")?;
 
     Ok(amount_usdc)
-}
-
-fn try_surplus(
-    (in_a, out_a): (&BigUint, &BigUint),
-    (in_b, out_b): (&BigUint, &BigUint),
-    pair: &Pair,
-) -> eyre::Result<(BigUint, BigUint)> {
-    // out_a - in_a
-    let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
-        format!(
-            "min_out_a {} cannot be less than in_a {} for token {}",
-            out_a,
-            in_a,
-            pair.token_a().symbol,
-        )
-    })?;
-
-    // out_b - in_b
-    let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
-        format!(
-            "min_out_b {} cannot be less than in_b {} for token {}",
-            out_b,
-            in_b,
-            pair.token_b().symbol,
-        )
-    })?;
-    Ok((amount_a, amount_b))
-}
-
-fn try_mul_amount_usdc_price(
-    amount: &BigUint,
-    prices: &Option<SpotPrices>,
-) -> eyre::Result<(BigUint, f64)> {
-    // If direct USDC pricing is available use it; otherwise this is USDC
-    match prices {
-        Some(prices) => {
-            let price = prices.min_price;
-            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
-
-            Ok((amount_usdc, price))
-        }
-        None => Ok((amount.clone(), 1.0f64)),
-    }
 }

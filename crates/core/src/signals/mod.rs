@@ -1,3 +1,4 @@
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, sync::Arc};
 use tycho_simulation::protocol::models::ProtocolComponent;
@@ -7,6 +8,7 @@ use color_eyre::eyre::{self, Context, Ok, OptionExt};
 use crate::{
     chain::Chain,
     encoder::{UnsignedTransaction, create_solution},
+    signals::profit::try_mul_amount_usdc_price,
     spot_prices::SpotPrices,
     state::{self, pair::Pair},
     strategy::Swap,
@@ -38,24 +40,48 @@ impl Display for Direction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
+    /// TODO: docstring
     pub slow_chain: Chain,
+    /// TODO: docstring
     pub slow_pair: Pair,
+    /// TODO: docstring
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// TODO: docstring
     pub slow_pool_id: state::PoolId,
+    /// TODO: docstring
     pub slow_swap_sim: Swap,
+    /// TODO: docstring
     pub slow_height: u64,
+    /// TODO: docstring
     pub fast_chain: Chain,
+    /// TODO: docstring
     pub fast_pair: Pair,
+    /// TODO: docstring
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// TODO: docstring
     pub fast_pool_id: state::PoolId,
+    /// TODO: docstring
     pub fast_swap_sim: Swap,
+    /// TODO: docstring
     pub fast_height: u64,
+    /// TODO: docstring
     pub slow_prices_a_b: SpotPrices,
+    /// TODO: docstring
     pub slow_prices_a_usdc: Option<SpotPrices>,
+    /// TODO: docstring
     pub slow_prices_b_usdc: Option<SpotPrices>,
+    /// TODO: docstring
+    pub slow_prices_eth_usdc: Option<SpotPrices>,
+    /// TODO: docstring
     pub max_slippage_bps: u64,
+    /// TODO: docstring
     pub congestion_risk_discount_bps: u64,
+    /// TODO: docstring
     pub expected_profit: ExpectedProfit,
+    /// USDC value of 1 unit of gas (i.e. basefee * price_eth_usdc)
+    pub base_fee_usdc: BigUint,
+    /// Basefee in ETH (i.e. 1 unit of gas costs base_fee_eth)
+    pub base_fee_eth: BigUint,
 }
 
 impl CrossChainSingleHop {
@@ -70,6 +96,7 @@ impl CrossChainSingleHop {
         slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
+        slow_prices_eth_usdc: &Option<SpotPrices>,
         fast_chain: &Chain,
         fast_pair: &Pair,
         fast_protocol_component: Arc<ProtocolComponent>,
@@ -78,6 +105,7 @@ impl CrossChainSingleHop {
         fast_swap_sim: Swap,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
+        base_fee: u64,
     ) -> eyre::Result<Self> {
         if slow_swap_sim.amount_out < fast_swap_sim.amount_in {
             eyre::bail!("Slow chain output is less than fast chain input");
@@ -91,6 +119,9 @@ impl CrossChainSingleHop {
             max_slippage_bps,
             congestion_risk_discount_bps,
         )?;
+
+        let base_fee_eth = BigUint::from(base_fee);
+        let (base_fee_usdc, _) = try_mul_amount_usdc_price(&base_fee_eth, slow_prices_eth_usdc)?;
 
         Ok(Self {
             slow_chain: slow_chain.clone(),
@@ -111,6 +142,9 @@ impl CrossChainSingleHop {
             expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            slow_prices_eth_usdc: slow_prices_eth_usdc.clone(),
+            base_fee_eth,
+            base_fee_usdc,
         })
     }
 

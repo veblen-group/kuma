@@ -4,7 +4,7 @@ use std::{
     task::{self, Poll},
 };
 
-use alloy::rpc::types::Header;
+use alloy::{consensus::BlockHeader, rpc::types::Header};
 use futures::{Stream, StreamExt as _};
 use num_bigint::BigUint;
 use tokio::sync::watch;
@@ -39,7 +39,8 @@ pub struct BlockState {
     pub token_a_balance: BigUint,
     pub token_b_usdc_state: Option<PairState>,
     pub token_b_balance: BigUint,
-    // TODO: add basefee
+    pub eth_usdc_state: Option<PairState>,
+    pub base_fee: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -47,6 +48,7 @@ pub struct BlockStateStream {
     pair: Pair,
     token_a_usdc_pair: Option<Pair>,
     token_b_usdc_pair: Option<Pair>,
+    eth_usdc_pair: Option<Pair>,
     block_rx: WatchStream<Arc<Option<Block>>>,
 }
 
@@ -55,6 +57,7 @@ impl BlockStateStream {
         pair: Pair,
         block_rx: watch::Receiver<Arc<Option<Block>>>,
         usdc: Token,
+        eth: Token,
     ) -> Self {
         let token_a_usdc_pair = if pair.token_a().symbol != "USDC" {
             Some(Pair::new(pair.token_a().clone(), usdc.clone()))
@@ -62,15 +65,18 @@ impl BlockStateStream {
             None
         };
         let token_b_usdc_pair = if pair.token_b().symbol != "USDC" {
-            Some(Pair::new(pair.token_b().clone(), usdc))
+            Some(Pair::new(pair.token_b().clone(), usdc.clone()))
         } else {
             None
         };
+
+        let eth_usdc_pair = Some(Pair::new(eth, usdc));
 
         Self {
             pair,
             token_a_usdc_pair,
             token_b_usdc_pair,
+            eth_usdc_pair,
             block_rx: WatchStream::from_changes(block_rx),
         }
     }
@@ -104,10 +110,15 @@ impl Stream for BlockStateStream {
                         .as_ref()
                         .map(|token_b_usdc_pair| block.sims.get_pair_state(token_b_usdc_pair));
 
+                    let eth_usdc_state = self
+                        .eth_usdc_pair
+                        .as_ref()
+                        .map(|eth_usdc_pair| block.sims.get_pair_state(eth_usdc_pair));
+
                     let token_a_balance = block.token_balances.get_balance(self.pair.token_a());
                     let token_b_balance = block.token_balances.get_balance(self.pair.token_b());
 
-                    // TODO: add basefee
+                    let base_fee = block.header.base_fee_per_gas();
 
                     Poll::Ready(Some(BlockState {
                         pair_state,
@@ -115,7 +126,8 @@ impl Stream for BlockStateStream {
                         token_b_usdc_state,
                         token_a_balance,
                         token_b_balance,
-                        // TODO: add basefee
+                        eth_usdc_state,
+                        base_fee,
                     }))
                 }
                 // Only start yielding values after the initial block is received
