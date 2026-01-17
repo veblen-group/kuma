@@ -101,24 +101,6 @@ impl SpotPrices {
 
         SpotPrices::try_from_sorted_prices(&sorted_spot_prices, state.block_height, chain, pair)
     }
-
-    /// Get the pessimistic (worst-case) USDC price for one of the tokens in this pair.
-    ///
-    /// For a USDC pair, returns the appropriate pessimistic price:
-    /// - If token_a is USDC: returns the minimum price (worst case when receiving USDC)
-    /// - If token_b is USDC: returns the maximum price (worst case when receiving token_a)
-    ///
-    /// # Errors
-    /// Returns an error if neither token in the pair is USDC.
-    pub fn try_pessimistic_usdc_price(&self) -> eyre::Result<f64> {
-        if "USDC" == self.pair.token_a().symbol {
-            Ok(self.min_price)
-        } else if "USDC" == self.pair.token_b().symbol {
-            Ok(self.max_price)
-        } else {
-            Err(eyre!("not a USDC pair"))
-        }
-    }
 }
 
 impl Display for SpotPrices {
@@ -156,7 +138,8 @@ pub fn try_make_sorted_spot_prices(
         .states
         .iter()
         .filter_map(|(id, pool)| {
-            let spot_price = pool.spot_price(pair.token_a(), pair.token_b());
+            let (token_a, token_b) = pair.token_a_b_adjusted_for_usdc();
+            let spot_price = pool.spot_price(token_a, token_b);
             match spot_price {
                 Ok(price) => Some((id.clone(), price)),
                 Err(err) => {

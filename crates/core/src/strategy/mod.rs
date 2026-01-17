@@ -1335,7 +1335,6 @@ mod tests {
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
-                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1414,7 +1413,6 @@ mod tests {
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
-                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1495,7 +1493,6 @@ mod tests {
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
-                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,
@@ -1576,7 +1573,6 @@ mod tests {
             ExpectedProfit::try_from_swaps(
                 &expected_slow_sim,
                 &expected_fast_sim,
-                &precompute.prices_a_b,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 strategy.max_slippage_bps,

@@ -8,8 +8,7 @@ INSERT INTO signals (
     fast_swap_token_in_symbol, fast_swap_token_out_symbol,
     fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
     surplus_a, surplus_b, expected_profit_a, expected_profit_b,
-    expected_profit_usdc
-    max_slippage_bps, congestion_risk_discount_bps
+    expected_profit_usdc, max_slippage_bps, congestion_risk_discount_bps
 ) VALUES
     (
         'ethereum', 18765432, '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
@@ -19,8 +18,7 @@ INSERT INTO signals (
         'WETH', 'USDC',
         '5', '10200', '20',
         '200', '200', '180', '180',
-        '50',
-        50, 20
+        '50', 50, 20
     ),
     (
         'base', 7654321, '0x3f9840a85d5aF5bf1D1762F925BDADdC4201F986',
@@ -30,7 +28,7 @@ INSERT INTO signals (
         'USDC', 'WETH',
         '9800', '10050', '25',
         '250', '250', '220', '220',
-        75, 30
+        75, 30, 20
     ),
     (
         'ethereum', 45678901, '0x5f9840a85d5aF5bf1D1762F925BDADdC4201F988',
@@ -40,5 +38,5 @@ INSERT INTO signals (
         'WETH', 'USDC',
         '47', '5100', '30',
         '400', '400', '350', '350',
-        100, 40
+        100, 40, 20
     );
