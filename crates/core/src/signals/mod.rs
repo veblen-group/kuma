@@ -86,7 +86,6 @@ impl CrossChainSingleHop {
         let expected_profit = ExpectedProfit::try_from_swaps(
             &slow_sim,
             &fast_sim,
-            &slow_prices_a_b,
             &slow_prices_a_usdc,
             &slow_prices_b_usdc,
             max_slippage_bps,

@@ -37,12 +37,15 @@ impl Pair {
         &self.1
     }
 
-    pub fn zero2one(token_a: Token, token_b: Token) -> (Token, Token) {
-        // TODO: how to compare addrs
-        if token_a.address < token_b.address {
-            (token_a, token_b)
+    pub fn token_a_b_adjusted_for_usdc(&self) -> (&Token, &Token) {
+        if self.token_a().symbol == "USDC" {
+            // if A = USDC, B->USDC
+            (self.token_b(), self.token_a())
+        } else if self.token_b().symbol == "USDC" {
+            (self.token_a(), self.token_b())
         } else {
-            (token_b, token_a)
+            // else A->B
+            (self.token_a(), self.token_b())
         }
     }
 }

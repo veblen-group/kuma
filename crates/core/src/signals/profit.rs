@@ -44,7 +44,6 @@ impl RealizedProfit {
     pub fn try_from_swaps(
         slow_swap: &state::Swap,
         fast_swap: &state::Swap,
-        prices_a_b: &SpotPrices,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
     ) -> eyre::Result<Self> {
@@ -52,11 +51,11 @@ impl RealizedProfit {
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_swap, fast_swap)?;
         let surplus = try_surplus(amounts_a, amounts_b, &slow_pair)?;
 
-        let usdc_prices = try_usdc_prices(prices_a_b, prices_a_usdc, prices_b_usdc)?;
+        let (price_a_usdc, price_b_usdc) = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
 
         let min_usdc_amounts = {
-            let a_usdc = try_mul_biguint_f64(&surplus.0, usdc_prices.0)?;
-            let b_usdc = try_mul_biguint_f64(&surplus.1, usdc_prices.1)?;
+            let a_usdc = try_mul_biguint_f64(&surplus.0, price_a_usdc)?;
+            let b_usdc = try_mul_biguint_f64(&surplus.1, price_b_usdc)?;
             (a_usdc, b_usdc)
         };
 
@@ -72,7 +71,7 @@ impl RealizedProfit {
 
         Ok(RealizedProfit {
             total_usdc: total_amount,
-            usdc_prices: (usdc_prices.0, usdc_prices.1),
+            usdc_prices: (price_a_usdc, price_b_usdc),
             pair: slow_pair.clone(),
             surplus,
             slow_swap: slow_swap.clone(),
@@ -141,7 +140,6 @@ impl ExpectedProfit {
     pub fn try_from_swaps(
         slow_sim: &strategy::Swap,
         fast_sim: &strategy::Swap,
-        prices_a_b: &SpotPrices,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
         max_slippage_bps: u64,
@@ -168,7 +166,7 @@ impl ExpectedProfit {
 
         // Step 4: Determine pessimistic USDC prices for each token
         // If direct USDC pricing is available use it; otherwise fall back to the A-B pair pricing
-        let usdc_prices = try_usdc_prices(prices_a_b, prices_a_usdc, prices_b_usdc)?;
+        let usdc_prices = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
 
         // Step 5: Convert minimum token amounts to USDC using pessimistic prices
         let min_usdc_amounts = {
@@ -348,24 +346,24 @@ fn try_surplus(
 }
 
 fn try_usdc_prices(
-    prices_a_b: &SpotPrices,
     prices_a_usdc: &Option<SpotPrices>,
     prices_b_usdc: &Option<SpotPrices>,
 ) -> Result<(f64, f64), eyre::Error> {
-    let usdc_prices = {
-        let price_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
-            prices_a_usdc.try_pessimistic_usdc_price()?
-        } else {
-            prices_a_b.try_pessimistic_usdc_price()?
-        };
-
-        let price_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
-            prices_b_usdc.try_pessimistic_usdc_price()?
-        } else {
-            prices_a_b.try_pessimistic_usdc_price()?
-        };
-
-        (price_a_usdc, price_b_usdc)
+    let price_a_usdc = if let Some(prices_a_usdc) = prices_a_usdc {
+        // if A != USDC, A->USDC
+        prices_a_usdc.min_price
+    } else {
+        // if A = USDC, B->A
+        1.0f64
     };
-    Ok(usdc_prices)
+
+    let price_b_usdc = if let Some(prices_b_usdc) = prices_b_usdc {
+        // if B != USDC, B->USDC
+        prices_b_usdc.min_price
+    } else {
+        // if B = USDC, A->B
+        1.0f64
+    };
+
+    Ok((price_a_usdc, price_b_usdc))
 }

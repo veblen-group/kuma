@@ -211,7 +211,6 @@ impl Trade {
         let profit = RealizedProfit::try_from_swaps(
             &slow_swap,
             &fast_swap,
-            &self.signal.slow_prices_a_b,
             &self.signal.slow_prices_a_usdc,
             &self.signal.slow_prices_b_usdc,
         )
