@@ -38,10 +38,7 @@ impl Swap {
                 amount_in = amount_in
                     .checked_add(&transfer.amount)
                     .ok_or_else(|| eyre::eyre!("overflow adding amount_in"))?;
-                continue;
-            }
-
-            if contract == token_out_addr {
+            } else if contract == token_out_addr {
                 let transfer = Transfer::try_from_log(&swap.token_out, log.clone())?;
                 amount_out = amount_out
                     .checked_add(&transfer.amount)

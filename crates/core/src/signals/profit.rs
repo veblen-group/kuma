@@ -48,7 +48,8 @@ impl RealizedProfit {
         prices_b_usdc: &Option<SpotPrices>,
     ) -> eyre::Result<Self> {
         let slow_pair = slow_swap.get_pair();
-        let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_swap, fast_swap)?;
+        let (amounts_a, amounts_b) =
+            Self::try_amounts_by_tokens_a_b(slow_swap, fast_swap, &slow_pair)?;
         let surplus = try_surplus(amounts_a, amounts_b, &slow_pair)?;
 
         let (price_a_usdc, price_b_usdc) = try_usdc_prices(prices_a_usdc, prices_b_usdc)?;
@@ -59,7 +60,7 @@ impl RealizedProfit {
             (a_usdc, b_usdc)
         };
 
-        let total_amount = min_usdc_amounts
+        let total_usdc = min_usdc_amounts
             .0
             .checked_add(&min_usdc_amounts.1)
             .wrap_err_with(|| {
@@ -70,7 +71,7 @@ impl RealizedProfit {
             })?;
 
         Ok(RealizedProfit {
-            total_usdc: total_amount,
+            total_usdc,
             usdc_prices: (price_a_usdc, price_b_usdc),
             pair: slow_pair.clone(),
             surplus,
@@ -83,8 +84,8 @@ impl RealizedProfit {
     fn try_amounts_by_tokens_a_b<'a>(
         slow_sim: &'a state::Swap,
         fast_sim: &'a state::Swap,
+        pair: &Pair,
     ) -> eyre::Result<((&'a BigUint, &'a BigUint), (&'a BigUint, &'a BigUint))> {
-        let pair = slow_sim.get_pair();
         if pair.token_a().symbol == slow_sim.token_in.symbol {
             Ok((
                 (&slow_sim.amount_in, &fast_sim.amount_out),
