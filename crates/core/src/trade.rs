@@ -122,6 +122,7 @@ impl Trade {
     // Execute the trade by sending the transactions to their respective chains
     #[instrument(skip(self), fields(slow_chain = %self.signal.slow_chain.name, fast_chain = %self.signal.fast_chain.name))]
     pub async fn run(self, mut id_rx: oneshot::Receiver<i64>) -> eyre::Result<TradeResult> {
+        // TODO: move this to ExpectedProfit::try_from_swaps
         let slow_gas_amount = BigUint::from(
             estimate_gas_amount(self.slow_tx_req.clone(), &self.signal.slow_chain).await?,
         );

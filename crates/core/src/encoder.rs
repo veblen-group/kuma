@@ -100,6 +100,8 @@ pub async fn estimate_gas_amount(
         .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);
 
     // TODO: use basefee from signal here instead of fetching from rpc
+    // or just replace this function with having some constant swap gas cost and:
+    // swap_gas_cost * base_fee * eth_usdc_price = gas_cost_usdc
     provider
         .estimate_gas(transaction.tx)
         .await
@@ -112,6 +114,7 @@ pub async fn execute_tx(
     chain: &Chain,
 ) -> eyre::Result<TransactionReceipt> {
     let wallet = EthereumWallet::new(chain.signer().clone());
+    // TODO: long-lived provider so it doesnt have to connect evvery time
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
         .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);

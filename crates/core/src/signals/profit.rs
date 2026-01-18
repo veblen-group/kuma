@@ -129,6 +129,7 @@ impl RealizedProfit {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ExpectedProfit {
+    pub pair: Pair,
     /// Raw surplus in token amounts (a, b respectively) from swaps, before slippage and congestion
     pub surplus: (BigUint, BigUint),
     /// Max amount of tokens paid in slippage
@@ -142,6 +143,10 @@ pub struct ExpectedProfit {
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
     pub pair: Pair,
+    // TODO: basefee
+    // TODO: gas_used_eth
+    // TODO: eth usdc price
+    // TODO: gas_used_usdc
 }
 
 impl ExpectedProfit {
@@ -172,6 +177,10 @@ impl ExpectedProfit {
         // Extract (amount_in, amount_out) pairs for token A and token B from the swap simulations
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_sim, fast_sim)?;
         let pair = slow_sim.get_pair();
+
+        // TODO: calculate gas cost from base fee + eth/usdc price
+        // TODO: check gas usage vs expected profit
+        // or maybe move this into the signal generation and assume single hop has constant gas cost
 
         // Step 1: Calculate raw surplus (output - input for each token)
         let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
