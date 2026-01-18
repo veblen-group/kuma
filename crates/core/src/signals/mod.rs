@@ -40,43 +40,43 @@ impl Display for Direction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
-    /// TODO: docstring
+    /// The chain with longer block times where the first leg of the arbitrage executes.
     pub slow_chain: Chain,
-    /// TODO: docstring
+    /// The token pair being traded on the slow chain (e.g., WETH/USDC).
     pub slow_pair: Pair,
-    /// TODO: docstring
+    /// Protocol component metadata for the slow chain pool, used for transaction encoding.
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// TODO: docstring
+    /// Unique identifier for the AMM pool on the slow chain.
     pub slow_pool_id: state::PoolId,
-    /// TODO: docstring
+    /// Simulated swap parameters for the slow chain leg (token_in, amount_in, token_out, amount_out).
     pub slow_swap_sim: Swap,
-    /// TODO: docstring
+    /// Block height on the slow chain when this signal was generated.
     pub slow_height: u64,
-    /// TODO: docstring
+    /// The chain with shorter block times where the second leg of the arbitrage executes.
     pub fast_chain: Chain,
-    /// TODO: docstring
+    /// The token pair being traded on the fast chain (mirrors slow_pair tokens).
     pub fast_pair: Pair,
-    /// TODO: docstring
+    /// Protocol component metadata for the fast chain pool, used for transaction encoding.
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// TODO: docstring
+    /// Unique identifier for the AMM pool on the fast chain.
     pub fast_pool_id: state::PoolId,
-    /// TODO: docstring
+    /// Simulated swap parameters for the fast chain leg (token_in, amount_in, token_out, amount_out).
     pub fast_swap_sim: Swap,
-    /// TODO: docstring
+    /// Block height on the fast chain when this signal was generated.
     pub fast_height: u64,
-    /// TODO: docstring
+    /// Spot prices between token A and token B on the slow chain, used for profit calculation.
     pub slow_prices_a_b: SpotPrices,
-    /// TODO: docstring
+    /// Spot prices for token A to USDC conversion, None if token A is USDC.
     pub slow_prices_a_usdc: Option<SpotPrices>,
-    /// TODO: docstring
+    /// Spot prices for token B to USDC conversion, None if token B is USDC.
     pub slow_prices_b_usdc: Option<SpotPrices>,
-    /// TODO: docstring
+    /// Spot prices for ETH to USDC conversion, used for gas cost calculation.
     pub slow_prices_eth_usdc: Option<SpotPrices>,
-    /// TODO: docstring
+    /// Maximum acceptable slippage in basis points (1 bps = 0.01%).
     pub max_slippage_bps: u64,
-    /// TODO: docstring
+    /// Discount applied to expected profit to account for congestion/settlement risk, in basis points.
     pub congestion_risk_discount_bps: u64,
-    /// TODO: docstring
+    /// Calculated expected profit after applying slippage and congestion discounts.
     pub expected_profit: ExpectedProfit,
     /// USDC value of 1 unit of gas (i.e. basefee * price_eth_usdc)
     pub base_fee_usdc: BigUint,

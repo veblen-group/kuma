@@ -30,23 +30,41 @@ pub mod simulation;
 pub use builder::Builder;
 pub use simulation::Swap;
 
+/// Precomputed swap simulation data for the slow chain.
+///
+/// Generated when a new slow chain block arrives, these precomputes are used to
+/// quickly generate signals when the fast chain block arrives without needing to
+/// re-simulate swaps. Contains swap simulations at various amounts and spot prices.
 #[derive(Debug, Clone)]
 pub struct Precomputes {
+    /// Block height at which these precomputes were generated.
     pub block_height: u64,
+    /// Spot prices for the primary trading pair (token_a/token_b).
     pub prices_a_b: SpotPrices,
+    /// Sorted spot prices for each pool, used to find crossing pools.
     pub sorted_prices_a_b: Vec<(PoolId, f64)>,
+    /// Precomputed swap simulations for each pool at various amounts.
     pub pool_sims: HashMap<state::PoolId, simulation::PoolSteps>,
+    /// Protocol component metadata for each pool, needed for transaction encoding.
     pub pool_metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
+    /// ETH to USDC prices for gas cost calculation.
     pub prices_eth_usdc: Option<SpotPrices>,
+    /// Token A to USDC prices for profit calculation.
     pub prices_a_usdc: Option<SpotPrices>,
+    /// Token B to USDC prices for profit calculation.
     pub prices_b_usdc: Option<SpotPrices>,
+    /// Base fee per gas unit from the block header.
     pub base_fee: u64,
 }
 
-// Implementation of the arbitrage strategy
+/// Strategy configuration for cross-chain single-hop arbitrage.
+///
+/// Encapsulates all the parameters needed to detect and execute arbitrage opportunities
+/// between two chains for a single token pair. The strategy monitors price differences
+/// between slow chain and fast chain pools to identify profitable trades.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CrossChainSingleHop {
-    // TODO: make a (chain, pair, inventory) tuple?
+    /// The token pair being traded on the slow chain.
     pub slow_pair: Pair,
     pub slow_usdc: Token,
     pub slow_eth: Token,

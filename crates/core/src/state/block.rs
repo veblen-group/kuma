@@ -17,9 +17,16 @@ use crate::state::{
     tycho::BlockSim,
 };
 
+/// A complete block state containing header, token balances, and pool simulations.
+///
+/// Represents all the data needed from a single block to perform arbitrage calculations,
+/// including the block header (for base fee), account balances, and AMM pool states.
 pub struct Block {
+    /// The block header containing metadata like block number and base fee.
     pub header: Header,
+    /// Token balances for the trading account on this block.
     pub token_balances: TokenBalances,
+    /// Pool simulation states for all relevant AMM pools at this block height.
     pub sims: BlockSim,
 }
 
@@ -33,16 +40,32 @@ impl Block {
     }
 }
 
+/// Extracted state for a specific trading pair from a block.
+///
+/// Contains all the information needed by a strategy to generate signals for a
+/// particular token pair, including pool states, USDC conversion prices, and gas costs.
 pub struct BlockState {
+    /// Pool states for the primary trading pair (e.g., WETH/PEPE).
     pub pair_state: PairState,
+    /// Pool states for token A to USDC conversion, None if token A is USDC.
     pub token_a_usdc_state: Option<PairState>,
+    /// Available balance of token A in the trading account.
     pub token_a_balance: BigUint,
+    /// Pool states for token B to USDC conversion, None if token B is USDC.
     pub token_b_usdc_state: Option<PairState>,
+    /// Available balance of token B in the trading account.
     pub token_b_balance: BigUint,
+    /// Pool states for ETH to USDC conversion, used for gas cost calculation.
     pub eth_usdc_state: Option<PairState>,
+    /// Base fee per gas unit in wei, extracted from block header.
     pub base_fee: Option<u64>,
 }
 
+/// Async stream that yields `BlockState` updates for a specific trading pair.
+///
+/// Transforms raw block updates into pair-specific state by extracting relevant
+/// pool states, balances, and USDC conversion prices. This stream is consumed
+/// by strategies to receive real-time block updates for signal generation.
 #[derive(Debug)]
 pub struct BlockStateStream {
     pair: Pair,

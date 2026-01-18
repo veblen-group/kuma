@@ -85,7 +85,11 @@ pub async fn get_tx_request(
     Ok(SignedTransaction { tx })
 }
 
-// TODO: docstring
+/// Estimate the gas required to execute a transaction on the given chain.
+///
+/// Connects to the chain's RPC endpoint and uses eth_estimateGas to determine
+/// the approximate gas units needed. This estimate is used to calculate gas
+/// costs in USDC for profitability checks before trade execution.
 pub async fn estimate_gas_amount(
     transaction: UnsignedTransaction,
     chain: &Chain,

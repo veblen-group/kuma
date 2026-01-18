@@ -21,11 +21,11 @@ pub struct RealizedProfit {
     pub fast_swap: state::Swap,
     /// Token A -> USDC and Token B -> USDC prices used to calculate realized profit
     pub token_usdc_prices: (f64, f64),
-    /// TODO: docstring
+    /// ETH to USDC price used for converting gas costs to USDC
     pub gas_price_usdc: f64,
-    /// TODO: docstring
+    /// Total gas consumed by both transactions in wei (slow + fast chain)
     pub gas_amount_eth: BigUint,
-    /// TODO: docstring
+    /// Total gas cost converted to USDC using the ETH-USDC price
     pub gas_amount_usdc: BigUint,
     /// Surplus amounts in token A and token B respectively
     pub surplus: (BigUint, BigUint),
@@ -36,7 +36,6 @@ pub struct RealizedProfit {
 }
 
 impl RealizedProfit {
-    // TODO: update docstring
     /// Calculate realized profit from slow and fast chain swaps and spot prices.
     ///
     /// Calculates the realized profit by:
@@ -246,7 +245,11 @@ impl ExpectedProfit {
         }
     }
 
-    // TODO: docstring
+    /// Calculate the maximum token amounts that could be lost to slippage.
+    ///
+    /// Computes the difference between the expected output amounts and the minimum
+    /// amounts after applying the maximum slippage tolerance. This represents the
+    /// worst-case slippage for each token in the arbitrage.
     fn try_max_slippage_amounts(
         out_a: &BigUint,
         out_b: &BigUint,
@@ -270,7 +273,14 @@ impl ExpectedProfit {
         Ok((amount_a, amount_b))
     }
 
-    // TODO: docstring
+    /// Apply congestion risk discount to the surplus after accounting for slippage.
+    ///
+    /// Calculates the minimum guaranteed profit by:
+    /// 1. Subtracting maximum slippage amounts from the raw surplus
+    /// 2. Applying the congestion risk discount factor to the result
+    ///
+    /// This accounts for the risk that transactions may execute at worse prices
+    /// due to competition for the same liquidity pools on-chain.
     fn apply_congestion_discount(
         surplus: &(BigUint, BigUint),
         max_slippage_token_amounts: &(BigUint, BigUint),
@@ -324,13 +334,21 @@ impl Display for ExpectedProfit {
     }
 }
 
-// TODO: docstring
+/// Apply a basis points discount to an amount.
+///
+/// Calculates `amount * (10000 - slippage_bps) / 10000`, effectively reducing
+/// the amount by the given percentage. For example, 50 bps (0.5%) discount on
+/// 1000 returns 995.
 pub fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
     (amount * slippage_multiplier) / BigUint::from(10000u64)
 }
 
-// TODO: docstring
+/// Calculate the raw surplus from input/output amounts for both tokens.
+///
+/// Computes `(out_a - in_a, out_b - in_b)` representing the net gain in each
+/// token from the cross-chain arbitrage. Both values should be positive for
+/// a profitable trade.
 fn try_surplus(
     (in_a, out_a): (&BigUint, &BigUint),
     (in_b, out_b): (&BigUint, &BigUint),
@@ -358,7 +376,13 @@ fn try_surplus(
     Ok((amount_a, amount_b))
 }
 
-// TODO: docstring
+/// Convert a token amount to USDC using spot prices.
+///
+/// If prices are provided, multiplies the amount by the minimum (pessimistic) price
+/// and adjusts for decimal differences between the tokens. If prices are None
+/// (indicating the token is already USDC), returns the amount unchanged.
+///
+/// Returns a tuple of (usdc_amount, price_used).
 pub fn try_mul_amount_usdc_price(
     amount: &BigUint,
     prices: &Option<SpotPrices>,
@@ -375,7 +399,11 @@ pub fn try_mul_amount_usdc_price(
     }
 }
 
-// TODO: docstring
+/// Multiply a token amount by a price, adjusting for decimal differences.
+///
+/// Handles the conversion between tokens with different decimal precisions.
+/// For example, when converting from an 18-decimal token to 6-decimal USDC,
+/// divides by 10^12 to normalize the result.
 fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Result<BigUint> {
     let price =
         BigRational::from_f64(price).ok_or_eyre("failed to convert price to BigRational")?;
