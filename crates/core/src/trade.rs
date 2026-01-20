@@ -1,16 +1,12 @@
 use alloy::rpc::types::TransactionReceipt;
-use color_eyre::eyre::{self, OptionExt as _, WrapErr as _, eyre};
-use num_bigint::BigUint;
-use num_traits::CheckedMul as _;
+use color_eyre::eyre::{self, WrapErr as _, eyre};
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tracing::{error, instrument};
 
 use crate::{
     database::{TradeFailedOnFastRow, TradeFailedOnSlowRow, TradeSuccessRow},
-    encoder::{
-        SignedTransaction, UnsignedTransaction, estimate_gas_amount, execute_tx, get_tx_request,
-    },
+    encoder::{SignedTransaction, UnsignedTransaction, execute_tx, get_tx_request},
     signals::{self, CrossChainSingleHop, RealizedProfit},
     state,
 };
@@ -122,27 +118,22 @@ impl Trade {
     // Execute the trade by sending the transactions to their respective chains
     #[instrument(skip(self), fields(slow_chain = %self.signal.slow_chain.name, fast_chain = %self.signal.fast_chain.name))]
     pub async fn run(self, mut id_rx: oneshot::Receiver<i64>) -> eyre::Result<TradeResult> {
-        // TODO: move this to ExpectedProfit::try_from_swaps
-        let slow_gas_amount = BigUint::from(
-            estimate_gas_amount(self.slow_tx_req.clone(), &self.signal.slow_chain).await?,
-        );
-        let fast_gas_amount = BigUint::from(
-            estimate_gas_amount(self.fast_tx_req.clone(), &self.signal.fast_chain).await?,
-        );
-
-        let gas_cost_eth = slow_gas_amount + fast_gas_amount;
-        let gas_cost_usdc = gas_cost_eth
-            .checked_mul(&self.signal.base_fee_usdc)
-            .ok_or_eyre("failed to multiply gas cost by base_fee_usdc")?;
-
-        let expected_profit_usdc = self.signal.expected_profit.min_total_amount_usdc.clone();
-
-        if gas_cost_usdc > expected_profit_usdc {
+        // TODO: this should be in the expected profit constructor
+        let expected_profit_usdc = &self.signal.expected_profit.min_total_amount_usdc;
+        let total_gas_cost_usdc = &self.signal.expected_profit.total_gas_cost_usdc;
+        if total_gas_cost_usdc > expected_profit_usdc {
             return Err(eyre!(
                 "estimated transactions gas cost exceeds expected profit"
             ));
         }
-        let slow_receipt = match execute_tx(&self.slow_tx_req, &self.signal.slow_chain).await {
+        let slow_receipt = match execute_tx(
+            &self.slow_tx_req,
+            &self.signal.slow_chain,
+            self.signal.expected_profit.base_fee,
+            &self.signal.expected_profit.gas_cost_amounts.0,
+        )
+        .await
+        {
             Ok(receipt) => receipt,
             Err(error) => {
                 error!(
@@ -171,7 +162,14 @@ impl Trade {
             }));
         }
 
-        let fast_receipt = match execute_tx(self.fast_tx(), &self.signal.fast_chain).await {
+        let fast_receipt = match execute_tx(
+            self.fast_tx(),
+            &self.signal.fast_chain,
+            self.signal.expected_profit.base_fee,
+            &self.signal.expected_profit.gas_cost_amounts.1,
+        )
+        .await
+        {
             Ok(receipt) => receipt,
             Err(error) => {
                 error!(chain = %self.signal.fast_chain.name, %error, "failed to submit  transaction to fast chain");

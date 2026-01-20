@@ -277,6 +277,13 @@ fn try_signal_from_row(
         pair: slow_pair.clone(),
         // TODO: save total_usdc to db
         min_total_amount_usdc: BigUint::zero(),
+        gas_cost_eth: (BigUint::zero(), BigUint::zero()), // TODO
+        eth_usdc_price: 0f64,                             // TODO
+        gas_cost_usdc: (BigUint::zero(), BigUint::zero()), // TODO
+        base_fee: 0u64,                                   // TODO
+        gas_cost_amounts: (BigUint::zero(), BigUint::zero()),
+        total_gas_cost_eth: BigUint::zero(),  // TODO
+        total_gas_cost_usdc: BigUint::zero(), // TODO
     };
 
     // TODO: save prices to db

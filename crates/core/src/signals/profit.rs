@@ -142,11 +142,14 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    pub pair: Pair,
-    // TODO: basefee
-    // TODO: gas_used_eth
-    // TODO: eth usdc price
-    // TODO: gas_used_usdc
+    // TODO: slow, fast basefee
+    pub base_fee: u64,
+    pub gas_cost_amounts: (BigUint, BigUint),
+    pub gas_cost_eth: (BigUint, BigUint),
+    pub total_gas_cost_eth: BigUint,
+    pub eth_usdc_price: f64,
+    pub gas_cost_usdc: (BigUint, BigUint),
+    pub total_gas_cost_usdc: BigUint,
 }
 
 impl ExpectedProfit {
@@ -171,16 +174,53 @@ impl ExpectedProfit {
         fast_sim: &strategy::Swap,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
+        prices_eth_usdc: &Option<SpotPrices>,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
+        base_fee: u64,
     ) -> eyre::Result<Self> {
         // Extract (amount_in, amount_out) pairs for token A and token B from the swap simulations
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_sim, fast_sim)?;
         let pair = slow_sim.get_pair();
 
-        // TODO: calculate gas cost from base fee + eth/usdc price
-        // TODO: check gas usage vs expected profit
-        // or maybe move this into the signal generation and assume single hop has constant gas cost
+        // TODO: use slow basefee
+        let slow_gas_cost_eth = slow_sim
+            .gas_cost
+            .checked_mul(&BigUint::from(base_fee))
+            .ok_or_eyre("failed calculating gas_cost")?;
+
+        // TODO: use fast basefee
+        let fast_gas_cost_eth = fast_sim
+            .gas_cost
+            .checked_mul(&BigUint::from(base_fee))
+            .ok_or_eyre("failed calculating gas_cost")?;
+
+        let total_gas_cost_eth = slow_gas_cost_eth
+            .checked_add(&fast_gas_cost_eth)
+            .wrap_err_with(|| {
+                format!(
+                    "total_gas_cost_eth failed: slow_gas_cost_eth {} + fast_gas_cost_eth {}",
+                    slow_gas_cost_eth, fast_gas_cost_eth
+                )
+            })?;
+
+        let (gas_cost_usdc_amounts, eth_usdc_price) = {
+            let (slow_gas_cost, price_eth_usdc) =
+                try_mul_amount_usdc_price(&slow_gas_cost_eth, &prices_eth_usdc)?;
+            let (fast_gas_cost, _) =
+                try_mul_amount_usdc_price(&fast_gas_cost_eth, &prices_eth_usdc)?;
+            ((slow_gas_cost, fast_gas_cost), (price_eth_usdc))
+        };
+
+        let total_gas_cost_usdc = gas_cost_usdc_amounts
+            .0
+            .checked_add(&gas_cost_usdc_amounts.1)
+            .wrap_err_with(|| {
+                format!(
+                    "total_gas_cost_usdc failed: gas_cost_usdc_amounts {} + {}",
+                    gas_cost_usdc_amounts.0, gas_cost_usdc_amounts.1
+                )
+            })?;
 
         // Step 1: Calculate raw surplus (output - input for each token)
         let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
@@ -222,9 +262,16 @@ impl ExpectedProfit {
             max_slippage_token_amounts,
             min_token_amounts,
             token_usdc_prices,
+            eth_usdc_price: eth_usdc_price,
             min_usdc_amounts,
             min_total_amount_usdc,
             pair,
+            base_fee,
+            gas_cost_amounts: (slow_sim.gas_cost.clone(), fast_sim.gas_cost.clone()),
+            gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
+            total_gas_cost_eth,
+            gas_cost_usdc: gas_cost_usdc_amounts,
+            total_gas_cost_usdc,
         })
     }
 

@@ -396,7 +396,7 @@ impl CrossChainSingleHop {
         fast_height: u64,
         fast_inventory: &BigUint,
         // fast_basefee: u64,
-        basefee: u64,
+        base_fee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // Binary search to find the optimal signal. The search assumes the profit function is
         // unimodal (has a single peak) over the slow_sims array. At each step, we compare the
@@ -425,7 +425,7 @@ impl CrossChainSingleHop {
                     fast_height,
                     fast_inventory,
                     // fast_basefee,
-                    basefee,
+                    base_fee,
                 )
                 .wrap_err("failed to create signal from single precompute")?;
             return Ok(signal);
@@ -455,7 +455,7 @@ impl CrossChainSingleHop {
                     fast_height,
                     fast_inventory,
                     // fast_basefee,
-                    basefee,
+                    base_fee,
                 )
                 .inspect_err(|err| {
                     trace!(index = mid, %err, "failed to create mid signal");
@@ -483,7 +483,7 @@ impl CrossChainSingleHop {
                     fast_height,
                     fast_inventory,
                     // fast_basefee,
-                    basefee,
+                    base_fee,
                 )
                 .inspect_err(|err| {
                     trace!(index = next, %err, "failed to create next signal");
@@ -1507,8 +1507,10 @@ mod tests {
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
+                &precompute.prices_eth_usdc,
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                precompute.base_fee
             )
             .unwrap()
         )
@@ -1600,8 +1602,10 @@ mod tests {
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
+                &precompute.prices_eth_usdc,
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                precompute.base_fee
             )
             .unwrap()
         )
@@ -1694,8 +1698,10 @@ mod tests {
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
+                &precompute.prices_eth_usdc,
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                precompute.base_fee
             )
             .unwrap()
         )
@@ -1787,8 +1793,10 @@ mod tests {
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
+                &precompute.prices_eth_usdc,
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                precompute.base_fee
             )
             .unwrap()
         )

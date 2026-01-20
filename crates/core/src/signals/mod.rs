@@ -116,8 +116,10 @@ impl CrossChainSingleHop {
             &fast_swap_sim,
             slow_prices_a_usdc,
             slow_prices_b_usdc,
+            slow_prices_eth_usdc,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            base_fee,
         )?;
 
         let base_fee_eth = BigUint::from(base_fee);
