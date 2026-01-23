@@ -8,6 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
+use num_traits::Zero;
 use tracing::{debug, error, instrument, trace, warn};
 use tycho_common::models::token::Token;
 use tycho_simulation::{
@@ -345,101 +346,85 @@ impl CrossChainSingleHop {
         fast_height: u64,
         fast_inventory: &BigUint,
     ) -> Option<signals::CrossChainSingleHop> {
+        if slow_sims.is_empty() {
+            trace!("no slow sims provided for binary search; cannot find optimal signal");
+            return None;
+        }
         let (mut left, mut right) = (0, slow_sims.len() - 1);
 
-        let mut best_signal: Option<signals::CrossChainSingleHop> = None;
-
         while left < right {
-            let mid = (right + left) / 2;
-
-            // make sims for mid
-            let mid_signal = match self.try_signal_from_precompute(
-                slow_sims[mid].clone(),
-                slow_protocol_component.clone(),
-                slow_pool_id,
-                slow_height,
-                slow_prices_a_b,
-                slow_prices_a_usdc,
-                slow_prices_b_usdc,
-                fast_state,
-                fast_protocol_component.clone(),
-                fast_pool_id,
-                fast_height,
-                fast_inventory,
-            ) {
-                Ok(signal) => signal,
-                Err(err) => {
-                    trace!(index = mid, err = %err, "failed to make mid signal, searching over smaller values");
-                    right = mid - 1;
-                    continue;
-                }
-            };
-
-            trace!(
-                index = mid,
-                expected_profit = %mid_signal.expected_profit,
-                "Generated mid candidate signal"
-            );
-
-            // make sims for mid+1
-            let next_signal = match self.try_signal_from_precompute(
-                slow_sims[mid + 1].clone(),
-                slow_protocol_component.clone(),
-                slow_pool_id,
-                slow_height,
-                slow_prices_a_b,
-                slow_prices_a_usdc,
-                slow_prices_b_usdc,
-                fast_state,
-                fast_protocol_component.clone(),
-                fast_pool_id,
-                fast_height,
-                fast_inventory,
-            ) {
-                Ok(signal) => signal,
-                Err(err) => {
-                    trace!(index = mid+1, err = %err, "failed to make mid+1 signal, searching over smaller values");
-                    right = mid;
-                    continue;
-                }
-            };
-            trace!(
-                index = mid+1,
-                expected_profit = %next_signal.expected_profit,
-                "Generated mid+1 candidate signal"
-            );
-
-            // compare the expected profits
-            let mid_profit_usdc = match mid_signal.expected_profit.total_profit_usdc() {
-                Ok(profit) => profit,
-                Err(err) => {
-                    error!(index = mid+1, err = %err, profit = %mid_signal.expected_profit, "failed to calculate mid+1 signal profit");
-                    continue;
-                }
-            };
-            let next_profit_usdc = match next_signal.expected_profit.total_profit_usdc() {
-                Ok(profit) => profit,
-                Err(err) => {
-                    error!(index = mid+1, err = %err, profit = %next_signal.expected_profit, "failed to calculate next signal profit");
-                    continue;
-                }
-            };
+            let mid = left + (right - left) / 2;
+            let mid_profit_usdc = self
+                .get_profit_and_signal(
+                    mid,
+                    slow_sims,
+                    slow_protocol_component.clone(),
+                    slow_pool_id,
+                    slow_height,
+                    slow_prices_a_b,
+                    slow_prices_a_usdc,
+                    slow_prices_b_usdc,
+                    fast_state,
+                    fast_protocol_component.clone(),
+                    fast_pool_id,
+                    fast_height,
+                    fast_inventory,
+                )
+                .map(|(_, p)| p)
+                .unwrap_or_default();
+            let next_profit_usdc = self
+                .get_profit_and_signal(
+                    mid + 1,
+                    slow_sims,
+                    slow_protocol_component.clone(),
+                    slow_pool_id,
+                    slow_height,
+                    slow_prices_a_b,
+                    slow_prices_a_usdc,
+                    slow_prices_b_usdc,
+                    fast_state,
+                    fast_protocol_component.clone(),
+                    fast_pool_id,
+                    fast_height,
+                    fast_inventory,
+                )
+                .map(|(_, p)| p)
+                .unwrap_or_default();
 
             if mid_profit_usdc < next_profit_usdc {
                 // next is higher -> check to the right (try a higher amount_in)
-                trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
-                best_signal = Some(next_signal);
+                trace!(index = mid, left = %left, right = %right, mid_profit_usdc = %mid_profit_usdc, next_profit_usdc = %next_profit_usdc, "mid+1 signal has higher expected profit, continuing search");
                 left = mid + 1;
             } else {
-                // next is lower -> check to the left (try a lower amount_in)
-                trace!(index = mid, left = %left, right = %right, "mid+1 signal has lower expected profit, continuing search");
                 right = mid;
             }
         }
 
-        trace!(index = %left, found_signal = %best_signal.is_some(), "search complete");
+        let (best_signal, profit) = self
+            .get_profit_and_signal(
+                left,
+                slow_sims,
+                slow_protocol_component.clone(),
+                slow_pool_id,
+                slow_height,
+                slow_prices_a_b,
+                slow_prices_a_usdc,
+                slow_prices_b_usdc,
+                fast_state,
+                fast_protocol_component.clone(),
+                fast_pool_id,
+                fast_height,
+                fast_inventory,
+            )
+            .map(|(sig, p)| (sig, p))?;
 
-        best_signal
+        trace!(index = %left, found_signal = %best_signal, "search complete");
+
+        if profit.is_zero() {
+            trace!("best signal has zero profit, returning None");
+            return None;
+        }
+        Some(best_signal)
     }
 
     /// This creates the fast leg of the arbitrage out of the precompute slow leg.
@@ -523,6 +508,43 @@ impl CrossChainSingleHop {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
             err
         })
+    }
+
+    // Helper to keep the main loop clean
+    fn get_profit_and_signal(
+        &self,
+        index: usize,
+        slow_sims: &[Swap],
+        slow_protocol_component: Arc<ProtocolComponent>,
+        slow_pool_id: &PoolId,
+        slow_height: u64,
+        slow_prices_a_b: &SpotPrices,
+        slow_prices_a_usdc: &Option<SpotPrices>,
+        slow_prices_b_usdc: &Option<SpotPrices>,
+        fast_state: &dyn ProtocolSim,
+        fast_protocol_component: Arc<ProtocolComponent>,
+        fast_pool_id: &PoolId,
+        fast_height: u64,
+        fast_inventory: &BigUint,
+    ) -> Option<(signals::CrossChainSingleHop, BigUint)> {
+        let sig = self
+            .try_signal_from_precompute(
+                slow_sims[index].clone(),
+                slow_protocol_component,
+                slow_pool_id,
+                slow_height,
+                slow_prices_a_b,
+                slow_prices_a_usdc,
+                slow_prices_b_usdc,
+                fast_state,
+                fast_protocol_component,
+                fast_pool_id,
+                fast_height,
+                fast_inventory,
+            )
+            .ok()?;
+        let profit = sig.expected_profit.total_profit_usdc().ok()?;
+        Some((sig, profit))
     }
 
     pub fn token_a_symbol(&self) -> &str {
