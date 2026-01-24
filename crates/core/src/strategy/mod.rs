@@ -316,19 +316,16 @@ impl CrossChainSingleHop {
     /// Finds the optimal swap for a given direction.
     ///
     /// Uses a binary search over the slow chain simulations created in the precompute step.
-    /// This assumes simulations behave "unimodally", i.e. they have a single peak, in terms of
-    /// amount_in -> amount_out.
+    /// This assumes the profit function behaves "unimodally", i.e. has a single peak, in terms of
+    /// amount_in -> profit.
     ///
-    /// At each step, the search compares the middle element, `mid`, to the one immediately after it,
-    /// `next`.
-    /// If `mid` < `next`, the search continues in the right half of the array.
-    /// If `mid` > `next`, the search continues in the left half of the array.
+    /// At each step, the search compares the profit at `mid` to `mid + 1`.
+    /// If `mid` < `mid + 1`, the search continues in the right half of the array.
+    /// If `mid` >= `mid + 1`, the search continues in the left half of the array.
     ///
     /// Each step uses a precomputed slow chain `Swap` and the fast chain's `ProtocolSim` to create
-    /// the fast chain's `Swap`, and the a candidate `signals::CrossChainSingleHop`. The signals'
+    /// the fast chain's `Swap`, and a candidate `signals::CrossChainSingleHop`. The signals'
     /// expected profits are compared to find the optimal signal.
-    ///
-    /// TODO: add slow_inventory to logs?
     #[allow(clippy::too_many_arguments)]
     fn find_optimal_signal(
         &self,
@@ -350,60 +347,49 @@ impl CrossChainSingleHop {
             trace!("no slow sims provided for binary search; cannot find optimal signal");
             return None;
         }
+
+        // Binary search to find the optimal signal. The search assumes the profit function is
+        // unimodal (has a single peak) over the slow_sims array. At each step, we compare the
+        // profit at `mid` vs `mid + 1`:
+        // - If mid < mid+1, the peak is to the right, so we search right (left = mid + 1)
+        // - If mid >= mid+1, the peak is at mid or to the left, so we search left (right = mid)
+        // We track the best signal seen during the search to avoid recomputing at the end.
         let (mut left, mut right) = (0, slow_sims.len() - 1);
 
-        while left < right {
-            let mid = left + (right - left) / 2;
-            let mid_profit_usdc = self
-                .get_profit_and_signal(
-                    mid,
-                    slow_sims,
-                    slow_protocol_component.clone(),
+        // Handle single-element case where the loop won't run (left == right)
+        if left == right {
+            let signal = self
+                .try_signal_from_precompute(
+                    slow_sims[left].clone(),
+                    slow_protocol_component,
                     slow_pool_id,
                     slow_height,
                     slow_prices_a_b,
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
                     fast_state,
-                    fast_protocol_component.clone(),
+                    fast_protocol_component,
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
                 )
-                .map(|(_, p)| p)
-                .unwrap_or_default();
-            let next_profit_usdc = self
-                .get_profit_and_signal(
-                    mid + 1,
-                    slow_sims,
-                    slow_protocol_component.clone(),
-                    slow_pool_id,
-                    slow_height,
-                    slow_prices_a_b,
-                    slow_prices_a_usdc,
-                    slow_prices_b_usdc,
-                    fast_state,
-                    fast_protocol_component.clone(),
-                    fast_pool_id,
-                    fast_height,
-                    fast_inventory,
-                )
-                .map(|(_, p)| p)
-                .unwrap_or_default();
-
-            if mid_profit_usdc < next_profit_usdc {
-                // next is higher -> check to the right (try a higher amount_in)
-                trace!(index = mid, left = %left, right = %right, mid_profit_usdc = %mid_profit_usdc, next_profit_usdc = %next_profit_usdc, "mid+1 signal has higher expected profit, continuing search");
-                left = mid + 1;
-            } else {
-                right = mid;
+                .ok()?;
+            if signal.expected_profit.min_total_amount_usdc.is_zero() {
+                trace!("single signal has zero profit, returning None");
+                return None;
             }
+            return Some(signal);
         }
 
-        let (best_signal, profit) = self
-            .get_profit_and_signal(
-                left,
-                slow_sims,
+        let mut best_signal = None;
+
+        // Each iteration compares profit at mid vs mid+1 and narrows the search range.
+        // The winning signal is saved to best_signal.
+        // Failed signals are treated as having zero profit, so valid signals are preferred.
+        while left < right {
+            let mid = left + (right - left) / 2;
+            let mid_signal = match self.try_signal_from_precompute(
+                slow_sims[mid].clone(),
                 slow_protocol_component.clone(),
                 slow_pool_id,
                 slow_height,
@@ -415,15 +401,72 @@ impl CrossChainSingleHop {
                 fast_pool_id,
                 fast_height,
                 fast_inventory,
-            )
-            .map(|(sig, p)| (sig, p))?;
+            ) {
+                Ok(signal) => Some(signal),
+                Err(err) => {
+                    trace!(index = mid, %err, "failed to create mid signal");
+                    None
+                }
+            };
+            let mid_profit = mid_signal
+                .as_ref()
+                .map(|s| &s.expected_profit.min_total_amount_usdc);
 
-        trace!(index = %left, found_signal = %best_signal, "search complete");
+            let next = mid + 1;
+            let next_signal = match self.try_signal_from_precompute(
+                slow_sims[next].clone(),
+                slow_protocol_component.clone(),
+                slow_pool_id,
+                slow_height,
+                slow_prices_a_b,
+                slow_prices_a_usdc,
+                slow_prices_b_usdc,
+                fast_state,
+                fast_protocol_component.clone(),
+                fast_pool_id,
+                fast_height,
+                fast_inventory,
+            ) {
+                Ok(signal) => Some(signal),
+                Err(err) => {
+                    trace!(index = next, %err, "failed to create next signal");
+                    None
+                }
+            };
+            let next_profit = next_signal
+                .as_ref()
+                .map(|s| &s.expected_profit.min_total_amount_usdc);
 
-        if profit.is_zero() {
-            trace!("best signal has zero profit, returning None");
-            return None;
+            // Compare Option<&BigUint> directly: None < Some(&signal.expected_profit.min_total_amount_usdc), so failed signals are always "less profitable"
+            if mid_profit < next_profit {
+                trace!(index = mid, left = %left, right = %right, mid_profit = ?mid_profit, next_profit = ?next_profit, "mid+1 has higher profit, searching right");
+                left = mid + 1;
+                best_signal = next_signal;
+            } else {
+                trace!(index = mid, left = %left, right = %right, mid_profit = ?mid_profit, next_profit = ?next_profit, "mid has equal or higher profit, searching left");
+                right = mid;
+                best_signal = mid_signal;
+            }
         }
+
+        // None if all signals in the search failed to create
+        let best_signal = match best_signal {
+            Some(signal) => {
+                // A zero-profit signal isn't worth executing
+                if signal.expected_profit.min_total_amount_usdc.is_zero() {
+                    trace!("best signal has zero profit, returning None");
+                    return None;
+                } else {
+                    trace!(index = %left, found_signal = %signal, "search complete");
+                    signal
+                }
+            }
+            None => {
+                trace!("no valid signal found during search");
+                return None;
+            }
+        };
+
         Some(best_signal)
     }
 
@@ -508,43 +551,6 @@ impl CrossChainSingleHop {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
             err
         })
-    }
-
-    // Helper to keep the main loop clean
-    fn get_profit_and_signal(
-        &self,
-        index: usize,
-        slow_sims: &[Swap],
-        slow_protocol_component: Arc<ProtocolComponent>,
-        slow_pool_id: &PoolId,
-        slow_height: u64,
-        slow_prices_a_b: &SpotPrices,
-        slow_prices_a_usdc: &Option<SpotPrices>,
-        slow_prices_b_usdc: &Option<SpotPrices>,
-        fast_state: &dyn ProtocolSim,
-        fast_protocol_component: Arc<ProtocolComponent>,
-        fast_pool_id: &PoolId,
-        fast_height: u64,
-        fast_inventory: &BigUint,
-    ) -> Option<(signals::CrossChainSingleHop, BigUint)> {
-        let sig = self
-            .try_signal_from_precompute(
-                slow_sims[index].clone(),
-                slow_protocol_component,
-                slow_pool_id,
-                slow_height,
-                slow_prices_a_b,
-                slow_prices_a_usdc,
-                slow_prices_b_usdc,
-                fast_state,
-                fast_protocol_component,
-                fast_pool_id,
-                fast_height,
-                fast_inventory,
-            )
-            .ok()?;
-        let profit = sig.expected_profit.total_profit_usdc().ok()?;
-        Some((sig, profit))
     }
 
     pub fn token_a_symbol(&self) -> &str {

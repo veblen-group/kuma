@@ -66,7 +66,7 @@ impl CrossChainSingleHop {
         slow_protocol_component: Arc<ProtocolComponent>,
         slow_id: &state::PoolId,
         slow_height: u64,
-        slow_sim: Swap,
+        slow_swap_sim: Swap,
         slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
@@ -75,17 +75,17 @@ impl CrossChainSingleHop {
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_id: &state::PoolId,
         fast_height: u64,
-        fast_sim: Swap,
+        fast_swap_sim: Swap,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
-        if slow_sim.amount_out < fast_sim.amount_in {
+        if slow_swap_sim.amount_out < fast_swap_sim.amount_in {
             eyre::bail!("Slow chain output is less than fast chain input");
         }
 
         let expected_profit = ExpectedProfit::try_from_swaps(
-            &slow_sim,
-            &fast_sim,
+            &slow_swap_sim,
+            &fast_swap_sim,
             &slow_prices_a_usdc,
             &slow_prices_b_usdc,
             max_slippage_bps,
@@ -98,17 +98,17 @@ impl CrossChainSingleHop {
             slow_protocol_component: Some(slow_protocol_component),
             slow_height,
             slow_pool_id: slow_id.clone(),
-            slow_swap_sim: slow_sim,
+            slow_swap_sim,
             fast_chain: fast_chain.clone(),
             fast_pair: fast_pair.clone(),
             fast_protocol_component: Some(fast_protocol_component),
             fast_height,
             fast_pool_id: fast_id.clone(),
-            fast_swap_sim: fast_sim,
+            fast_swap_sim,
             slow_prices_a_b: slow_prices_a_b.clone(),
             slow_prices_a_usdc: slow_prices_a_usdc.clone(),
             slow_prices_b_usdc: slow_prices_b_usdc.clone(),
-            expected_profit: expected_profit,
+            expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
         })

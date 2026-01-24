@@ -2,6 +2,7 @@ use std::{str::FromStr, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
+use num_traits::Zero as _;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -9,6 +10,7 @@ use crate::{
     chain::Chain,
     config::TokenAddressesForChain,
     signals,
+    spot_prices::SpotPrices,
     state::{PoolId, pair::Pair},
     strategy::Swap,
 };
@@ -270,10 +272,16 @@ fn try_signal_from_row(
         // TODO: save usdc prices to db
         token_usdc_prices: (0f64, 0f64),
         // TODO: save max slippage token amounts to db
-        max_slippage_token_amounts: (BigUint::ZERO, BigUint::ZERO),
+        max_slippage_token_amounts: (BigUint::zero(), BigUint::zero()),
         min_usdc_amounts: (expected_profit_usdc_a, expected_profit_usdc_b),
         pair: slow_pair.clone(),
+        // TODO: save total_usdc to db
+        min_total_amount_usdc: BigUint::zero(),
     };
+
+    // TODO: save prices to db
+    let slow_prices_a_b =
+        SpotPrices::try_from_sorted_prices(&vec![], 0, slow_chain.clone(), slow_pair.clone())?;
 
     Ok(signals::CrossChainSingleHop {
         slow_chain,
@@ -291,9 +299,9 @@ fn try_signal_from_row(
         slow_swap_sim,
         fast_pool_id,
         fast_swap_sim,
-        slow_prices_a_b: todo!(),
-        slow_prices_a_usdc: todo!(),
-        slow_prices_b_usdc: todo!(),
+        slow_prices_a_usdc: None, // TODO: save prices to db
+        slow_prices_b_usdc: None, // TODO: save prices to db
+        slow_prices_a_b,
     })
 }
 

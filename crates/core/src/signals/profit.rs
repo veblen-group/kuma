@@ -102,6 +102,7 @@ impl RealizedProfit {
     }
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively
+    #[allow(clippy::type_complexity)]
     fn try_amounts_by_tokens_a_b<'a>(
         slow_sim: &'a state::Swap,
         fast_sim: &'a state::Swap,
@@ -139,6 +140,8 @@ pub struct ExpectedProfit {
     pub token_usdc_prices: (f64, f64),
     /// USDC value of the minimum token amounts
     pub min_usdc_amounts: (BigUint, BigUint),
+    /// Total USDC value of the minimum token amounts
+    pub min_total_amount_usdc: BigUint,
     pub pair: Pair,
 }
 
@@ -176,7 +179,7 @@ impl ExpectedProfit {
 
         // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
         let max_slippage_token_amounts =
-            Self::try_max_slippage_amounts(&amounts_a.1, &amounts_b.1, max_slippage_bps)?;
+            Self::try_max_slippage_amounts(&amounts_a.1, amounts_b.1, max_slippage_bps)?;
 
         // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
         // This represents the minimum guaranteed amount if congestion occurs on-chain
@@ -195,12 +198,24 @@ impl ExpectedProfit {
             ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
         };
 
+        // Step 5: Calculate total amount of USDC after accounting for slippage and congestion risk
+        let min_total_amount_usdc = min_usdc_amounts
+            .0
+            .checked_add(&min_usdc_amounts.1)
+            .wrap_err_with(|| {
+                format!(
+                    "total_profit_usdc failed: min_usdc_amounts {} + {}",
+                    min_usdc_amounts.0, min_usdc_amounts.1
+                )
+            })?;
+
         Ok(ExpectedProfit {
             surplus,
             max_slippage_token_amounts,
             min_token_amounts,
             token_usdc_prices,
             min_usdc_amounts,
+            min_total_amount_usdc,
             pair,
         })
     }
@@ -283,18 +298,6 @@ impl ExpectedProfit {
             bps_discount(&min_surplus_after_slippage_a, congestion_risk_discount_bps),
             bps_discount(&min_surplus_after_slippage_b, congestion_risk_discount_bps),
         ))
-    }
-
-    pub fn total_profit_usdc(&self) -> eyre::Result<BigUint> {
-        self.min_usdc_amounts
-            .0
-            .checked_add(&self.min_usdc_amounts.1)
-            .wrap_err_with(|| {
-                format!(
-                    "total_profit_usdc failed: min_usdc_amounts {} + {}",
-                    self.min_usdc_amounts.0, self.min_usdc_amounts.1
-                )
-            })
     }
 }
 

@@ -90,7 +90,7 @@ impl Trade {
         fast: UnsignedTransaction,
     ) -> Self {
         Trade {
-            signal: signal,
+            signal,
             slow_tx_req: slow,
             fast_tx_req: fast,
         }
