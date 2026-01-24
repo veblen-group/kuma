@@ -1113,13 +1113,13 @@ mod tests {
 
     /// Creates a strategy that uses different number of decimals for tokens.
     ///
-    /// Token A = WETH, Slow Address = 0x100, Fast Address = 0x100
-    /// Token B = TEST6, Slow Address = 0x002, Fast Address = 0x002
+    /// Token A = TEST6 (6 decimals), Slow Address = 0x002, Fast Address = 0x002
+    /// Token B = WETH (18 decimals), Slow Address = 0x100, Fast Address = 0x100
     /// Pair = TEST6/WETH, Slow zero2one = TEST6/WETH, Fast zero2one = TEST6/WETH
     ///
     /// USDC Slow Address = 0x110, Fast Address = 0x010
-    /// USDC Slow zero2one: Token A -> WETH/USDC, Token B -> TEST6/USDC
-    /// USDC Fast zero2one: Token A -> USDC/WETH, Token B -> TEST6/USDC
+    /// USDC Slow zero2one: Token A -> TEST6/USDC, Token B -> WETH/USDC
+    /// USDC Fast zero2one: Token A -> TEST6/USDC, Token B -> USDC/WETH
     fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
         init_telemetry();
 
@@ -1127,10 +1127,10 @@ mod tests {
         let slow_chain = Chain::eth_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let slow_pair = Pair::new(make_mainnet_weth(), make_mainnet_test_6_token());
-        // zero2one = WETH/USDC
-        let slow_token_a_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
         // zero2one = TEST6/USDC
-        let slow_token_b_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
+        let slow_token_a_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
+        // zero2one = WETH/USDC
+        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -1140,10 +1140,10 @@ mod tests {
         let fast_chain = Chain::base_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let fast_pair = Pair::new(make_base_weth(), make_base_test_6_token());
-        // zero2one = USDC/WETH
-        let fast_token_a_usdc = Pair::new(make_base_weth(), make_base_usdc());
         // zero2one = TEST6/USDC
-        let fast_token_b_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
+        let fast_token_a_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
+        // zero2one = USDC/WETH
+        let fast_token_b_usdc = Pair::new(make_base_weth(), make_base_usdc());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),
@@ -1361,7 +1361,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1439,7 +1439,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1453,11 +1453,11 @@ mod tests {
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
-        // WETH -> TEST price is 200
+        // TEST6 -> WETH price is 0.0005 (WETH -> TEST6 price is 2000)
         let slow_state =
             make_slow_block_state_different_decimals(&strategy, 2000, 10_000_000, 5_000);
 
-        // WETH -> TEST price is 500
+        // TEST6 -> WETH price is 0.0002 (WETH -> TEST6 price is 5000)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 10_000_000, 2_000);
 
         let precompute = strategy
@@ -1479,7 +1479,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert test->weth and test->pepe legs
+        // assert test6->weth (slow) and weth->test6 (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_test_6_token());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
@@ -1508,7 +1508,7 @@ mod tests {
             "fast_main",
             expected_fast_amount_in,
             &make_base_weth(),
-            &make_base_usdc(),
+            &make_base_test_6_token(),
             fast_state.pair_state,
         );
         assert_eq!(
@@ -1519,7 +1519,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1534,10 +1534,10 @@ mod tests {
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
-        // weth -> PEPE price is 0.5
+        // TEST6 -> WETH price is 2.0 (WETH -> TEST6 price is 0.5)
         let slow_state = make_slow_block_state_different_decimals(&strategy, 2000, 5_000, 10_000);
 
-        // weth -> PEPE price is 0.2
+        // TEST6 -> WETH price is 5.0 (WETH -> TEST6 price is 0.2)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1559,7 +1559,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert weth->test6 (slow) and test6->weth (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_test_6_token());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_test_6_token());
@@ -1587,7 +1587,7 @@ mod tests {
         let expected_fast_sim = simulate_swap_for_pool_id(
             "fast_main",
             expected_fast_amount_in,
-            &make_base_pepe(),
+            &make_base_test_6_token(),
             &make_base_weth(),
             fast_state.pair_state,
         );
@@ -1599,7 +1599,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
