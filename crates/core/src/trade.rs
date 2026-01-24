@@ -69,8 +69,8 @@ impl TradeSuccess {
     }
 }
 
-// TODO: add failed, successful, etc
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum TradeResult {
     Successful(TradeSuccess),
     FailedSlow(TradeFailedOnSlow),
@@ -110,7 +110,7 @@ impl Trade {
 
     // Prepare the trade by creating the transaction requests for both chains
     pub async fn prepare(&self) -> eyre::Result<(SignedTransaction, SignedTransaction)> {
-        let slow_tx_request = get_tx_request(&self.slow_tx(), &self.signal().slow_chain)
+        let slow_tx_request = get_tx_request(self.slow_tx(), &self.signal().slow_chain)
             .await
             .wrap_err("Failed to create transaction request for slow chain")?;
         let fast_tx_request = get_tx_request(self.fast_tx(), &self.signal().fast_chain)
@@ -202,10 +202,10 @@ impl Trade {
         fast_receipt: &TransactionReceipt,
     ) -> eyre::Result<RealizedProfit> {
         let slow_swap =
-            state::swap::Swap::try_from_receipts(&slow_receipt, self.signal.slow_swap_sim.clone())
+            state::swap::Swap::try_from_receipts(slow_receipt, self.signal.slow_swap_sim.clone())
                 .wrap_err("failed to parse slow swap from receipt")?;
         let fast_swap =
-            state::swap::Swap::try_from_receipts(&fast_receipt, self.signal.fast_swap_sim.clone())
+            state::swap::Swap::try_from_receipts(fast_receipt, self.signal.fast_swap_sim.clone())
                 .wrap_err("failed to parse fast swap from receipt")?;
 
         let profit = RealizedProfit::try_from_swaps(

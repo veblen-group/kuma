@@ -281,7 +281,7 @@ fn try_signal_from_row(
 
     // TODO: save prices to db
     let slow_prices_a_b =
-        SpotPrices::try_from_sorted_prices(&vec![], 0, slow_chain.clone(), slow_pair.clone())?;
+        SpotPrices::try_from_sorted_prices(&[], 0, slow_chain.clone(), slow_pair.clone())?;
 
     Ok(signals::CrossChainSingleHop {
         slow_chain,

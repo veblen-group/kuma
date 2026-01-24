@@ -179,7 +179,7 @@ impl ExpectedProfit {
 
         // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
         let max_slippage_token_amounts =
-            Self::try_max_slippage_amounts(&amounts_a.1, amounts_b.1, max_slippage_bps)?;
+            Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
 
         // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
         // This represents the minimum guaranteed amount if congestion occurs on-chain
@@ -192,9 +192,9 @@ impl ExpectedProfit {
         // Step 4: Determine pessimistic USDC prices for each token andonvert minimum token amounts to USDC
         let (min_usdc_amounts, token_usdc_prices) = {
             let (a_usdc, price_a_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.0, &prices_a_usdc)?;
+                try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
             let (b_usdc, price_b_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.1, &prices_b_usdc)?;
+                try_mul_amount_usdc_price(&min_token_amounts.1, prices_b_usdc)?;
             ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
         };
 
@@ -221,6 +221,7 @@ impl ExpectedProfit {
     }
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively
+    #[allow(clippy::type_complexity)]
     fn try_amounts_by_tokens_a_b<'a>(
         slow_sim: &'a strategy::Swap,
         fast_sim: &'a strategy::Swap,
@@ -250,8 +251,8 @@ impl ExpectedProfit {
         out_b: &BigUint,
         max_slippage_bps: u64,
     ) -> eyre::Result<(BigUint, BigUint)> {
-        let min_out_a = bps_discount(&out_a, max_slippage_bps);
-        let min_out_b = bps_discount(&out_b, max_slippage_bps);
+        let min_out_a = bps_discount(out_a, max_slippage_bps);
+        let min_out_b = bps_discount(out_b, max_slippage_bps);
 
         let amount_a = out_a.checked_sub(&min_out_a).wrap_err_with(|| {
             format!(
@@ -351,7 +352,7 @@ fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Resul
     } else {
         // token_a has fewer decimals: multiply by 10^|decimals_diff|
         BigRational::new(
-            BigInt::from(10).pow((decimals_diff.abs()) as u32),
+            BigInt::from(10).pow(decimals_diff.unsigned_abs()),
             BigInt::from(1),
         )
     };

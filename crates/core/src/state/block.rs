@@ -94,18 +94,14 @@ impl Stream for BlockStateStream {
                 Some(block) => {
                     let pair_state = block.sims.get_pair_state(&self.pair);
 
-                    let token_a_usdc_state =
-                        if let Some(token_a_usdc_pair) = &self.token_a_usdc_pair {
-                            Some(block.sims.get_pair_state(token_a_usdc_pair))
-                        } else {
-                            None
-                        };
-                    let token_b_usdc_state =
-                        if let Some(token_b_usdc_pair) = &self.token_b_usdc_pair {
-                            Some(block.sims.get_pair_state(token_b_usdc_pair))
-                        } else {
-                            None
-                        };
+                    let token_a_usdc_state = self
+                        .token_a_usdc_pair
+                        .as_ref()
+                        .map(|token_a_usdc_pair| block.sims.get_pair_state(token_a_usdc_pair));
+                    let token_b_usdc_state = self
+                        .token_b_usdc_pair
+                        .as_ref()
+                        .map(|token_b_usdc_pair| block.sims.get_pair_state(token_b_usdc_pair));
 
                     let token_a_balance = block.token_balances.get_balance(self.pair.token_a());
                     let token_b_balance = block.token_balances.get_balance(self.pair.token_b());
