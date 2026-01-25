@@ -76,9 +76,9 @@ pub struct CrossChainSingleHop {
     pub congestion_risk_discount_bps: u64,
     /// Calculated expected profit after applying slippage and congestion discounts.
     pub expected_profit: ExpectedProfit,
-    // TODO: docstring
+    /// Base fee in wei for slow chain
     pub slow_base_fee: u64,
-    // TODO: docstring
+    /// Base fee in wei for fast chain
     pub fast_base_fee: u64,
 }
 

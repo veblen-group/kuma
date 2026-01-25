@@ -83,18 +83,26 @@ impl BlockStateStream {
         usdc: Token,
         eth: Token,
     ) -> Self {
-        let token_a_usdc_pair = if pair.token_a().symbol != "USDC" {
+        // token a is usdc so don't need to use this pair state
+        let token_a_usdc_pair = if pair.token_a().symbol == "USDC" {
+            None
+        } else {
             Some(Pair::new(pair.token_a().clone(), usdc.clone()))
-        } else {
-            None
-        };
-        let token_b_usdc_pair = if pair.token_b().symbol != "USDC" {
-            Some(Pair::new(pair.token_b().clone(), usdc.clone()))
-        } else {
-            None
         };
 
-        let eth_usdc_pair = Some(Pair::new(eth, usdc));
+        // token b is usdc so don't need to use this pair state
+        let token_b_usdc_pair = if pair.token_b().symbol == "USDC" {
+            None
+        } else {
+            Some(Pair::new(pair.token_b().clone(), usdc.clone()))
+        };
+
+        // pair is ETH/USDC so don't need to use this pair state
+        let eth_usdc_pair = if pair == Pair::new(eth.clone(), usdc.clone()) {
+            None
+        } else {
+            Some(Pair::new(eth, usdc))
+        };
 
         Self {
             pair,

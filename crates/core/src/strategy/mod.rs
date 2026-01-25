@@ -1181,10 +1181,14 @@ mod tests {
         let slow_chain = Chain::eth_mainnet();
         // Pair = PEPE/WETH, zero2one = PEPE/WETH
         let slow_pair = Pair::new(make_mainnet_pepe(), make_mainnet_weth());
+
         // zero2one = PEPE/USDC
         let slow_token_a_usdc = Pair::new(make_mainnet_pepe(), make_mainnet_usdc());
         // zero2one = WETH/USDC
         let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+
+        // zero2one = WETH/USDC
+        let slow_eth_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
 
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50u64), slow_pair.token_a().decimals),
@@ -1195,6 +1199,7 @@ mod tests {
         let fast_chain = Chain::base_mainnet();
         // Pair = PEPE/WETH, zero2one = PEPE/WETH
         let fast_pair = Pair::new(make_base_pepe(), make_base_weth());
+
         // zero2one = PEPE/USDC
         let fast_token_a_usdc = Pair::new(make_base_pepe(), make_base_usdc());
         // zero2one = USDC/WETH
@@ -1218,7 +1223,7 @@ mod tests {
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
             binary_search_steps: 16,
-            slow_eth_usdc: Some(fast_token_b_usdc.clone()),
+            slow_eth_usdc: Some(slow_eth_usdc),
             slow_token_a_usdc: Some(slow_token_a_usdc),
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
@@ -1251,12 +1256,15 @@ mod tests {
         let slow_chain = Chain::eth_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let slow_pair = Pair::new(make_mainnet_weth(), make_mainnet_test_6_token());
+
         // zero2one = TEST6/USDC
         let slow_token_a_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
         // zero2one = WETH/USDC
         let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+
         // zero2one = WETH/USDC
         let slow_eth_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
+
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -1266,10 +1274,12 @@ mod tests {
         let fast_chain = Chain::base_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let fast_pair = Pair::new(make_base_weth(), make_base_test_6_token());
+
         // zero2one = TEST6/USDC
         let fast_token_a_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
         // zero2one = USDC/WETH
         let fast_token_b_usdc = Pair::new(make_base_weth(), make_base_usdc());
+
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),

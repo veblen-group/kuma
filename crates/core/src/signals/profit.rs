@@ -142,17 +142,17 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    // TODO: docstring
+    /// Gas cost in gas units for slow and fast swap respectively
     pub gas_cost_amounts: (BigUint, BigUint),
-    // TODO: docstring
+    /// Gas cost in ETH for slow and fast swap respectively
     pub gas_cost_eth: (BigUint, BigUint),
-    // TODO: docstring
+    /// Total gas cost in ETH for slow and fast swap combined
     pub total_gas_cost_eth: BigUint,
-    // TODO: docstring
+    /// (W)ETH -> USDC price
     pub eth_usdc_price: f64,
-    // TODO: docstring
+    /// Gas cost in USDC for slow and fast swap respectively
     pub gas_cost_usdc: (BigUint, BigUint),
-    // TODO: docstring
+    /// Total gas cost in USDC for slow and fast swap combined
     pub total_gas_cost_usdc: BigUint,
 }
 
@@ -161,9 +161,9 @@ impl ExpectedProfit {
     ///
     /// The profit calculation pipeline:
     /// 1. Calculates raw surplus (difference between outputs and inputs for each token)
-    /// 2. Calculates maximum slippage amounts as a percentage of the fast chain outputs
+    /// 2. Calculates maximum slippage amounts as a percentage of the outputs
     /// 3. Applies congestion risk discount to the surplus after accounting for slippage
-    /// 4. Converts minimum token amounts to USDC using pessimistic prices
+    /// 4. Converts minimum token amounts to USDC
     /// 5. Calculates total USDC amount after slippage and congestion risk
     /// 6. Calculates gas costs in gas units, ETH, and USDC for both chains
     ///
@@ -193,19 +193,19 @@ impl ExpectedProfit {
         // Step 1: Calculate raw surplus (output - input for each token)
         let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
 
-        // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
+        // Step 2: Calculate maximum slippage amounts as a percentage of the outputs
         let max_slippage_token_amounts =
             Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
 
         // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
-        // This represents the minimum guaranteed amount if congestion occurs on-chain
+        // This represents the minimum guaranteed amount after discounting for congestion
         let min_token_amounts = Self::apply_congestion_discount(
             &surplus,
             &max_slippage_token_amounts,
             congestion_risk_discount_bps,
         )?;
 
-        // Step 4: Convert minimum token amounts to USDC using pessimistic prices
+        // Step 4: Convert minimum token amounts to USDC
         let (min_usdc_amounts, token_usdc_prices) = {
             let (a_usdc, price_a_usdc) =
                 try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
@@ -225,7 +225,7 @@ impl ExpectedProfit {
                 )
             })?;
 
-        // Step 6: Calculate gas costs in gas units, ETH and USDC
+        // Step 6: Calculate gas costs in ETH
         let slow_gas_cost_eth = slow_sim
             .gas_cost
             .checked_mul(&BigUint::from(slow_base_fee))
@@ -245,6 +245,7 @@ impl ExpectedProfit {
                 )
             })?;
 
+        // Step 7: Calculate gas costs in USDC using the ETH -> USDC price
         let (gas_cost_usdc_amounts, eth_usdc_price) = {
             let (slow_gas_cost, price_eth_usdc) =
                 try_mul_amount_usdc_price(&slow_gas_cost_eth, prices_eth_usdc)?;
@@ -263,6 +264,7 @@ impl ExpectedProfit {
                 )
             })?;
 
+        // Step 8: Assert total gas cost < total profit
         if total_gas_cost_usdc > min_total_amount_usdc {
             Err(eyre!(
                 "total_gas_cost_usdc {} - min_total_amount_usdc {} = {} ",
