@@ -81,27 +81,26 @@ impl BlockStateStream {
         pair: Pair,
         block_rx: watch::Receiver<Arc<Option<Block>>>,
         usdc: Token,
-        eth: Token,
+        eth: Option<Token>,
     ) -> Self {
-        // token a is usdc so don't need to use this pair state
-        let token_a_usdc_pair = if pair.token_a().symbol == "USDC" {
-            None
-        } else {
+        // if token a is usdc we don't need to use this pair state
+        let token_a_usdc_pair = if pair.token_a().symbol != "USDC" {
             Some(Pair::new(pair.token_a().clone(), usdc.clone()))
+        } else {
+            None
         };
 
-        // token b is usdc so don't need to use this pair state
-        let token_b_usdc_pair = if pair.token_b().symbol == "USDC" {
-            None
-        } else {
+        // if token b is usdc we don't need to use this pair state
+        let token_b_usdc_pair = if pair.token_b().symbol != "USDC" {
             Some(Pair::new(pair.token_b().clone(), usdc.clone()))
+        } else {
+            None
         };
 
         // pair is ETH/USDC so don't need to use this pair state
-        let eth_usdc_pair = if pair == Pair::new(eth.clone(), usdc.clone()) {
-            None
-        } else {
-            Some(Pair::new(eth, usdc))
+        let eth_usdc_pair = match eth {
+            Some(eth) if pair != Pair::new(eth.clone(), usdc.clone()) => Some(Pair::new(eth, usdc)),
+            _ => None,
         };
 
         Self {

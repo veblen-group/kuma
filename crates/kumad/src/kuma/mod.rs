@@ -94,13 +94,13 @@ impl Kuma {
             let slow_stream = block_handles[&strategy_config.slow_chain].get_block_state_stream(
                 strategy_config.slow_pair.clone(),
                 strategy_config.slow_usdc.clone(),
-                strategy_config.slow_eth.clone(),
+                Some(strategy_config.slow_eth.clone()),
             );
 
             let fast_stream = block_handles[&strategy_config.fast_chain].get_block_state_stream(
                 strategy_config.fast_pair.clone(),
                 strategy_config.fast_usdc.clone(),
-                strategy_config.slow_eth.clone(),
+                None,
             );
 
             let slow_block_time = strategy_config
