@@ -169,6 +169,7 @@ impl ExpectedProfit {
     /// - Minimum guaranteed token amounts after slippage and congestion discount
     /// - USDC prices used for conversion
     /// - Final minimum USDC amounts achievable for the arbitrage
+    #[allow(clippy::too_many_arguments)]
     pub fn try_from_swaps(
         slow_sim: &strategy::Swap,
         fast_sim: &strategy::Swap,
@@ -206,9 +207,9 @@ impl ExpectedProfit {
 
         let (gas_cost_usdc_amounts, eth_usdc_price) = {
             let (slow_gas_cost, price_eth_usdc) =
-                try_mul_amount_usdc_price(&slow_gas_cost_eth, &prices_eth_usdc)?;
+                try_mul_amount_usdc_price(&slow_gas_cost_eth, prices_eth_usdc)?;
             let (fast_gas_cost, _) =
-                try_mul_amount_usdc_price(&fast_gas_cost_eth, &prices_eth_usdc)?;
+                try_mul_amount_usdc_price(&fast_gas_cost_eth, prices_eth_usdc)?;
             ((slow_gas_cost, fast_gas_cost), (price_eth_usdc))
         };
 
@@ -262,7 +263,7 @@ impl ExpectedProfit {
             max_slippage_token_amounts,
             min_token_amounts,
             token_usdc_prices,
-            eth_usdc_price: eth_usdc_price,
+            eth_usdc_price,
             min_usdc_amounts,
             min_total_amount_usdc,
             pair,
