@@ -142,8 +142,8 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    // TODO: slow, fast basefee
-    pub base_fee: u64,
+    pub slow_base_fee: u64,
+    pub fast_base_fee: u64,
     pub gas_cost_amounts: (BigUint, BigUint),
     pub gas_cost_eth: (BigUint, BigUint),
     pub total_gas_cost_eth: BigUint,
@@ -156,17 +156,18 @@ impl ExpectedProfit {
     /// Calculate expected profit from slow and fast chain swap simulations.
     ///
     /// The profit calculation pipeline:
-    /// 1. Extracts token amounts from both swap simulations based on the token pair
-    /// 2. Calculates raw surplus (difference between outputs and inputs for each token)
-    /// 3. Applies maximum slippage discount based on fast simulation outputs
-    /// 4. Applies congestion risk discount to the surplus after slippage
-    /// 5. Determines pessimistic USDC prices (minimum for token_a, maximum for token_b)
-    /// 6. Converts final token amounts to USDC values using the pessimistic prices
+    /// 1. Calculates raw surplus (difference between outputs and inputs for each token)
+    /// 2. Calculates maximum slippage amounts as a percentage of the fast chain outputs
+    /// 3. Applies congestion risk discount to the surplus after accounting for slippage
+    /// 4. Converts minimum token amounts to USDC using pessimistic prices
+    /// 5. Calculates total USDC amount after slippage and congestion risk
+    /// 6. Calculates gas costs in gas units, ETH, and USDC for both chains
     ///
     /// Returns a structured ExpectedProfit containing:
     /// - Raw surplus in token amounts before any discounts
     /// - Maximum slippage that could be lost per token
     /// - Minimum guaranteed token amounts after slippage and congestion discount
+    /// - Gas costs in ETH and USDC for both chains
     /// - USDC prices used for conversion
     /// - Final minimum USDC amounts achievable for the arbitrage
     #[allow(clippy::too_many_arguments)]
@@ -176,24 +177,59 @@ impl ExpectedProfit {
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
         prices_eth_usdc: &Option<SpotPrices>,
+        slow_base_fee: u64,
+        fast_base_fee: u64,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
-        base_fee: u64,
     ) -> eyre::Result<Self> {
         // Extract (amount_in, amount_out) pairs for token A and token B from the swap simulations
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_sim, fast_sim)?;
         let pair = slow_sim.get_pair();
 
-        // TODO: use slow basefee
+        // Step 1: Calculate raw surplus (output - input for each token)
+        let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
+
+        // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
+        let max_slippage_token_amounts =
+            Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
+
+        // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
+        // This represents the minimum guaranteed amount if congestion occurs on-chain
+        let min_token_amounts = Self::apply_congestion_discount(
+            &surplus,
+            &max_slippage_token_amounts,
+            congestion_risk_discount_bps,
+        )?;
+
+        // Step 4: Convert minimum token amounts to USDC using pessimistic prices
+        let (min_usdc_amounts, token_usdc_prices) = {
+            let (a_usdc, price_a_usdc) =
+                try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
+            let (b_usdc, price_b_usdc) =
+                try_mul_amount_usdc_price(&min_token_amounts.1, prices_b_usdc)?;
+            ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
+        };
+
+        // Step 5: Calculate total amount of USDC after accounting for slippage and congestion risk
+        let min_total_amount_usdc = min_usdc_amounts
+            .0
+            .checked_add(&min_usdc_amounts.1)
+            .wrap_err_with(|| {
+                format!(
+                    "total_profit_usdc failed: min_usdc_amounts {} + {}",
+                    min_usdc_amounts.0, min_usdc_amounts.1
+                )
+            })?;
+
+        // Step 6: Calculate gas costs in gas units, ETH and USDC
         let slow_gas_cost_eth = slow_sim
             .gas_cost
-            .checked_mul(&BigUint::from(base_fee))
+            .checked_mul(&BigUint::from(slow_base_fee))
             .ok_or_eyre("failed calculating gas_cost")?;
 
-        // TODO: use fast basefee
         let fast_gas_cost_eth = fast_sim
             .gas_cost
-            .checked_mul(&BigUint::from(base_fee))
+            .checked_mul(&BigUint::from(fast_base_fee))
             .ok_or_eyre("failed calculating gas_cost")?;
 
         let total_gas_cost_eth = slow_gas_cost_eth
@@ -223,41 +259,6 @@ impl ExpectedProfit {
                 )
             })?;
 
-        // Step 1: Calculate raw surplus (output - input for each token)
-        let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
-
-        // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
-        let max_slippage_token_amounts =
-            Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
-
-        // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
-        // This represents the minimum guaranteed amount if congestion occurs on-chain
-        let min_token_amounts = Self::apply_congestion_discount(
-            &surplus,
-            &max_slippage_token_amounts,
-            congestion_risk_discount_bps,
-        )?;
-
-        // Step 4: Determine pessimistic USDC prices for each token andonvert minimum token amounts to USDC
-        let (min_usdc_amounts, token_usdc_prices) = {
-            let (a_usdc, price_a_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
-            let (b_usdc, price_b_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.1, prices_b_usdc)?;
-            ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
-        };
-
-        // Step 5: Calculate total amount of USDC after accounting for slippage and congestion risk
-        let min_total_amount_usdc = min_usdc_amounts
-            .0
-            .checked_add(&min_usdc_amounts.1)
-            .wrap_err_with(|| {
-                format!(
-                    "total_profit_usdc failed: min_usdc_amounts {} + {}",
-                    min_usdc_amounts.0, min_usdc_amounts.1
-                )
-            })?;
-
         Ok(ExpectedProfit {
             surplus,
             max_slippage_token_amounts,
@@ -267,7 +268,8 @@ impl ExpectedProfit {
             min_usdc_amounts,
             min_total_amount_usdc,
             pair,
-            base_fee,
+            slow_base_fee,
+            fast_base_fee,
             gas_cost_amounts: (slow_sim.gas_cost.clone(), fast_sim.gas_cost.clone()),
             gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
             total_gas_cost_eth,
@@ -317,14 +319,14 @@ impl ExpectedProfit {
 
         let amount_a = out_a.checked_sub(&min_out_a).wrap_err_with(|| {
             format!(
-                "min_out_a {} cannot be less than out_a {}",
-                min_out_a, out_a
+                "out_a {} cannot be less than min_out_a {}",
+                out_a, min_out_a
             )
         })?;
         let amount_b = out_b.checked_sub(&min_out_b).wrap_err_with(|| {
             format!(
-                "min_out_b {} cannot be less than out_b {}",
-                min_out_b, out_b
+                "out_b {} cannot be less than min_out_b {}",
+                out_b, min_out_b
             )
         })?;
         Ok((amount_a, amount_b))
@@ -414,7 +416,7 @@ fn try_surplus(
     // out_a - in_a
     let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
         format!(
-            "min_out_a {} cannot be less than in_a {} for token {}",
+            "out_a {} cannot be less than in_a {} for token {}",
             out_a,
             in_a,
             pair.token_a().symbol,
@@ -424,7 +426,7 @@ fn try_surplus(
     // out_b - in_b
     let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
         format!(
-            "min_out_b {} cannot be less than in_b {} for token {}",
+            "out_b {} cannot be less than in_b {} for token {}",
             out_b,
             in_b,
             pair.token_b().symbol,

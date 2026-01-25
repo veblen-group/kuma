@@ -101,6 +101,7 @@ pub async fn execute_tx(
 
     provider.anvil_set_logging(true).await.ok();
 
+    // TODO: this seems stupid
     let gas_limit = gas_cost
         .to_u64()
         .ok_or_eyre("failed converting gas cost to u64")?;

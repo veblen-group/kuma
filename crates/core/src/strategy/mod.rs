@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use color_eyre::eyre::{self, Context, ContextCompat, eyre};
+use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
 use tracing::{debug, error, instrument, trace, warn};
 use tycho_common::models::token::Token;
@@ -234,10 +234,6 @@ impl CrossChainSingleHop {
             None
         };
 
-        let base_fee = state
-            .base_fee
-            .wrap_err("base fee not available for block")?;
-
         Ok(Precomputes {
             block_height,
             prices_a_b,
@@ -247,7 +243,7 @@ impl CrossChainSingleHop {
             prices_eth_usdc,
             prices_a_usdc,
             prices_b_usdc,
-            base_fee,
+            base_fee: state.base_fee,
         })
     }
 
@@ -265,6 +261,7 @@ impl CrossChainSingleHop {
         precompute: &Precomputes,
         fast_state: PairState,
         fast_sorted_spot_prices: Vec<(PoolId, f64)>,
+        fast_base_fee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // 1. find the first pair of crossing pools from precompute & fast_state
         if fast_sorted_spot_prices.is_empty() {
@@ -313,12 +310,13 @@ impl CrossChainSingleHop {
                             &precompute.prices_a_usdc,
                             &precompute.prices_b_usdc,
                             &precompute.prices_eth_usdc,
+                            precompute.base_fee,
                             fast_state.states[&fast_id].as_ref(),
                             fast_state.metadata[&fast_id].clone(),
                             &fast_id,
                             fast_state.block_height,
                             &self.fast_inventory.1,
-                            0, // TODO: basefee
+                            fast_base_fee,
                         )
                         .wrap_err("no optimal signal for A->B (slow) and B->A (fast)")?;
                     trace!(
@@ -340,12 +338,13 @@ impl CrossChainSingleHop {
                             &precompute.prices_a_usdc,
                             &precompute.prices_b_usdc,
                             &precompute.prices_eth_usdc,
+                            precompute.base_fee,
                             fast_state.states[&fast_id].as_ref(),
                             fast_state.metadata[&fast_id].clone(),
                             &fast_id,
                             fast_state.block_height,
                             &self.fast_inventory.0,
-                            0, // TODO: basefee
+                            fast_base_fee,
                         )
                         .wrap_err("no optimal signal for B->A (slow) and A->B (fast)")?;
                     trace!(
@@ -389,14 +388,13 @@ impl CrossChainSingleHop {
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
         slow_prices_eth_usdc: &Option<SpotPrices>,
-        // slow_basefee: u64,
+        slow_base_fee: u64,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
-        // fast_basefee: u64,
-        base_fee: u64,
+        fast_base_fee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         // Binary search to find the optimal signal. The search assumes the profit function is
         // unimodal (has a single peak) over the slow_sims array. At each step, we compare the
@@ -418,14 +416,13 @@ impl CrossChainSingleHop {
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
                     slow_prices_eth_usdc,
-                    // slow_basefee,
+                    slow_base_fee,
                     fast_state,
                     fast_protocol_component,
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
-                    // fast_basefee,
-                    base_fee,
+                    fast_base_fee,
                 )
                 .wrap_err("failed to create signal from single precompute")?;
             return Ok(signal);
@@ -448,14 +445,13 @@ impl CrossChainSingleHop {
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
                     slow_prices_eth_usdc,
-                    // slow_basefee,
+                    slow_base_fee,
                     fast_state,
                     fast_protocol_component.clone(),
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
-                    // fast_basefee,
-                    base_fee,
+                    fast_base_fee,
                 )
                 .inspect_err(|err| {
                     trace!(index = mid, %err, "failed to create mid signal");
@@ -476,14 +472,13 @@ impl CrossChainSingleHop {
                     slow_prices_a_usdc,
                     slow_prices_b_usdc,
                     slow_prices_eth_usdc,
-                    // slow_basefee,
+                    slow_base_fee,
                     fast_state,
                     fast_protocol_component.clone(),
                     fast_pool_id,
                     fast_height,
                     fast_inventory,
-                    // fast_basefee,
-                    base_fee,
+                    fast_base_fee,
                 )
                 .inspect_err(|err| {
                     trace!(index = next, %err, "failed to create next signal");
@@ -556,12 +551,13 @@ impl CrossChainSingleHop {
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
         slow_prices_eth_usdc: &Option<SpotPrices>,
+        slow_base_fee: u64,
         fast_state: &dyn ProtocolSim,
         fast_protocol_component: Arc<ProtocolComponent>,
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
-        base_fee: u64,
+        fast_base_fee: u64,
     ) -> eyre::Result<signals::CrossChainSingleHop> {
         let fast_sim = match self.swap_from_precompute(
             slow_sim.clone(),
@@ -588,6 +584,7 @@ impl CrossChainSingleHop {
             slow_prices_a_usdc,
             slow_prices_b_usdc,
             slow_prices_eth_usdc,
+            slow_base_fee,
             &self.fast_chain,
             &self.fast_pair,
             fast_protocol_component,
@@ -596,7 +593,7 @@ impl CrossChainSingleHop {
             fast_sim.clone(),
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
-            base_fee,
+            fast_base_fee,
         )
         .map_err(|err| {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
@@ -939,7 +936,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: Some(0u64),
+            base_fee: 0u64, // TODO: non-zero base fee
         }
     }
 
@@ -1011,7 +1008,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: Some(0u64),
+            base_fee: 0u64, // TODO: non-zero base fee
         }
     }
 
@@ -1092,7 +1089,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: Some(0u64),
+            base_fee: 0u64,
         }
     }
 
@@ -1164,7 +1161,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: Some(0u64),
+            base_fee: 0u64,
         }
     }
 
@@ -1457,6 +1454,7 @@ mod tests {
                 &precompute,
                 fast_state.pair_state.clone(),
                 fast_sorted_spot_prices,
+                0u64, // TODO: non-zero base fee
             )
             .unwrap();
 
@@ -1508,9 +1506,10 @@ mod tests {
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 &precompute.prices_eth_usdc,
+                precompute.base_fee,
+                0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
-                precompute.base_fee
             )
             .unwrap()
         )
@@ -1552,6 +1551,7 @@ mod tests {
                 &precompute,
                 fast_state.pair_state.clone(),
                 fast_sorted_spot_prices,
+                0u64, // TODO: non-zero base fee
             )
             .unwrap();
 
@@ -1603,9 +1603,10 @@ mod tests {
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 &precompute.prices_eth_usdc,
+                precompute.base_fee,
+                0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
-                precompute.base_fee
             )
             .unwrap()
         )
@@ -1648,6 +1649,7 @@ mod tests {
                 &precompute,
                 fast_state.pair_state.clone(),
                 fast_sorted_spot_prices,
+                0u64, // TODO: non-zero base fee
             )
             .unwrap();
 
@@ -1699,9 +1701,10 @@ mod tests {
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 &precompute.prices_eth_usdc,
+                precompute.base_fee,
+                0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
-                precompute.base_fee
             )
             .unwrap()
         )
@@ -1743,6 +1746,7 @@ mod tests {
                 &precompute,
                 fast_state.pair_state.clone(),
                 fast_sorted_spot_prices,
+                0u64, // TODO: non-zero base fee
             )
             .unwrap();
 
@@ -1794,9 +1798,10 @@ mod tests {
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
                 &precompute.prices_eth_usdc,
+                precompute.base_fee,
+                0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
-                precompute.base_fee
             )
             .unwrap()
         )
@@ -1842,6 +1847,7 @@ mod tests {
                 &precompute,
                 fast_state.pair_state.clone(),
                 fast_sorted_spot_prices,
+                0u64, // TODO: non-zero base fee
             )
             .expect("should find signal with single binary search step");
 
@@ -1882,6 +1888,7 @@ mod tests {
             &precompute,
             fast_state.pair_state.clone(),
             fast_sorted_spot_prices,
+            0u64, // TODO: non-zero base fee
         );
 
         assert!(result.is_err(), "expected error but got: {:#?}", result);
@@ -1937,6 +1944,7 @@ mod tests {
             &precompute,
             fast_state.pair_state.clone(),
             fast_sorted_spot_prices,
+            0u64, // TODO: non-zero base fee
         );
 
         assert!(result.is_err(), "expected error but got: {:?}", result);

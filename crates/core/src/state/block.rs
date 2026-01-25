@@ -9,6 +9,7 @@ use futures::{Stream, StreamExt as _};
 use num_bigint::BigUint;
 use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
+use tracing::error;
 use tycho_common::models::token::Token;
 
 use crate::state::{
@@ -58,7 +59,7 @@ pub struct BlockState {
     /// Pool states for ETH to USDC conversion, used for gas cost calculation.
     pub eth_usdc_state: Option<PairState>,
     /// Base fee per gas unit in wei, extracted from block header.
-    pub base_fee: Option<u64>,
+    pub base_fee: u64,
 }
 
 /// Async stream that yields `BlockState` updates for a specific trading pair.
@@ -141,7 +142,13 @@ impl Stream for BlockStateStream {
                     let token_a_balance = block.token_balances.get_balance(self.pair.token_a());
                     let token_b_balance = block.token_balances.get_balance(self.pair.token_b());
 
-                    let base_fee = block.header.base_fee_per_gas();
+                    let Some(base_fee) = block.header.base_fee_per_gas() else {
+                        error!(
+                            chain = %self.pair.chain_name(),
+                            "block header missing base fee, skipping this block"
+                        );
+                        return Poll::Pending;
+                    };
 
                     Poll::Ready(Some(BlockState {
                         pair_state,

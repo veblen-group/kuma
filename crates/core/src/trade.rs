@@ -129,7 +129,7 @@ impl Trade {
         let slow_receipt = match execute_tx(
             &self.slow_tx_req,
             &self.signal.slow_chain,
-            self.signal.expected_profit.base_fee,
+            self.signal.expected_profit.slow_base_fee, // TODO: this is wrong
             &self.signal.expected_profit.gas_cost_amounts.0,
         )
         .await
@@ -165,7 +165,7 @@ impl Trade {
         let fast_receipt = match execute_tx(
             self.fast_tx(),
             &self.signal.fast_chain,
-            self.signal.expected_profit.base_fee,
+            self.signal.expected_profit.fast_base_fee, // TODO: this is wrong
             &self.signal.expected_profit.gas_cost_amounts.1,
         )
         .await

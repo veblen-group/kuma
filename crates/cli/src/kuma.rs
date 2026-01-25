@@ -191,6 +191,7 @@ impl Kuma {
             &precompute,
             fast_state.pair_state,
             fast_sorted_spot_prices,
+            fast_state.base_fee,
         )?;
 
         info!(signal = ?signal, "📊 generated signal");

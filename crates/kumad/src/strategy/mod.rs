@@ -266,7 +266,7 @@ impl Worker {
                     if let Some(precompute) = precompute.as_ref() {
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
 
-                        match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b) {
+                        match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b, fast_state.base_fee) {
                             Ok(signal) => {
                                 info!(
                                     %signal,
