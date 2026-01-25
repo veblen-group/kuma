@@ -17,6 +17,7 @@ pub struct Builder {
 }
 
 impl Builder {
+    #[allow(clippy::type_complexity)]
     pub fn build(
         self,
     ) -> eyre::Result<(

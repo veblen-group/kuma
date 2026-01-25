@@ -31,7 +31,7 @@ pub struct IERC20Contract<P: Provider + Clone> {
 impl<P: Provider + Clone> IERC20Contract<P> {
     pub fn new(address: Address, provider: P) -> Self {
         Self {
-            contract: IERC20::new(address.clone(), provider),
+            contract: IERC20::new(address, provider),
             address,
         }
     }

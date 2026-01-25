@@ -25,6 +25,7 @@ pub struct Chain {
 }
 
 impl Chain {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: &str,
         rpc_url: &str,

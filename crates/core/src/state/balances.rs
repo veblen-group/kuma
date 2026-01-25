@@ -23,7 +23,7 @@ pub struct TokenBalances {
 
 impl TokenBalances {
     pub fn get_balance(&self, token: &Token) -> BigUint {
-        self.balances.get(&token).cloned().unwrap_or_default()
+        self.balances.get(token).cloned().unwrap_or_default()
     }
 
     pub async fn get_curr_balances(
