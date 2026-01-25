@@ -175,9 +175,8 @@ impl Worker {
                         "✅ Precomputed trade sizes for slow chain"
                     );
 
-                    let repo = self.db.spot_price_repository();
                     db_writes.push({
-
+                        let repo = self.db.spot_price_repository();
                         let pair_eth_usdc = self.strategy.slow_eth_usdc.clone();
                         let pair_a_b = self.strategy.slow_pair.clone();
                         let pair_a_usdc = self.strategy.slow_token_a_usdc.clone();
@@ -245,8 +244,8 @@ impl Worker {
                     let prices_a_b = SpotPrices::try_from_sorted_prices(&sorted_prices_a_b, fast_state.pair_state.block_height, self.strategy.fast_chain.clone(), self.strategy.fast_pair.clone())?;
 
 
-                    let repo = self.db.spot_price_repository();
                     db_writes.push({
+                        let repo = self.db.spot_price_repository();
                         let pair_a_b = self.strategy.fast_pair.clone();
 
                         async move {

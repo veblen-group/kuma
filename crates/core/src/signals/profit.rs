@@ -1,4 +1,4 @@
-use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _};
+use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _, eyre};
 use num_bigint::{BigInt, BigUint};
 use num_rational::BigRational;
 use serde::{Deserialize, Serialize};
@@ -142,13 +142,17 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    pub slow_base_fee: u64,
-    pub fast_base_fee: u64,
+    // TODO: docstring
     pub gas_cost_amounts: (BigUint, BigUint),
+    // TODO: docstring
     pub gas_cost_eth: (BigUint, BigUint),
+    // TODO: docstring
     pub total_gas_cost_eth: BigUint,
+    // TODO: docstring
     pub eth_usdc_price: f64,
+    // TODO: docstring
     pub gas_cost_usdc: (BigUint, BigUint),
+    // TODO: docstring
     pub total_gas_cost_usdc: BigUint,
 }
 
@@ -259,23 +263,30 @@ impl ExpectedProfit {
                 )
             })?;
 
-        Ok(ExpectedProfit {
-            surplus,
-            max_slippage_token_amounts,
-            min_token_amounts,
-            token_usdc_prices,
-            eth_usdc_price,
-            min_usdc_amounts,
-            min_total_amount_usdc,
-            pair,
-            slow_base_fee,
-            fast_base_fee,
-            gas_cost_amounts: (slow_sim.gas_cost.clone(), fast_sim.gas_cost.clone()),
-            gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
-            total_gas_cost_eth,
-            gas_cost_usdc: gas_cost_usdc_amounts,
-            total_gas_cost_usdc,
-        })
+        if total_gas_cost_usdc > min_total_amount_usdc {
+            Err(eyre!(
+                "total_gas_cost_usdc {} - min_total_amount_usdc {} = {} ",
+                total_gas_cost_usdc.clone(),
+                min_total_amount_usdc.clone(),
+                total_gas_cost_usdc - min_total_amount_usdc
+            ))
+        } else {
+            Ok(ExpectedProfit {
+                surplus,
+                max_slippage_token_amounts,
+                min_token_amounts,
+                token_usdc_prices,
+                eth_usdc_price,
+                min_usdc_amounts,
+                min_total_amount_usdc,
+                pair,
+                gas_cost_amounts: (slow_sim.gas_cost.clone(), fast_sim.gas_cost.clone()),
+                gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
+                total_gas_cost_eth,
+                gas_cost_usdc: gas_cost_usdc_amounts,
+                total_gas_cost_usdc,
+            })
+        }
     }
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively

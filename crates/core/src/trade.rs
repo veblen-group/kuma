@@ -1,5 +1,5 @@
 use alloy::rpc::types::TransactionReceipt;
-use color_eyre::eyre::{self, WrapErr as _, eyre};
+use color_eyre::eyre::{self, WrapErr as _};
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 use tracing::{error, instrument};
@@ -118,18 +118,10 @@ impl Trade {
     // Execute the trade by sending the transactions to their respective chains
     #[instrument(skip(self), fields(slow_chain = %self.signal.slow_chain.name, fast_chain = %self.signal.fast_chain.name))]
     pub async fn run(self, mut id_rx: oneshot::Receiver<i64>) -> eyre::Result<TradeResult> {
-        // TODO: this should be in the expected profit constructor
-        let expected_profit_usdc = &self.signal.expected_profit.min_total_amount_usdc;
-        let total_gas_cost_usdc = &self.signal.expected_profit.total_gas_cost_usdc;
-        if total_gas_cost_usdc > expected_profit_usdc {
-            return Err(eyre!(
-                "estimated transactions gas cost exceeds expected profit"
-            ));
-        }
         let slow_receipt = match execute_tx(
             &self.slow_tx_req,
             &self.signal.slow_chain,
-            self.signal.expected_profit.slow_base_fee, // TODO: this is wrong
+            self.signal.slow_base_fee,
             &self.signal.expected_profit.gas_cost_amounts.0,
         )
         .await
@@ -165,7 +157,7 @@ impl Trade {
         let fast_receipt = match execute_tx(
             self.fast_tx(),
             &self.signal.fast_chain,
-            self.signal.expected_profit.fast_base_fee, // TODO: this is wrong
+            self.signal.fast_base_fee,
             &self.signal.expected_profit.gas_cost_amounts.1,
         )
         .await

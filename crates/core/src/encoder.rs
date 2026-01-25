@@ -71,6 +71,7 @@ pub async fn get_tx_request(
     transaction: &UnsignedTransaction,
     chain: &Chain,
 ) -> eyre::Result<SignedTransaction> {
+    // TODO: long-lived provider isntead of creating it every time
     let wallet = EthereumWallet::new(chain.signer().clone());
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
@@ -93,15 +94,14 @@ pub async fn execute_tx(
     base_fee: u64,
     gas_cost: &BigUint,
 ) -> eyre::Result<TransactionReceipt> {
+    // TODO: long-lived provider isntead of creating it every time
     let wallet = EthereumWallet::new(chain.signer().clone());
-    // TODO: long-lived provider so it doesnt have to connect evvery time
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
         .connect_http(chain.rpc_url.parse().wrap_err("Invalid RPC URL")?);
 
     provider.anvil_set_logging(true).await.ok();
 
-    // TODO: this seems stupid
     let gas_limit = gas_cost
         .to_u64()
         .ok_or_eyre("failed converting gas cost to u64")?;
@@ -110,7 +110,7 @@ pub async fn execute_tx(
             transaction
                 .tx
                 .clone()
-                .gas_price(base_fee as u128 * 2)
+                .gas_price(base_fee as u128 * 2) // TODO: this seems stupid
                 .gas_limit(gas_limit * 2),
         )
         .await

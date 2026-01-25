@@ -76,6 +76,10 @@ pub struct CrossChainSingleHop {
     pub congestion_risk_discount_bps: u64,
     /// Calculated expected profit after applying slippage and congestion discounts.
     pub expected_profit: ExpectedProfit,
+    // TODO: docstring
+    pub slow_base_fee: u64,
+    // TODO: docstring
+    pub fast_base_fee: u64,
 }
 
 impl CrossChainSingleHop {
@@ -138,6 +142,8 @@ impl CrossChainSingleHop {
             max_slippage_bps,
             congestion_risk_discount_bps,
             slow_prices_eth_usdc: slow_prices_eth_usdc.clone(),
+            slow_base_fee,
+            fast_base_fee,
         })
     }
 
