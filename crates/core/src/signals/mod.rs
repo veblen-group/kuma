@@ -38,24 +38,48 @@ impl Display for Direction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
+    /// The chain with longer block times where the first leg of the arbitrage executes.
     pub slow_chain: Chain,
+    /// The token pair being traded on the slow chain (e.g., WETH/USDC).
     pub slow_pair: Pair,
+    /// Protocol component metadata for the slow chain pool, used for transaction encoding.
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// Unique identifier for the AMM pool on the slow chain.
     pub slow_pool_id: state::PoolId,
+    /// Simulated swap parameters for the slow chain leg (token_in, amount_in, token_out, amount_out).
     pub slow_swap_sim: Swap,
+    /// Block height on the slow chain when this signal was generated.
     pub slow_height: u64,
+    /// The chain with shorter block times where the second leg of the arbitrage executes.
     pub fast_chain: Chain,
+    /// The token pair being traded on the fast chain (mirrors slow_pair tokens).
     pub fast_pair: Pair,
+    /// Protocol component metadata for the fast chain pool, used for transaction encoding.
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// Unique identifier for the AMM pool on the fast chain.
     pub fast_pool_id: state::PoolId,
+    /// Simulated swap parameters for the fast chain leg (token_in, amount_in, token_out, amount_out).
     pub fast_swap_sim: Swap,
+    /// Block height on the fast chain when this signal was generated.
     pub fast_height: u64,
+    /// Spot prices between token A and token B on the slow chain, used for profit calculation.
     pub slow_prices_a_b: SpotPrices,
+    /// Spot prices for token A to USDC conversion, None if token A is USDC.
     pub slow_prices_a_usdc: Option<SpotPrices>,
+    /// Spot prices for token B to USDC conversion, None if token B is USDC.
     pub slow_prices_b_usdc: Option<SpotPrices>,
+    /// Spot prices for ETH to USDC conversion, used for gas cost calculation.
+    pub slow_prices_eth_usdc: Option<SpotPrices>,
+    /// Maximum acceptable slippage in basis points (1 bps = 0.01%).
     pub max_slippage_bps: u64,
+    /// Discount applied to expected profit to account for congestion/settlement risk, in basis points.
     pub congestion_risk_discount_bps: u64,
+    /// Calculated expected profit after applying slippage and congestion discounts.
     pub expected_profit: ExpectedProfit,
+    /// Base fee in wei for slow chain
+    pub slow_base_fee: u64,
+    /// Base fee in wei for fast chain
+    pub fast_base_fee: u64,
 }
 
 impl CrossChainSingleHop {
@@ -70,6 +94,8 @@ impl CrossChainSingleHop {
         slow_prices_a_b: &SpotPrices,
         slow_prices_a_usdc: &Option<SpotPrices>,
         slow_prices_b_usdc: &Option<SpotPrices>,
+        slow_prices_eth_usdc: &Option<SpotPrices>,
+        slow_base_fee: u64,
         fast_chain: &Chain,
         fast_pair: &Pair,
         fast_protocol_component: Arc<ProtocolComponent>,
@@ -78,6 +104,7 @@ impl CrossChainSingleHop {
         fast_swap_sim: Swap,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
+        fast_base_fee: u64,
     ) -> eyre::Result<Self> {
         if slow_swap_sim.amount_out < fast_swap_sim.amount_in {
             eyre::bail!("Slow chain output is less than fast chain input");
@@ -88,6 +115,9 @@ impl CrossChainSingleHop {
             &fast_swap_sim,
             slow_prices_a_usdc,
             slow_prices_b_usdc,
+            slow_prices_eth_usdc,
+            slow_base_fee,
+            fast_base_fee,
             max_slippage_bps,
             congestion_risk_discount_bps,
         )?;
@@ -111,6 +141,9 @@ impl CrossChainSingleHop {
             expected_profit,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            slow_prices_eth_usdc: slow_prices_eth_usdc.clone(),
+            slow_base_fee,
+            fast_base_fee,
         })
     }
 
@@ -133,6 +166,9 @@ impl CrossChainSingleHop {
                 .clone();
             create_solution(slow_component, slow_swap_sim, slow_chain.signer().clone())?
         };
+        let slow_unsigned_tx =
+            UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
+                .wrap_err("Failed to create unsigned transaction from slow solution")?;
 
         let fast_solution = {
             let fast_component = fast_protocol_component
@@ -143,14 +179,10 @@ impl CrossChainSingleHop {
             create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
         };
 
-        let slow_unsigned_tx =
-            UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
-                .wrap_err("Failed to create unsigned transaction from slow solution")?;
         let fast_unsigned_tx =
             UnsignedTransaction::try_from_solution(&fast_solution, fast_chain)
                 .wrap_err("Failed to create unsigned transaction from fast solution")?;
 
-        // add gas prices and sign transactions
         Ok(Trade::new(self.clone(), slow_unsigned_tx, fast_unsigned_tx))
     }
 }

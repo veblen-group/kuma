@@ -14,8 +14,9 @@ use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest
 use alloy::signers::Signature;
 use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
-use color_eyre::eyre::{self, Context as _, ContextCompat};
+use color_eyre::eyre::{self, Context as _, ContextCompat, OptionExt};
 use num_bigint::BigUint;
+use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 use tycho_common::Bytes;
@@ -38,6 +39,7 @@ pub struct SignedTransaction {
     tx: EthereumTxEnvelope<alloy::consensus::TxEip4844Variant>,
 }
 
+#[derive(Debug, Clone)]
 pub struct UnsignedTransaction {
     tx: TransactionRequest,
 }
@@ -69,6 +71,7 @@ pub async fn get_tx_request(
     transaction: &UnsignedTransaction,
     chain: &Chain,
 ) -> eyre::Result<SignedTransaction> {
+    // TODO: long-lived provider isntead of creating it every time
     let wallet = EthereumWallet::new(chain.signer().clone());
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
@@ -88,7 +91,10 @@ pub async fn get_tx_request(
 pub async fn execute_tx(
     transaction: &UnsignedTransaction,
     chain: &Chain,
+    base_fee: u64,
+    gas_cost: &BigUint,
 ) -> eyre::Result<TransactionReceipt> {
+    // TODO: long-lived provider isntead of creating it every time
     let wallet = EthereumWallet::new(chain.signer().clone());
     let provider = alloy::providers::ProviderBuilder::new()
         .wallet(wallet)
@@ -96,8 +102,17 @@ pub async fn execute_tx(
 
     provider.anvil_set_logging(true).await.ok();
 
+    let gas_limit = gas_cost
+        .to_u64()
+        .ok_or_eyre("failed converting gas cost to u64")?;
     let pending_tx = provider
-        .send_transaction(transaction.tx.clone())
+        .send_transaction(
+            transaction
+                .tx
+                .clone()
+                .gas_price(base_fee as u128 * 2) // TODO: this seems stupid
+                .gas_limit(gas_limit * 2),
+        )
         .await
         .wrap_err("failed sending transaction")?;
 

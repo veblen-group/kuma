@@ -1,4 +1,4 @@
-use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _};
+use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _, eyre};
 use num_bigint::{BigInt, BigUint};
 use num_rational::BigRational;
 use serde::{Deserialize, Serialize};
@@ -21,11 +21,11 @@ pub struct RealizedProfit {
     pub fast_swap: state::Swap,
     /// Token A -> USDC and Token B -> USDC prices used to calculate realized profit
     pub token_usdc_prices: (f64, f64),
-    /// TODO: docstring
+    /// ETH to USDC price used for converting gas costs to USDC
     pub gas_price_usdc: f64,
-    /// TODO: docstring
+    /// Total gas consumed by both transactions in wei (slow + fast chain)
     pub gas_amount_eth: BigUint,
-    /// TODO: docstring
+    /// Total gas cost converted to USDC using the ETH-USDC price
     pub gas_amount_usdc: BigUint,
     /// Surplus amounts in token A and token B respectively
     pub surplus: (BigUint, BigUint),
@@ -36,7 +36,6 @@ pub struct RealizedProfit {
 }
 
 impl RealizedProfit {
-    // TODO: update docstring
     /// Calculate realized profit from slow and fast chain swaps and spot prices.
     ///
     /// Calculates the realized profit by:
@@ -130,6 +129,7 @@ impl RealizedProfit {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ExpectedProfit {
+    pub pair: Pair,
     /// Raw surplus in token amounts (a, b respectively) from swaps, before slippage and congestion
     pub surplus: (BigUint, BigUint),
     /// Max amount of tokens paid in slippage
@@ -142,31 +142,45 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    pub pair: Pair,
+    /// Gas cost in ETH for slow and fast swap respectively
+    pub gas_cost_eth: (BigUint, BigUint),
+    /// Total gas cost in ETH for slow and fast swap combined
+    pub total_gas_cost_eth: BigUint,
+    /// (W)ETH -> USDC price
+    pub eth_usdc_price: f64,
+    /// Gas cost in USDC for slow and fast swap respectively
+    pub gas_cost_usdc: (BigUint, BigUint),
+    /// Total gas cost in USDC for slow and fast swap combined
+    pub total_gas_cost_usdc: BigUint,
 }
 
 impl ExpectedProfit {
     /// Calculate expected profit from slow and fast chain swap simulations.
     ///
     /// The profit calculation pipeline:
-    /// 1. Extracts token amounts from both swap simulations based on the token pair
-    /// 2. Calculates raw surplus (difference between outputs and inputs for each token)
-    /// 3. Applies maximum slippage discount based on fast simulation outputs
-    /// 4. Applies congestion risk discount to the surplus after slippage
-    /// 5. Determines pessimistic USDC prices (minimum for token_a, maximum for token_b)
-    /// 6. Converts final token amounts to USDC values using the pessimistic prices
+    /// 1. Calculates raw surplus (difference between outputs and inputs for each token)
+    /// 2. Calculates maximum slippage amounts as a percentage of the outputs
+    /// 3. Applies congestion risk discount to the surplus after accounting for slippage
+    /// 4. Converts minimum token amounts to USDC
+    /// 5. Calculates total USDC amount after slippage and congestion risk
+    /// 6. Calculates gas costs in gas units, ETH, and USDC for both chains
     ///
     /// Returns a structured ExpectedProfit containing:
     /// - Raw surplus in token amounts before any discounts
     /// - Maximum slippage that could be lost per token
     /// - Minimum guaranteed token amounts after slippage and congestion discount
+    /// - Gas costs in ETH and USDC for both chains
     /// - USDC prices used for conversion
     /// - Final minimum USDC amounts achievable for the arbitrage
+    #[allow(clippy::too_many_arguments)]
     pub fn try_from_swaps(
         slow_sim: &strategy::Swap,
         fast_sim: &strategy::Swap,
         prices_a_usdc: &Option<SpotPrices>,
         prices_b_usdc: &Option<SpotPrices>,
+        prices_eth_usdc: &Option<SpotPrices>,
+        slow_base_fee: u64,
+        fast_base_fee: u64,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
     ) -> eyre::Result<Self> {
@@ -177,19 +191,19 @@ impl ExpectedProfit {
         // Step 1: Calculate raw surplus (output - input for each token)
         let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
 
-        // Step 2: Calculate maximum slippage amounts as a percentage of the fast chain outputs
+        // Step 2: Calculate maximum slippage amounts as a percentage of the outputs
         let max_slippage_token_amounts =
             Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
 
         // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
-        // This represents the minimum guaranteed amount if congestion occurs on-chain
+        // This represents the minimum guaranteed amount after discounting for congestion
         let min_token_amounts = Self::apply_congestion_discount(
             &surplus,
             &max_slippage_token_amounts,
             congestion_risk_discount_bps,
         )?;
 
-        // Step 4: Determine pessimistic USDC prices for each token andonvert minimum token amounts to USDC
+        // Step 4: Convert minimum token amounts to USDC
         let (min_usdc_amounts, token_usdc_prices) = {
             let (a_usdc, price_a_usdc) =
                 try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
@@ -209,15 +223,69 @@ impl ExpectedProfit {
                 )
             })?;
 
-        Ok(ExpectedProfit {
-            surplus,
-            max_slippage_token_amounts,
-            min_token_amounts,
-            token_usdc_prices,
-            min_usdc_amounts,
-            min_total_amount_usdc,
-            pair,
-        })
+        // Step 6: Calculate gas costs in ETH
+        let slow_gas_cost_eth = slow_sim
+            .gas_cost
+            .checked_mul(&BigUint::from(slow_base_fee))
+            .ok_or_eyre("failed calculating gas_cost")?;
+
+        let fast_gas_cost_eth = fast_sim
+            .gas_cost
+            .checked_mul(&BigUint::from(fast_base_fee))
+            .ok_or_eyre("failed calculating gas_cost")?;
+
+        let total_gas_cost_eth = slow_gas_cost_eth
+            .checked_add(&fast_gas_cost_eth)
+            .wrap_err_with(|| {
+                format!(
+                    "total_gas_cost_eth failed: slow_gas_cost_eth {} + fast_gas_cost_eth {}",
+                    slow_gas_cost_eth, fast_gas_cost_eth
+                )
+            })?;
+
+        // Step 7: Calculate gas costs in USDC using the ETH -> USDC price
+        let (gas_cost_usdc_amounts, eth_usdc_price) = {
+            let (slow_gas_cost, price_eth_usdc) =
+                try_mul_amount_usdc_price(&slow_gas_cost_eth, prices_eth_usdc)?;
+            let (fast_gas_cost, _) =
+                try_mul_amount_usdc_price(&fast_gas_cost_eth, prices_eth_usdc)?;
+            ((slow_gas_cost, fast_gas_cost), (price_eth_usdc))
+        };
+
+        let total_gas_cost_usdc = gas_cost_usdc_amounts
+            .0
+            .checked_add(&gas_cost_usdc_amounts.1)
+            .wrap_err_with(|| {
+                format!(
+                    "total_gas_cost_usdc failed: gas_cost_usdc_amounts {} + {}",
+                    gas_cost_usdc_amounts.0, gas_cost_usdc_amounts.1
+                )
+            })?;
+
+        // Step 8: Assert total gas cost < total profit
+        if total_gas_cost_usdc > min_total_amount_usdc {
+            Err(eyre!(
+                "total_gas_cost_usdc {} - min_total_amount_usdc {} = {} ",
+                total_gas_cost_usdc.clone(),
+                min_total_amount_usdc.clone(),
+                total_gas_cost_usdc - min_total_amount_usdc
+            ))
+        } else {
+            Ok(ExpectedProfit {
+                surplus,
+                max_slippage_token_amounts,
+                min_token_amounts,
+                token_usdc_prices,
+                eth_usdc_price,
+                min_usdc_amounts,
+                min_total_amount_usdc,
+                pair,
+                gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
+                total_gas_cost_eth,
+                gas_cost_usdc: gas_cost_usdc_amounts,
+                total_gas_cost_usdc,
+            })
+        }
     }
 
     /// Return two tuples of (amount_in, amount_out) for token A, B respectively
@@ -246,6 +314,11 @@ impl ExpectedProfit {
         }
     }
 
+    /// Calculate the maximum token amounts that could be lost to slippage.
+    ///
+    /// Computes the difference between the expected output amounts and the minimum
+    /// amounts after applying the maximum slippage tolerance. This represents the
+    /// worst-case slippage for each token in the arbitrage.
     fn try_max_slippage_amounts(
         out_a: &BigUint,
         out_b: &BigUint,
@@ -256,19 +329,27 @@ impl ExpectedProfit {
 
         let amount_a = out_a.checked_sub(&min_out_a).wrap_err_with(|| {
             format!(
-                "min_out_a {} cannot be less than out_a {}",
-                min_out_a, out_a
+                "out_a {} cannot be less than min_out_a {}",
+                out_a, min_out_a
             )
         })?;
         let amount_b = out_b.checked_sub(&min_out_b).wrap_err_with(|| {
             format!(
-                "min_out_b {} cannot be less than out_b {}",
-                min_out_b, out_b
+                "out_b {} cannot be less than min_out_b {}",
+                out_b, min_out_b
             )
         })?;
         Ok((amount_a, amount_b))
     }
 
+    /// Apply congestion risk discount to the surplus after accounting for slippage.
+    ///
+    /// Calculates the minimum guaranteed profit by:
+    /// 1. Subtracting maximum slippage amounts from the raw surplus
+    /// 2. Applying the congestion risk discount factor to the result
+    ///
+    /// This accounts for the risk that transactions may execute at worse prices
+    /// due to competition for the same liquidity pools on-chain.
     fn apply_congestion_discount(
         surplus: &(BigUint, BigUint),
         max_slippage_token_amounts: &(BigUint, BigUint),
@@ -322,18 +403,76 @@ impl Display for ExpectedProfit {
     }
 }
 
+/// Apply a basis points discount to an amount.
+///
+/// Calculates `amount * (10000 - slippage_bps) / 10000`, effectively reducing
+/// the amount by the given percentage. For example, 50 bps (0.5%) discount on
+/// 1000 returns 995.
 pub fn bps_discount(amount: &BigUint, slippage_bps: u64) -> BigUint {
     let slippage_multiplier = BigUint::from(10000u64 - slippage_bps);
     (amount * slippage_multiplier) / BigUint::from(10000u64)
 }
 
-/// Multiply a token amount by its USDC price, accounting for token decimals.
+/// Calculate the raw surplus from input/output amounts for both tokens.
 ///
-/// Token amounts are stored as integers scaled by their decimals.
-/// For example: 1 token with 18 decimals = 10^18 units, 1 USDC (6 decimals) = 10^6 units
+/// Computes `(out_a - in_a, out_b - in_b)` representing the net gain in each
+/// token from the cross-chain arbitrage. Both values should be positive for
+/// a profitable trade.
+fn try_surplus(
+    (in_a, out_a): (&BigUint, &BigUint),
+    (in_b, out_b): (&BigUint, &BigUint),
+    pair: &Pair,
+) -> eyre::Result<(BigUint, BigUint)> {
+    // out_a - in_a
+    let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
+        format!(
+            "out_a {} cannot be less than in_a {} for token {}",
+            out_a,
+            in_a,
+            pair.token_a().symbol,
+        )
+    })?;
+
+    // out_b - in_b
+    let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
+        format!(
+            "out_b {} cannot be less than in_b {} for token {}",
+            out_b,
+            in_b,
+            pair.token_b().symbol,
+        )
+    })?;
+    Ok((amount_a, amount_b))
+}
+
+/// Convert a token amount to USDC using spot prices.
 ///
-/// This function normalizes the amount for the decimal difference between tokens,
-/// then multiplies by the price to get USDC value.
+/// If prices are provided, multiplies the amount by the minimum (pessimistic) price
+/// and adjusts for decimal differences between the tokens. If prices are None
+/// (indicating the token is already USDC), returns the amount unchanged.
+///
+/// Returns a tuple of (usdc_amount, price_used).
+pub fn try_mul_amount_usdc_price(
+    amount: &BigUint,
+    prices: &Option<SpotPrices>,
+) -> eyre::Result<(BigUint, f64)> {
+    // If direct USDC pricing is available use it; otherwise this is USDC
+    match prices {
+        Some(prices) => {
+            let price = prices.min_price;
+            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
+
+            Ok((amount_usdc, price))
+        }
+        None => Ok((amount.clone(), 1.0f64)),
+    }
+}
+
+/// Multiply a token amount by a price, adjusting for decimal differences.
+///
+/// Handles the conversion between tokens with different decimal precisions.
+/// For example, when converting from an 18-decimal token to 6-decimal USDC,
+/// divides by 10^12 to normalize the result.
 fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Result<BigUint> {
     let price =
         BigRational::from_f64(price).ok_or_eyre("failed to convert price to BigRational")?;
@@ -370,47 +509,4 @@ fn try_mul_biguint_f64(amount: &BigUint, price: f64, pair: &Pair) -> eyre::Resul
         .ok_or_eyre("failed to convert USDC amount to BigUint")?;
 
     Ok(amount_usdc)
-}
-
-fn try_surplus(
-    (in_a, out_a): (&BigUint, &BigUint),
-    (in_b, out_b): (&BigUint, &BigUint),
-    pair: &Pair,
-) -> eyre::Result<(BigUint, BigUint)> {
-    // out_a - in_a
-    let amount_a = out_a.checked_sub(in_a).wrap_err_with(|| {
-        format!(
-            "min_out_a {} cannot be less than in_a {} for token {}",
-            out_a,
-            in_a,
-            pair.token_a().symbol,
-        )
-    })?;
-
-    // out_b - in_b
-    let amount_b = out_b.checked_sub(in_b).wrap_err_with(|| {
-        format!(
-            "min_out_b {} cannot be less than in_b {} for token {}",
-            out_b,
-            in_b,
-            pair.token_b().symbol,
-        )
-    })?;
-    Ok((amount_a, amount_b))
-}
-
-fn try_mul_amount_usdc_price(
-    amount: &BigUint,
-    prices: &Option<SpotPrices>,
-) -> eyre::Result<(BigUint, f64)> {
-    // If direct USDC pricing is available use it; otherwise this is USDC
-    match prices {
-        Some(prices) => {
-            let price = prices.min_price;
-            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
-
-            Ok((amount_usdc, price))
-        }
-        None => Ok((amount.clone(), 1.0f64)),
-    }
 }

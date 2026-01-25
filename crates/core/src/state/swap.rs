@@ -9,18 +9,33 @@ use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
 
+/// Realized swap data extracted from an executed transaction receipt.
+///
+/// Unlike `strategy::Swap` which contains simulated/expected values, this struct
+/// contains the actual amounts transferred on-chain, parsed from ERC20 Transfer
+/// events in the transaction logs. Used for calculating realized profit.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Swap {
+    /// The token that was sold in the swap.
     pub token_in: Token,
+    /// Actual amount of token_in transferred (from Transfer events).
     pub amount_in: BigUint,
+    /// The token that was received in the swap.
     pub token_out: Token,
+    /// Actual amount of token_out received (from Transfer events).
     pub amount_out: BigUint,
+    /// Gas cost in wei (gas_used * effective_gas_price from receipt).
     pub gas_cost_eth: BigUint,
 }
 
 impl Swap {
+    /// Parse actual swap amounts from a transaction receipt.
+    ///
+    /// Iterates through the transaction logs to find ERC20 Transfer events for
+    /// the input and output tokens, summing the transferred amounts. Also extracts
+    /// the actual gas cost from the receipt.
     pub fn try_from_receipts(
-        receipt: &TransactionReceipt, // should be trade log
+        receipt: &TransactionReceipt,
         swap: strategy::Swap,
     ) -> eyre::Result<Self> {
         let mut amount_in = BigUint::default();

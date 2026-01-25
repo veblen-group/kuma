@@ -53,9 +53,14 @@ impl Handle {
         self.block_rx.clone()
     }
 
-    pub fn get_block_state_stream(&self, pair: Pair, usdc: Token) -> BlockStateStream {
+    pub fn get_block_state_stream(
+        &self,
+        pair: Pair,
+        usdc: Token,
+        eth: Option<Token>,
+    ) -> BlockStateStream {
         let block_rx = self.block_rx.clone();
-        BlockStateStream::from_block_rx(pair, block_rx, usdc)
+        BlockStateStream::from_block_rx(pair, block_rx, usdc, eth)
     }
 }
 
