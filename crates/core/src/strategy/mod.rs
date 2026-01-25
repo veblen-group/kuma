@@ -66,21 +66,37 @@ pub struct Precomputes {
 pub struct CrossChainSingleHop {
     /// The token pair being traded on the slow chain.
     pub slow_pair: Pair,
+    // TODO: docstring
     pub slow_usdc: Token,
+    // TODO: docstring
     pub slow_eth: Token,
+    // TODO: docstring
     pub slow_eth_usdc: Option<Pair>,
+    // TODO: docstring
     pub slow_token_a_usdc: Option<Pair>,
+    // TODO: docstring
     pub slow_token_b_usdc: Option<Pair>,
+    // TODO: docstring
     pub slow_chain: Chain,
+    // TODO: docstring
     pub fast_pair: Pair,
+    // TODO: docstring
     pub fast_token_a_usdc: Option<Pair>,
+    // TODO: docstring
     pub fast_token_b_usdc: Option<Pair>,
+    // TODO: docstring
     pub fast_usdc: Token,
+    // TODO: docstring
     pub fast_chain: Chain,
+    // TODO: docstring
     pub slow_inventory: (BigUint, BigUint),
+    // TODO: docstring
     pub fast_inventory: (BigUint, BigUint),
+    // TODO: docstring
     pub binary_search_steps: usize,
+    // TODO: docstring
     pub max_slippage_bps: u64,
+    // TODO: docstring
     pub congestion_risk_discount_bps: u64,
 }
 
@@ -1089,7 +1105,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: 0u64,
+            base_fee: 0u64, // TODO: non-zero base fee
         }
     }
 
@@ -1161,7 +1177,7 @@ mod tests {
             token_b_usdc_state,
             token_b_balance: BigUint::from(0u64),
             eth_usdc_state,
-            base_fee: 0u64,
+            base_fee: 0u64, // TODO: non-zero base fee
         }
     }
 
