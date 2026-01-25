@@ -49,6 +49,10 @@ impl Pair {
             (self.token_a(), self.token_b())
         }
     }
+
+    pub fn chain_name(&self) -> tycho_common::models::Chain {
+        self.0.chain
+    }
 }
 
 impl Display for Pair {

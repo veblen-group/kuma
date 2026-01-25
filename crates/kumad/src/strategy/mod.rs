@@ -124,8 +124,10 @@ impl Worker {
         // only submit late into the slow block
         let submission_delay = self.slow_block_time.mul_f64(0.75);
         let mut submission_deadline = None;
+
         let mut precompute: Option<Precomputes> = None;
         let mut curr_signal: Option<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)> = None;
+
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
         > = FuturesUnordered::new();
@@ -173,12 +175,14 @@ impl Worker {
                         "✅ Precomputed trade sizes for slow chain"
                     );
 
-                    let repo = self.db.spot_price_repository();
                     db_writes.push({
+                        let repo = self.db.spot_price_repository();
+                        let pair_eth_usdc = self.strategy.slow_eth_usdc.clone();
                         let pair_a_b = self.strategy.slow_pair.clone();
                         let pair_a_usdc = self.strategy.slow_token_a_usdc.clone();
                         let pair_b_usdc = self.strategy.slow_token_b_usdc.clone();
 
+                        let prices_eth_usdc = new_precompute.prices_eth_usdc.clone();
                         let prices_a_b = new_precompute.prices_a_b.clone();
                         let prices_a_usdc = new_precompute.prices_a_usdc.clone();
                         let prices_b_usdc = new_precompute.prices_b_usdc.clone();
@@ -214,6 +218,17 @@ impl Worker {
                                 );
                                 repo.insert(prices_b_usdc).await.wrap_err_with(|| eyre!("failed to write spot prices to db for {}", pair_b_usdc))?;
                             }
+
+                            if let (Some(pair_eth_usdc), Some(prices_eth_usdc)) = (pair_eth_usdc, prices_eth_usdc) {
+                                info!(
+                                    chain = %self.strategy.slow_chain.name,
+                                    block_height = %new_precompute.block_height,
+                                    pair = %pair_eth_usdc,
+                                    prices = %prices_eth_usdc,
+                                    "📈 Saving ETH-USDC spot prices to database"
+                                );
+                                repo.insert(prices_eth_usdc).await.wrap_err_with(|| eyre!("failed to write ETH-USDC spot prices to db for {}", pair_eth_usdc))?;
+                            }
                             Ok(())
                         }
                     }.boxed());
@@ -229,8 +244,8 @@ impl Worker {
                     let prices_a_b = SpotPrices::try_from_sorted_prices(&sorted_prices_a_b, fast_state.pair_state.block_height, self.strategy.fast_chain.clone(), self.strategy.fast_pair.clone())?;
 
 
-                    let repo = self.db.spot_price_repository();
                     db_writes.push({
+                        let repo = self.db.spot_price_repository();
                         let pair_a_b = self.strategy.fast_pair.clone();
 
                         async move {
@@ -249,7 +264,8 @@ impl Worker {
                     // try to generate signal if precompute is available
                     if let Some(precompute) = precompute.as_ref() {
                         let (slow_height, fast_height) = (precompute.block_height, fast_state.pair_state.block_height);
-                        match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b) {
+
+                        match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b, fast_state.base_fee) {
                             Ok(signal) => {
                                 info!(
                                     %signal,
