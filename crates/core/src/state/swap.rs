@@ -4,7 +4,7 @@ use crate::{
 };
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
-use num_bigint::{BigUint};
+use num_bigint::BigUint;
 use num_traits::CheckedAdd as _;
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
@@ -52,9 +52,9 @@ impl Swap {
 
         Ok(Swap {
             token_in: swap.token_in,
-            amount_in: amount_in,
+            amount_in,
             token_out: swap.token_out,
-            amount_out: amount_out,
+            amount_out,
             gas_cost_eth,
         })
     }

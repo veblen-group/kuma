@@ -84,9 +84,9 @@ impl Worker {
         // Create a stream of signal receivers that maintain connections
         let broadcasts = self
             .signal_rxs
-            .into_iter()
             // Map the HashMap values (the receivers) into streams
-            .map(|(_, rx)| ReceiverStream::new(rx))
+            .into_values()
+            .map(ReceiverStream::new)
             .collect::<FuturesUnordered<_>>();
         let mut signal_stream = select_all(broadcasts);
 

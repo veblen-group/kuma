@@ -249,60 +249,54 @@ impl CrossChainSingleHop {
         {
             match direction {
                 Direction::AtoB => {
-                    if let Some(signal) = self.find_optimal_signal(
-                        &precompute.pool_sims[&slow_id].a_to_b,
-                        precompute.pool_metadata[&slow_id].clone(),
-                        &slow_id,
-                        precompute.block_height,
-                        &precompute.prices_a_b,
-                        &precompute.prices_a_usdc,
-                        &precompute.prices_b_usdc,
-                        fast_state.states[&fast_id].as_ref(),
-                        fast_state.metadata[&fast_id].clone(),
-                        &fast_id,
-                        fast_state.block_height,
-                        &self.fast_inventory.1,
-                    ) {
-                        trace!(
-                            slow_sim = %signal.slow_swap_sim,
-                            fast_sim = %signal.fast_swap_sim,
-                            signal.expected_profit = %signal.expected_profit,
-                            "found optimal swap for A->B (slow) and B->A (fast)"
-                        );
-                        Ok(signal)
-                    } else {
-                        Err(eyre!(
-                            "no optimal signal found for A->B (slow) and B->A (fast)"
-                        ))
-                    }
+                    let signal = self
+                        .find_optimal_signal(
+                            &precompute.pool_sims[&slow_id].a_to_b,
+                            precompute.pool_metadata[&slow_id].clone(),
+                            &slow_id,
+                            precompute.block_height,
+                            &precompute.prices_a_b,
+                            &precompute.prices_a_usdc,
+                            &precompute.prices_b_usdc,
+                            fast_state.states[&fast_id].as_ref(),
+                            fast_state.metadata[&fast_id].clone(),
+                            &fast_id,
+                            fast_state.block_height,
+                            &self.fast_inventory.1,
+                        )
+                        .wrap_err("no optimal signal for A->B (slow) and B->A (fast)")?;
+                    trace!(
+                        slow_sim = %signal.slow_swap_sim,
+                        fast_sim = %signal.fast_swap_sim,
+                        signal.expected_profit = %signal.expected_profit,
+                        "found optimal swap for A->B (slow) and B->A (fast)"
+                    );
+                    Ok(signal)
                 }
                 Direction::BtoA => {
-                    if let Some(signal) = self.find_optimal_signal(
-                        &precompute.pool_sims[&slow_id].b_to_a,
-                        precompute.pool_metadata[&slow_id].clone(),
-                        &slow_id,
-                        precompute.block_height,
-                        &precompute.prices_a_b,
-                        &precompute.prices_a_usdc,
-                        &precompute.prices_b_usdc,
-                        fast_state.states[&fast_id].as_ref(),
-                        fast_state.metadata[&fast_id].clone(),
-                        &fast_id,
-                        fast_state.block_height,
-                        &self.fast_inventory.0,
-                    ) {
-                        trace!(
-                            slow_sim = %signal.slow_swap_sim,
-                            fast_sim = %signal.fast_swap_sim,
-                            signal.expected_profit = %signal.expected_profit,
-                            "found optimal swap for B->A (slow) and A->B (fast)"
-                        );
-                        Ok(signal)
-                    } else {
-                        Err(eyre!(
-                            "no optimal signal found for B->A (slow) and A->B (fast)"
-                        ))
-                    }
+                    let signal = self
+                        .find_optimal_signal(
+                            &precompute.pool_sims[&slow_id].b_to_a,
+                            precompute.pool_metadata[&slow_id].clone(),
+                            &slow_id,
+                            precompute.block_height,
+                            &precompute.prices_a_b,
+                            &precompute.prices_a_usdc,
+                            &precompute.prices_b_usdc,
+                            fast_state.states[&fast_id].as_ref(),
+                            fast_state.metadata[&fast_id].clone(),
+                            &fast_id,
+                            fast_state.block_height,
+                            &self.fast_inventory.0,
+                        )
+                        .wrap_err("no optimal signal for B->A (slow) and A->B (fast)")?;
+                    trace!(
+                        slow_sim = %signal.slow_swap_sim,
+                        fast_sim = %signal.fast_swap_sim,
+                        signal.expected_profit = %signal.expected_profit,
+                        "found optimal swap for B->A (slow) and A->B (fast)"
+                    );
+                    Ok(signal)
                 }
             }
         } else {
@@ -315,19 +309,16 @@ impl CrossChainSingleHop {
     /// Finds the optimal swap for a given direction.
     ///
     /// Uses a binary search over the slow chain simulations created in the precompute step.
-    /// This assumes simulations behave "unimodally", i.e. they have a single peak, in terms of
-    /// amount_in -> amount_out.
+    /// This assumes the profit function behaves "unimodally", i.e. has a single peak, in terms of
+    /// amount_in -> profit.
     ///
-    /// At each step, the search compares the middle element, `mid`, to the one immediately after it,
-    /// `next`.
-    /// If `mid` < `next`, the search continues in the right half of the array.
-    /// If `mid` > `next`, the search continues in the left half of the array.
+    /// At each step, the search compares the profit at `mid` to `mid + 1`.
+    /// If `mid` < `mid + 1`, the search continues in the right half of the array.
+    /// If `mid` >= `mid + 1`, the search continues in the left half of the array.
     ///
     /// Each step uses a precomputed slow chain `Swap` and the fast chain's `ProtocolSim` to create
-    /// the fast chain's `Swap`, and the a candidate `signals::CrossChainSingleHop`. The signals'
+    /// the fast chain's `Swap`, and a candidate `signals::CrossChainSingleHop`. The signals'
     /// expected profits are compared to find the optimal signal.
-    ///
-    /// TODO: add slow_inventory to logs?
     #[allow(clippy::too_many_arguments)]
     fn find_optimal_signal(
         &self,
@@ -344,102 +335,112 @@ impl CrossChainSingleHop {
         fast_pool_id: &PoolId,
         fast_height: u64,
         fast_inventory: &BigUint,
-    ) -> Option<signals::CrossChainSingleHop> {
+    ) -> eyre::Result<signals::CrossChainSingleHop> {
+        // Binary search to find the optimal signal. The search assumes the profit function is
+        // unimodal (has a single peak) over the slow_sims array. At each step, we compare the
+        // profit at `mid` vs `mid + 1`:
+        // - If mid < mid+1, the peak is to the right, so we search right (left = mid + 1)
+        // - If mid >= mid+1, the peak is at mid or to the left, so we search left (right = mid)
+        // We track the best signal seen during the search to avoid recomputing at the end.
         let (mut left, mut right) = (0, slow_sims.len() - 1);
 
-        let mut best_signal: Option<signals::CrossChainSingleHop> = None;
+        // Handle single-element case where the loop won't run (left == right)
+        if left == right {
+            let signal = self
+                .try_signal_from_precompute(
+                    slow_sims[left].clone(),
+                    slow_protocol_component,
+                    slow_pool_id,
+                    slow_height,
+                    slow_prices_a_b,
+                    slow_prices_a_usdc,
+                    slow_prices_b_usdc,
+                    fast_state,
+                    fast_protocol_component,
+                    fast_pool_id,
+                    fast_height,
+                    fast_inventory,
+                )
+                .wrap_err("failed to create signal from single precompute")?;
+            return Ok(signal);
+        }
 
+        let mut best_signal = None;
+
+        // Each iteration compares profit at mid vs mid+1 and narrows the search range.
+        // The winning signal is saved to best_signal.
+        // Failed signals are treated as having zero profit, so valid signals are preferred.
         while left < right {
-            let mid = (right + left) / 2;
+            let mid = left + (right - left) / 2;
+            let mid_signal = self
+                .try_signal_from_precompute(
+                    slow_sims[mid].clone(),
+                    slow_protocol_component.clone(),
+                    slow_pool_id,
+                    slow_height,
+                    slow_prices_a_b,
+                    slow_prices_a_usdc,
+                    slow_prices_b_usdc,
+                    fast_state,
+                    fast_protocol_component.clone(),
+                    fast_pool_id,
+                    fast_height,
+                    fast_inventory,
+                )
+                .inspect_err(|err| {
+                    trace!(index = mid, %err, "failed to create mid signal");
+                })
+                .ok();
+            let mid_profit = mid_signal
+                .as_ref()
+                .map(|s| &s.expected_profit.min_total_amount_usdc);
 
-            // make sims for mid
-            let mid_signal = match self.try_signal_from_precompute(
-                slow_sims[mid].clone(),
-                slow_protocol_component.clone(),
-                slow_pool_id,
-                slow_height,
-                slow_prices_a_b,
-                slow_prices_a_usdc,
-                slow_prices_b_usdc,
-                fast_state,
-                fast_protocol_component.clone(),
-                fast_pool_id,
-                fast_height,
-                fast_inventory,
-            ) {
-                Ok(signal) => signal,
-                Err(err) => {
-                    trace!(index = mid, err = %err, "failed to make mid signal, searching over smaller values");
-                    right = mid - 1;
-                    continue;
-                }
-            };
+            let next = mid + 1;
+            let next_signal = self
+                .try_signal_from_precompute(
+                    slow_sims[next].clone(),
+                    slow_protocol_component.clone(),
+                    slow_pool_id,
+                    slow_height,
+                    slow_prices_a_b,
+                    slow_prices_a_usdc,
+                    slow_prices_b_usdc,
+                    fast_state,
+                    fast_protocol_component.clone(),
+                    fast_pool_id,
+                    fast_height,
+                    fast_inventory,
+                )
+                .inspect_err(|err| {
+                    trace!(index = next, %err, "failed to create next signal");
+                })
+                .ok();
+            let next_profit = next_signal
+                .as_ref()
+                .map(|s| &s.expected_profit.min_total_amount_usdc);
 
-            trace!(
-                index = mid,
-                expected_profit = %mid_signal.expected_profit,
-                "Generated mid candidate signal"
-            );
-
-            // make sims for mid+1
-            let next_signal = match self.try_signal_from_precompute(
-                slow_sims[mid + 1].clone(),
-                slow_protocol_component.clone(),
-                slow_pool_id,
-                slow_height,
-                slow_prices_a_b,
-                slow_prices_a_usdc,
-                slow_prices_b_usdc,
-                fast_state,
-                fast_protocol_component.clone(),
-                fast_pool_id,
-                fast_height,
-                fast_inventory,
-            ) {
-                Ok(signal) => signal,
-                Err(err) => {
-                    trace!(index = mid+1, err = %err, "failed to make mid+1 signal, searching over smaller values");
-                    right = mid;
-                    continue;
-                }
-            };
-            trace!(
-                index = mid+1,
-                expected_profit = %next_signal.expected_profit,
-                "Generated mid+1 candidate signal"
-            );
-
-            // compare the expected profits
-            let mid_profit_usdc = match mid_signal.expected_profit.total_profit_usdc() {
-                Ok(profit) => profit,
-                Err(err) => {
-                    error!(index = mid+1, err = %err, profit = %mid_signal.expected_profit, "failed to calculate mid+1 signal profit");
-                    continue;
-                }
-            };
-            let next_profit_usdc = match next_signal.expected_profit.total_profit_usdc() {
-                Ok(profit) => profit,
-                Err(err) => {
-                    error!(index = mid+1, err = %err, profit = %next_signal.expected_profit, "failed to calculate next signal profit");
-                    continue;
-                }
-            };
-
-            if mid_profit_usdc < next_profit_usdc {
-                // next is higher -> check to the right (try a higher amount_in)
-                trace!(index = mid, left = %left, right = %right, "mid+1 signal has higher expected profit, continuing search");
-                best_signal = Some(next_signal);
+            // Compare Option<&BigUint> directly: None < Some(&signal.expected_profit.min_total_amount_usdc), so failed signals are always "less profitable"
+            if mid_profit < next_profit {
+                trace!(index = mid, left = %left, right = %right, mid_profit = ?mid_profit, next_profit = ?next_profit, "mid+1 has higher profit, searching right");
                 left = mid + 1;
+                best_signal = next_signal;
             } else {
-                // next is lower -> check to the left (try a lower amount_in)
-                trace!(index = mid, left = %left, right = %right, "mid+1 signal has lower expected profit, continuing search");
+                trace!(index = mid, left = %left, right = %right, mid_profit = ?mid_profit, next_profit = ?next_profit, "mid has equal or higher profit, searching left");
                 right = mid;
+                best_signal = mid_signal;
             }
         }
 
-        trace!(index = %left, found_signal = %best_signal.is_some(), "search complete");
-
-        best_signal
+        match best_signal {
+            Some(signal) => {
+                trace!(index = %left, found_signal = %signal, "search complete");
+                Ok(signal)
+            }
+            None => {
+                trace!("no valid signal found during search");
+                Err(eyre!("all signals failed to create during search"))
+            }
+        }
     }
 
     /// This creates the fast leg of the arbitrage out of the precompute slow leg.
@@ -779,10 +780,7 @@ mod tests {
         state: PairState,
     ) -> Swap {
         let pool_id = state::PoolId::from(pool_id);
-        let pool_state = state
-            .states
-            .get(&pool_id)
-            .expect(&format!("pool state not found for {}", pool_id));
+        let pool_state = state.states.get(&pool_id).expect("pool state not found");
         Swap::from_protocol_sim(&amount_in, token_in, token_out, pool_state.as_ref()).unwrap()
     }
 
@@ -1074,7 +1072,6 @@ mod tests {
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
-            // min_profit_threshold: 0.5, // 0.5%
             binary_search_steps: 16,
             slow_token_a_usdc: Some(slow_token_a_usdc),
             slow_token_b_usdc: Some(slow_token_b_usdc),
@@ -1083,15 +1080,24 @@ mod tests {
         })
     }
 
+    /// Same as `make_same_decimals_strategy` but with `binary_search_steps = 1`.
+    fn make_same_decimals_strategy_one_step() -> Arc<strategy::CrossChainSingleHop> {
+        let base = make_same_decimals_strategy();
+        Arc::new(CrossChainSingleHop {
+            binary_search_steps: 1,
+            ..(*base).clone()
+        })
+    }
+
     /// Creates a strategy that uses different number of decimals for tokens.
     ///
-    /// Token A = WETH, Slow Address = 0x100, Fast Address = 0x100
-    /// Token B = TEST6, Slow Address = 0x002, Fast Address = 0x002
+    /// Token A = TEST6 (6 decimals), Slow Address = 0x002, Fast Address = 0x002
+    /// Token B = WETH (18 decimals), Slow Address = 0x100, Fast Address = 0x100
     /// Pair = TEST6/WETH, Slow zero2one = TEST6/WETH, Fast zero2one = TEST6/WETH
     ///
     /// USDC Slow Address = 0x110, Fast Address = 0x010
-    /// USDC Slow zero2one: Token A -> WETH/USDC, Token B -> TEST6/USDC
-    /// USDC Fast zero2one: Token A -> USDC/WETH, Token B -> TEST6/USDC
+    /// USDC Slow zero2one: Token A -> TEST6/USDC, Token B -> WETH/USDC
+    /// USDC Fast zero2one: Token A -> TEST6/USDC, Token B -> USDC/WETH
     fn make_different_decimals_strategy() -> Arc<strategy::CrossChainSingleHop> {
         init_telemetry();
 
@@ -1099,10 +1105,10 @@ mod tests {
         let slow_chain = Chain::eth_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let slow_pair = Pair::new(make_mainnet_weth(), make_mainnet_test_6_token());
-        // zero2one = WETH/USDC
-        let slow_token_a_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
         // zero2one = TEST6/USDC
-        let slow_token_b_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
+        let slow_token_a_usdc = Pair::new(make_mainnet_test_6_token(), make_mainnet_usdc());
+        // zero2one = WETH/USDC
+        let slow_token_b_usdc = Pair::new(make_mainnet_weth(), make_mainnet_usdc());
         let available_inventory_slow = (
             scale_by_decimals(&BigUint::from(50_000u64), slow_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(100u64), slow_pair.token_b().decimals),
@@ -1112,10 +1118,10 @@ mod tests {
         let fast_chain = Chain::base_mainnet();
         // Pair = TEST6/WETH, zero2one = TEST6/WETH
         let fast_pair = Pair::new(make_base_weth(), make_base_test_6_token());
-        // zero2one = USDC/WETH
-        let fast_token_a_usdc = Pair::new(make_base_weth(), make_base_usdc());
         // zero2one = TEST6/USDC
-        let fast_token_b_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
+        let fast_token_a_usdc = Pair::new(make_base_test_6_token(), make_base_usdc());
+        // zero2one = USDC/WETH
+        let fast_token_b_usdc = Pair::new(make_base_weth(), make_base_usdc());
         let available_inventory_fast = (
             scale_by_decimals(&BigUint::from(200_000u64), fast_pair.token_a().decimals),
             scale_by_decimals(&BigUint::from(500u64), fast_pair.token_b().decimals),
@@ -1132,7 +1138,6 @@ mod tests {
             fast_inventory: available_inventory_fast,
             max_slippage_bps: 25, // 0.25%
             congestion_risk_discount_bps: 25,
-            // min_profit_threshold: 0.5, // 0.5%
             binary_search_steps: 16,
             slow_token_a_usdc: Some(slow_token_a_usdc),
             slow_token_b_usdc: Some(slow_token_b_usdc),
@@ -1263,15 +1268,24 @@ mod tests {
         assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
     }
 
+    /// Test A->B->A arb with same decimal tokens (PEPE/WETH, both 18 decimals).
+    ///
+    /// - Reserves: (10K PEPE, 5K WETH) on slow, (10K PEPE, 2K WETH) on fast
+    /// - PEPE->WETH price = WETH_reserve / PEPE_reserve
+    ///   - Slow: 5,000 / 10,000 = 0.5
+    ///   - Fast: 2,000 / 10,000 = 0.2
+    /// - Arb: PEPE is worth MORE on slow (0.5 > 0.2), so sell PEPE on slow, buy back on fast
+    /// - Direction: A->B slow (PEPE->WETH), B->A fast (WETH->PEPE)
+    /// - Uses `a_to_b` precompute
+    /// - simulate_swap uses WETH->PEPE
     #[test]
     fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
-        // Slow: PEPE->WETH = 0.5 (10k PEPE : 5k WETH) - expensive WETH on slow chain
+        // Slow: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH)
         let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
 
-        // Fast: PEPE->WETH = 0.2 (10k PEPE : 2k WETH) - cheap WETH on fast chain
-        // Arb: Sell PEPE on slow for WETH, buy PEPE on fast with WETH
+        // Fast: 10K PEPE : 2K WETH (1 PEPE = 0.2 WETH)
         let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 2_000);
 
         let precompute = strategy
@@ -1282,6 +1296,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: PEPE worth more on slow (0.5 > 0.2 WETH)
+        // - Slow: sell PEPE for WETH at 0.5
+        // - Fast: sell WETH for PEPE at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1293,7 +1310,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert pepe->weth (slow) and weth->pepe (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_pepe());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
@@ -1333,7 +1350,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1344,12 +1361,24 @@ mod tests {
         )
     }
 
+    /// Test B->A->B arb with same decimal tokens (PEPE/WETH, both 18 decimals).
+    ///
+    /// - Reserves: (5K PEPE, 10K WETH) on slow, (2K PEPE, 10K WETH) on fast
+    /// - PEPE->WETH price = WETH_reserve / PEPE_reserve
+    ///   - Slow: 10,000 / 5,000 = 2.0
+    ///   - Fast: 10,000 / 2,000 = 5.0
+    /// - Arb: On slow 1 WETH = 0.5 PEPE, on fast 1 WETH = 0.2 PEPE. WETH buys more PEPE on slow.
+    /// - Direction: B->A slow (WETH->PEPE), A->B fast (PEPE->WETH)
+    /// - Uses `b_to_a` precompute
+    /// - simulate_swap uses PEPE->WETH
     #[test]
     fn generate_signal_same_decimals_bab() {
         let strategy = make_same_decimals_strategy();
 
+        // Slow: 5K PEPE : 10K WETH (1 WETH = 0.5 PEPE)
         let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 5_000, 10_000);
 
+        // Fast: 2K PEPE : 10K WETH (1 WETH = 0.2 PEPE)
         let fast_state = make_fast_block_same_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1360,6 +1389,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: WETH buys more PEPE on slow (0.5 > 0.2 PEPE)
+        // - Slow: sell WETH for PEPE at 0.5
+        // - Fast: sell PEPE for WETH at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1371,7 +1403,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert weth->pepe (slow) and pepe->weth (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_pepe());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_pepe());
@@ -1411,7 +1443,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1421,15 +1453,26 @@ mod tests {
             .unwrap()
         )
     }
+
+    /// Test A->B->A arb with different decimal tokens (TEST6=6 decimals, WETH=18 decimals).
+    ///
+    /// - Reserves: (10M TEST6, 5K WETH) on slow, (10M TEST6, 2K WETH) on fast
+    /// - TEST6->WETH price = WETH_reserve / TEST6_reserve
+    ///   - Slow: 5,000 / 10,000,000 = 0.0005
+    ///   - Fast: 2,000 / 10,000,000 = 0.0002
+    /// - Arb: TEST6 is worth MORE on slow (0.0005 > 0.0002), so sell TEST6 on slow, buy back on fast
+    /// - Direction: A->B slow (TEST6->WETH), B->A fast (WETH->TEST6)
+    /// - Uses `a_to_b` precompute
+    /// - simulate_swap uses WETH->TEST6
     #[test]
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
-        // WETH -> TEST price is 200
+        // Slow: 10M TEST6 : 5K WETH (1 TEST6 = 0.0005 WETH)
         let slow_state =
             make_slow_block_state_different_decimals(&strategy, 2000, 10_000_000, 5_000);
 
-        // WETH -> TEST price is 500
+        // Fast: 10M TEST6 : 2K WETH (1 TEST6 = 0.0002 WETH)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 10_000_000, 2_000);
 
         let precompute = strategy
@@ -1440,6 +1483,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: TEST6 is worth more on slow (0.0005 > 0.0002 WETH)
+        // - Slow: sell TEST6 for WETH at 0.0005
+        // - Fast: sell WETH for TEST6 at 0.0002 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1451,7 +1497,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert test->weth and test->pepe legs
+        // assert test6->weth (slow) and weth->test6 (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_test_6_token());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
@@ -1480,7 +1526,7 @@ mod tests {
             "fast_main",
             expected_fast_amount_in,
             &make_base_weth(),
-            &make_base_usdc(),
+            &make_base_test_6_token(),
             fast_state.pair_state,
         );
         assert_eq!(
@@ -1491,7 +1537,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1502,14 +1548,24 @@ mod tests {
         )
     }
 
+    /// Test B->A->B arb with different decimal tokens (TEST6=6 decimals, WETH=18 decimals).
+    ///
+    /// - Reserves: (5K TEST6, 10K WETH) on slow, (2K TEST6, 10K WETH) on fast
+    /// - TEST6->WETH price = WETH_reserve / TEST6_reserve
+    ///   - Slow: 10,000 / 5,000 = 2.0
+    ///   - Fast: 10,000 / 2,000 = 5.0
+    /// - Arb: On slow 1 WETH = 0.5 TEST6, on fast 1 WETH = 0.2 TEST6. WETH buys more TEST6 on slow.
+    /// - Direction: B->A slow (WETH->TEST6), A->B fast (TEST6->WETH)
+    /// - Uses `b_to_a` precompute
+    /// - simulate_swap uses TEST6->WETH
     #[test]
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
-        // weth -> PEPE price is 0.5
+        // Slow: 5K TEST6 : 10K WETH (1 WETH = 0.5 TEST6)
         let slow_state = make_slow_block_state_different_decimals(&strategy, 2000, 5_000, 10_000);
 
-        // weth -> PEPE price is 0.2
+        // Fast: 2K TEST6 : 10K WETH (1 WETH = 0.2 TEST6)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1520,6 +1576,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: WETH buys more TEST6 on slow (0.5 > 0.2 TEST6)
+        // - Slow: sell WETH for TEST6 at 0.5
+        // - Fast: sell TEST6 for WETH at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1531,7 +1590,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert weth->test6 (slow) and test6->weth (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_test_6_token());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_test_6_token());
@@ -1559,7 +1618,7 @@ mod tests {
         let expected_fast_sim = simulate_swap_for_pool_id(
             "fast_main",
             expected_fast_amount_in,
-            &make_base_pepe(),
+            &make_base_test_6_token(),
             &make_base_weth(),
             fast_state.pair_state,
         );
@@ -1571,7 +1630,7 @@ mod tests {
         assert_eq!(
             signal.expected_profit,
             ExpectedProfit::try_from_swaps(
-                &expected_slow_sim,
+                expected_slow_sim,
                 &expected_fast_sim,
                 &precompute.prices_a_usdc,
                 &precompute.prices_b_usdc,
@@ -1580,5 +1639,158 @@ mod tests {
             )
             .unwrap()
         )
+    }
+
+    /// Test single binary search step (binary_search_steps = 1).
+    ///
+    /// When there's only one simulation, the binary search loop doesn't run (left == right).
+    /// The single-element handling added in the fix should return that signal if profitable.
+    ///
+    /// - Uses same_decimals setup with binary_search_steps = 1
+    /// - Reserves: (10K PEPE, 5K WETH) on slow, (10K PEPE, 2K WETH) on fast
+    /// - Should find a valid signal using the single precomputed simulation
+    #[test]
+    fn generate_signal_single_binary_search_step() {
+        let strategy = make_same_decimals_strategy_one_step();
+
+        // Slow: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH)
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
+
+        // Fast: 10K PEPE : 2K WETH (1 PEPE = 0.2 WETH)
+        let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 2_000);
+
+        let precompute = strategy
+            .try_precompute(slow_state, None)
+            .expect("precompute shouldn't fail");
+
+        // Verify only 1 simulation was created
+        let pool_sims = precompute
+            .pool_sims
+            .get(&state::PoolId::from("slow_main"))
+            .expect("slow_main pool not found");
+        assert_eq!(pool_sims.a_to_b.len(), 1, "expected 1 a_to_b simulation");
+        assert_eq!(pool_sims.b_to_a.len(), 1, "expected 1 b_to_a simulation");
+
+        let fast_sorted_spot_prices =
+            try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
+                .expect("failed to make sorted spot prices");
+
+        // Should find a valid signal even with single step
+        let signal = strategy
+            .generate_signal(
+                &precompute,
+                fast_state.pair_state.clone(),
+                fast_sorted_spot_prices,
+            )
+            .expect("should find signal with single binary search step");
+
+        // Verify basic signal properties
+        assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
+        assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
+        assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_pepe());
+        assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
+    }
+
+    /// Test that equal prices on both chains returns an error (no arbitrage opportunity).
+    ///
+    /// - Reserves: (10K PEPE, 5K WETH) on slow, (10K PEPE, 5K WETH) on fast
+    /// - PEPE->WETH price = WETH_reserve / PEPE_reserve
+    ///   - Slow: 5,000 / 10,000 = 0.5
+    ///   - Fast: 5,000 / 10,000 = 0.5
+    /// - No arb: prices are equal, no crossed pools
+    #[test]
+    fn generate_signal_no_arb_equal_prices() {
+        let strategy = make_same_decimals_strategy();
+
+        // Slow: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH)
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
+
+        // Fast: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH) - same price as slow
+        let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 5_000);
+
+        let precompute = strategy
+            .try_precompute(slow_state, None)
+            .expect("precompute shouldn't fail");
+
+        let fast_sorted_spot_prices =
+            try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
+                .expect("failed to make sorted spot prices");
+
+        // No arb opportunity - prices are equal, so no profitable signal
+        let result = strategy.generate_signal(
+            &precompute,
+            fast_state.pair_state.clone(),
+            fast_sorted_spot_prices,
+        );
+
+        assert!(result.is_err(), "expected error but got: {:#?}", result);
+        let err_chain = format!("{:?}", result.unwrap_err());
+        // Check direction context
+        assert!(
+            err_chain.contains("no optimal signal for B->A (slow) and A->B (fast)"),
+            "expected direction context but got: {}",
+            err_chain
+        );
+        // Check underlying reason
+        assert!(
+            err_chain.contains("all signals failed to create during search"),
+            "expected underlying reason but got: {}",
+            err_chain
+        );
+    }
+
+    /// Test single element case fails with equal prices (no arb opportunity).
+    ///
+    /// Same setup as generate_signal_no_arb_equal_prices but with binary_search_steps = 1.
+    /// This exercises the single-element path (left == right) instead of the binary search loop.
+    ///
+    /// - Reserves: (10K PEPE, 5K WETH) on slow, (10K PEPE, 5K WETH) on fast
+    /// - Equal prices = no arb, signal creation fails
+    #[test]
+    fn generate_signal_single_element_no_arb() {
+        let strategy = make_same_decimals_strategy_one_step();
+
+        // Slow: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH)
+        let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
+
+        // Fast: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH) - same price as slow
+        let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 5_000);
+
+        let precompute = strategy
+            .try_precompute(slow_state, None)
+            .expect("precompute shouldn't fail");
+
+        // Verify only 1 simulation was created
+        let pool_sims = precompute
+            .pool_sims
+            .get(&state::PoolId::from("slow_main"))
+            .expect("slow_main pool not found");
+        assert_eq!(pool_sims.a_to_b.len(), 1, "expected 1 a_to_b simulation");
+        assert_eq!(pool_sims.b_to_a.len(), 1, "expected 1 b_to_a simulation");
+
+        let fast_sorted_spot_prices =
+            try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
+                .expect("failed to make sorted spot prices");
+
+        let result = strategy.generate_signal(
+            &precompute,
+            fast_state.pair_state.clone(),
+            fast_sorted_spot_prices,
+        );
+
+        assert!(result.is_err(), "expected error but got: {:?}", result);
+        let err_chain = format!("{:?}", result.unwrap_err());
+        // Check direction context
+        assert!(
+            err_chain.contains("no optimal signal for"),
+            "expected direction context but got: {}",
+            err_chain
+        );
+        // Check single element path was taken
+        assert!(
+            err_chain.contains("failed to create signal from single precompute"),
+            "expected single precompute error but got: {}",
+            err_chain
+        );
     }
 }
