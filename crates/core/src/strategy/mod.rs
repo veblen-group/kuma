@@ -1291,15 +1291,24 @@ mod tests {
         assert_eq!(*last_amount_in_b, strategy.slow_inventory.1);
     }
 
+    /// Test A->B->A arb with same decimal tokens (PEPE/WETH, both 18 decimals).
+    ///
+    /// - Reserves: (10K PEPE, 5K WETH) on slow, (10K PEPE, 2K WETH) on fast
+    /// - PEPE->WETH price = WETH_reserve / PEPE_reserve
+    ///   - Slow: 5,000 / 10,000 = 0.5
+    ///   - Fast: 2,000 / 10,000 = 0.2
+    /// - Arb: PEPE is worth MORE on slow (0.5 > 0.2), so sell PEPE on slow, buy back on fast
+    /// - Direction: A->B slow (PEPE->WETH), B->A fast (WETH->PEPE)
+    /// - Uses `a_to_b` precompute
+    /// - simulate_swap uses WETH->PEPE
     #[test]
     fn generate_signal_same_decimals_aba() {
         let strategy = make_same_decimals_strategy();
 
-        // Slow: PEPE->WETH = 0.5 (10k PEPE : 5k WETH) - expensive WETH on slow chain
+        // Slow: 10K PEPE : 5K WETH (1 PEPE = 0.5 WETH)
         let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 10_000, 5_000);
 
-        // Fast: PEPE->WETH = 0.2 (10k PEPE : 2k WETH) - cheap WETH on fast chain
-        // Arb: Sell PEPE on slow for WETH, buy PEPE on fast with WETH
+        // Fast: 10K PEPE : 2K WETH (1 PEPE = 0.2 WETH)
         let fast_state = make_fast_block_same_decimals(&strategy, 100, 10_000, 2_000);
 
         let precompute = strategy
@@ -1310,6 +1319,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: PEPE worth more on slow (0.5 > 0.2 WETH)
+        // - Slow: sell PEPE for WETH at 0.5
+        // - Fast: sell WETH for PEPE at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1321,7 +1333,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert pepe->weth (slow) and weth->pepe (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_pepe());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_weth());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_weth());
@@ -1372,12 +1384,24 @@ mod tests {
         )
     }
 
+    /// Test B->A->B arb with same decimal tokens (PEPE/WETH, both 18 decimals).
+    ///
+    /// - Reserves: (5K PEPE, 10K WETH) on slow, (2K PEPE, 10K WETH) on fast
+    /// - PEPE->WETH price = WETH_reserve / PEPE_reserve
+    ///   - Slow: 10,000 / 5,000 = 2.0
+    ///   - Fast: 10,000 / 2,000 = 5.0
+    /// - Arb: On slow 1 WETH = 0.5 PEPE, on fast 1 WETH = 0.2 PEPE. WETH buys more PEPE on slow.
+    /// - Direction: B->A slow (WETH->PEPE), A->B fast (PEPE->WETH)
+    /// - Uses `b_to_a` precompute
+    /// - simulate_swap uses PEPE->WETH
     #[test]
     fn generate_signal_same_decimals_bab() {
         let strategy = make_same_decimals_strategy();
 
+        // Slow: 5K PEPE : 10K WETH (1 WETH = 0.5 PEPE)
         let slow_state = make_slow_block_state_same_decimals(&strategy, 2000, 5_000, 10_000);
 
+        // Fast: 2K PEPE : 10K WETH (1 WETH = 0.2 PEPE)
         let fast_state = make_fast_block_same_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1388,6 +1412,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: WETH buys more PEPE on slow (0.5 > 0.2 PEPE)
+        // - Slow: sell WETH for PEPE at 0.5
+        // - Fast: sell PEPE for WETH at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1399,7 +1426,7 @@ mod tests {
         assert_eq!(signal.slow_pool_id, state::PoolId::from("slow_main"));
         assert_eq!(signal.fast_pool_id, state::PoolId::from("fast_main"));
 
-        // assert pepe->weth and weth->pepe legs
+        // assert weth->pepe (slow) and pepe->weth (fast) legs
         assert_eq!(signal.slow_swap_sim.token_in, make_mainnet_weth());
         assert_eq!(signal.slow_swap_sim.token_out, make_mainnet_pepe());
         assert_eq!(signal.fast_swap_sim.token_in, make_base_pepe());
@@ -1449,15 +1476,26 @@ mod tests {
             .unwrap()
         )
     }
+
+    /// Test A->B->A arb with different decimal tokens (TEST6=6 decimals, WETH=18 decimals).
+    ///
+    /// - Reserves: (10M TEST6, 5K WETH) on slow, (10M TEST6, 2K WETH) on fast
+    /// - TEST6->WETH price = WETH_reserve / TEST6_reserve
+    ///   - Slow: 5,000 / 10,000,000 = 0.0005
+    ///   - Fast: 2,000 / 10,000,000 = 0.0002
+    /// - Arb: TEST6 is worth MORE on slow (0.0005 > 0.0002), so sell TEST6 on slow, buy back on fast
+    /// - Direction: A->B slow (TEST6->WETH), B->A fast (WETH->TEST6)
+    /// - Uses `a_to_b` precompute
+    /// - simulate_swap uses WETH->TEST6
     #[test]
     fn generate_signal_different_decimals_aba() {
         let strategy = make_different_decimals_strategy();
 
-        // TEST6 -> WETH price is 0.0005 (WETH -> TEST6 price is 2000)
+        // Slow: 10M TEST6 : 5K WETH (1 TEST6 = 0.0005 WETH)
         let slow_state =
             make_slow_block_state_different_decimals(&strategy, 2000, 10_000_000, 5_000);
 
-        // TEST6 -> WETH price is 0.0002 (WETH -> TEST6 price is 5000)
+        // Fast: 10M TEST6 : 2K WETH (1 TEST6 = 0.0002 WETH)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 10_000_000, 2_000);
 
         let precompute = strategy
@@ -1468,6 +1506,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: TEST6 is worth more on slow (0.0005 > 0.0002 WETH)
+        // - Slow: sell TEST6 for WETH at 0.0005
+        // - Fast: sell WETH for TEST6 at 0.0002 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
@@ -1530,14 +1571,24 @@ mod tests {
         )
     }
 
+    /// Test B->A->B arb with different decimal tokens (TEST6=6 decimals, WETH=18 decimals).
+    ///
+    /// - Reserves: (5K TEST6, 10K WETH) on slow, (2K TEST6, 10K WETH) on fast
+    /// - TEST6->WETH price = WETH_reserve / TEST6_reserve
+    ///   - Slow: 10,000 / 5,000 = 2.0
+    ///   - Fast: 10,000 / 2,000 = 5.0
+    /// - Arb: On slow 1 WETH = 0.5 TEST6, on fast 1 WETH = 0.2 TEST6. WETH buys more TEST6 on slow.
+    /// - Direction: B->A slow (WETH->TEST6), A->B fast (TEST6->WETH)
+    /// - Uses `b_to_a` precompute
+    /// - simulate_swap uses TEST6->WETH
     #[test]
     fn generate_signal_different_decimals_bab() {
         let strategy = make_different_decimals_strategy();
 
-        // TEST6 -> WETH price is 2.0 (WETH -> TEST6 price is 0.5)
+        // Slow: 5K TEST6 : 10K WETH (1 WETH = 0.5 TEST6)
         let slow_state = make_slow_block_state_different_decimals(&strategy, 2000, 5_000, 10_000);
 
-        // TEST6 -> WETH price is 5.0 (WETH -> TEST6 price is 0.2)
+        // Fast: 2K TEST6 : 10K WETH (1 WETH = 0.2 TEST6)
         let fast_state = make_fast_block_different_decimals(&strategy, 100, 2_000, 10_000);
 
         let precompute = strategy
@@ -1548,6 +1599,9 @@ mod tests {
             try_make_sorted_spot_prices(&fast_state.pair_state, &strategy.fast_pair)
                 .expect("failed to make sorted spot prices");
 
+        // Arb: WETH buys more TEST6 on slow (0.5 > 0.2 TEST6)
+        // - Slow: sell WETH for TEST6 at 0.5
+        // - Fast: sell TEST6 for WETH at 0.2 (buy back cheaper)
         let signal = strategy
             .generate_signal(
                 &precompute,
