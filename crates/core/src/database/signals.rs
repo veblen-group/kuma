@@ -280,7 +280,6 @@ fn try_signal_from_row(
         gas_cost_eth: (BigUint::zero(), BigUint::zero()), // TODO
         eth_usdc_price: 0f64,                             // TODO
         gas_cost_usdc: (BigUint::zero(), BigUint::zero()), // TODO
-        gas_cost_amounts: (BigUint::zero(), BigUint::zero()),
         total_gas_cost_eth: BigUint::zero(),  // TODO
         total_gas_cost_usdc: BigUint::zero(), // TODO
     };

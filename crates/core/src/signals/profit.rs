@@ -142,8 +142,6 @@ pub struct ExpectedProfit {
     pub min_usdc_amounts: (BigUint, BigUint),
     /// Total USDC value of the minimum token amounts
     pub min_total_amount_usdc: BigUint,
-    /// Gas cost in gas units for slow and fast swap respectively
-    pub gas_cost_amounts: (BigUint, BigUint),
     /// Gas cost in ETH for slow and fast swap respectively
     pub gas_cost_eth: (BigUint, BigUint),
     /// Total gas cost in ETH for slow and fast swap combined
@@ -282,7 +280,6 @@ impl ExpectedProfit {
                 min_usdc_amounts,
                 min_total_amount_usdc,
                 pair,
-                gas_cost_amounts: (slow_sim.gas_cost.clone(), fast_sim.gas_cost.clone()),
                 gas_cost_eth: (slow_gas_cost_eth, fast_gas_cost_eth),
                 total_gas_cost_eth,
                 gas_cost_usdc: gas_cost_usdc_amounts,

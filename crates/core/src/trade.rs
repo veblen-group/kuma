@@ -122,7 +122,7 @@ impl Trade {
             &self.slow_tx_req,
             &self.signal.slow_chain,
             self.signal.slow_base_fee,
-            &self.signal.expected_profit.gas_cost_amounts.0,
+            &self.signal.slow_swap_sim.gas_cost,
         )
         .await
         {
@@ -158,7 +158,7 @@ impl Trade {
             self.fast_tx(),
             &self.signal.fast_chain,
             self.signal.fast_base_fee,
-            &self.signal.expected_profit.gas_cost_amounts.1,
+            &self.signal.fast_swap_sim.gas_cost,
         )
         .await
         {
@@ -190,7 +190,7 @@ impl Trade {
         let realized_profit = self.calculate_realized_profit(&slow_receipt, &fast_receipt)?;
 
         Ok(TradeResult::Successful(TradeSuccess {
-            signal: self.signal.clone(),
+            signal: self.signal,
             signal_id,
             slow_receipt,
             fast_receipt,
