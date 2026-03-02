@@ -21,8 +21,6 @@ import { columns } from "./columns"
 import { useSuccessfulTradeResults } from "@/lib/api-client"
 
 export function SuccessfulTradeResultTable() {
-  const selectedPair = "WETH-USDC" // Fixed pair for trade results
-
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -32,7 +30,6 @@ export function SuccessfulTradeResultTable() {
     data, isLoading, isError, error, refetch
   } = useSuccessfulTradeResults(
     {
-      pair: selectedPair,
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize
     },
