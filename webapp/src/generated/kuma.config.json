@@ -1,0 +1,123 @@
+{
+  "strategies": [
+    {
+      "token_a": "UNI",
+      "token_b": "WETH",
+      "slow_chain": "ethereum",
+      "fast_chain": "unichain"
+    }
+  ],
+  "binary_search_steps": 8192,
+  "congestion_risk_discount_bps": 0,
+  "max_slippage_bps": 0,
+  "tokens": {
+    "UNI": {
+      "addresses": {
+        "ethereum": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+        "base": "0xfb3CB973B2a9e2E09746393C59e7FB0d5189d290",
+        "unichain": "0x8f187aa05619a017077f5308904739877ce9ea21"
+      },
+      "decimals": 18,
+      "tax": 1000,
+      "gas": [
+        1000
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "100000000000000000000",
+        "base": "100000000000000000000",
+        "unichain": "100000000000000000000"
+      }
+    },
+    "USDC": {
+      "addresses": {
+        "ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "unichain": "0x078D782b760474a361dDA0AF3839290b0EF57AD6"
+      },
+      "decimals": 6,
+      "tax": 1000,
+      "gas": [
+        1000
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "500000000",
+        "base": "500000000",
+        "unichain": "500000000"
+      }
+    },
+    "WETH": {
+      "addresses": {
+        "ethereum": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "base": "0x4200000000000000000000000000000000000006",
+        "unichain": "0x4200000000000000000000000000000000000006"
+      },
+      "decimals": 18,
+      "tax": 1000,
+      "gas": [
+        1000
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "100000000000000000",
+        "base": "100000000000000000",
+        "unichain": "100000000000000000"
+      }
+    },
+    "WBTC": {
+      "addresses": {
+        "ethereum": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+        "base": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c",
+        "unichain": "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c"
+      },
+      "decimals": 8,
+      "tax": 0,
+      "gas": [
+        29669
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "10000000000000000",
+        "base": "10000000000000000",
+        "unichain": "10000000000000000"
+      }
+    },
+    "wstETH": {
+      "addresses": {
+        "ethereum": "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+        "base": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "unichain": "0xc02fE7317D4eb8753a02c35fe019786854A92001"
+      },
+      "decimals": 18,
+      "tax": 0,
+      "gas": [
+        29669
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "1000000000000000000",
+        "base": "1000000000000000000",
+        "unichain": "1000000000000000000"
+      }
+    },
+    "PEPE": {
+      "addresses": {
+        "ethereum": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
+        "base": "0x52b492a33E447Cdb854c7FC19F1e57E8BfA1777D",
+        "unichain": "0xC9Bac9F14Fc072C6541C2B33de0bBf97Fe2D5189"
+      },
+      "decimals": 18,
+      "tax": 0,
+      "gas": [
+        29669
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "1000000000000000000",
+        "base": "1000000000000000000",
+        "unichain": "1000000000000000000"
+      }
+    }
+  }
+}
