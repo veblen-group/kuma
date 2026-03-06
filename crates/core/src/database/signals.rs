@@ -42,11 +42,12 @@ impl SignalRepository {
                 slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                surplus_a, surplus_b, min_token_amount_a, min_token_amount_b,
+                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                $14, $15, $16, $17, $18, $19, $20, $21, $22
+                $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
             )
             RETURNING id
             "#,
@@ -70,6 +71,9 @@ impl SignalRepository {
             &signal.expected_profit.surplus.1.to_string(),
             &signal.expected_profit.min_token_amounts.0.to_string(),
             &signal.expected_profit.min_token_amounts.1.to_string(),
+            &signal.expected_profit.min_usdc_amounts.0.to_string(),
+            &signal.expected_profit.min_usdc_amounts.1.to_string(),
+            &signal.expected_profit.min_total_amount_usdc.to_string(),
             signal.max_slippage_bps as i64,
             signal.congestion_risk_discount_bps as i64,
         )
@@ -121,7 +125,8 @@ impl SignalRepository {
                 slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                surplus_a, surplus_b, min_token_amount_a, min_token_amount_b,
+                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             FROM signals
             WHERE (((slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
@@ -158,7 +163,8 @@ impl SignalRepository {
                 slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,
                 fast_swap_token_in_symbol, fast_swap_token_out_symbol,
                 fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,
-                surplus_a, surplus_b, expected_profit_a, expected_profit_b,
+                surplus_a, surplus_b, min_token_amount_a, min_token_amount_b,
+                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,
                 max_slippage_bps, congestion_risk_discount_bps
             FROM signals
             WHERE id = $1
@@ -192,8 +198,11 @@ struct SignalRow {
     fast_swap_gas_cost: String,
     surplus_a: String,
     surplus_b: String,
-    expected_profit_a: String,
-    expected_profit_b: String,
+    min_token_amount_a: String,
+    min_token_amount_b: String,
+    min_usdc_amount_a: String,
+    min_usdc_amount_b: String,
+    min_total_amount_usdc: String,
     max_slippage_bps: i64,
     congestion_risk_discount_bps: i64,
 }
@@ -252,19 +261,23 @@ fn try_signal_from_row(
     };
 
     let min_token_amounts = {
-        let a = BigUint::from_str(&row.expected_profit_a)
-            .map_err(|e| eyre!("failed to parse expected profit a from db: {e:}"))?;
-        let b = BigUint::from_str(&row.expected_profit_b)
-            .map_err(|e| eyre!("failed to parse expected profit b from db: {e:}"))?;
+        let a = BigUint::from_str(&row.min_token_amount_a)
+            .map_err(|e| eyre!("failed to parse min token amount a from db: {e:}"))?;
+        let b = BigUint::from_str(&row.min_token_amount_b)
+            .map_err(|e| eyre!("failed to parse min token amount b from db: {e:}"))?;
         (a, b)
     };
 
-    // TODO: this should be stored in (a usdc profit, b usdc profit) form so it can be properly reconstructed
-    let expected_profit_usdc_a = BigUint::from_str(&row.expected_profit_a)
-        .map_err(|e| eyre!("failed to parse expected a profit usdc from db: {e:}"))?;
+    let min_usdc_amounts = {
+        let a = BigUint::from_str(&row.min_usdc_amount_a)
+            .map_err(|e| eyre!("failed to parse min usdc amount a from db: {e:}"))?;
+        let b = BigUint::from_str(&row.min_usdc_amount_b)
+            .map_err(|e| eyre!("failed to parse min usdc amount b from db: {e:}"))?;
+        (a, b)
+    };
 
-    let expected_profit_usdc_b = BigUint::from_str(&row.expected_profit_b)
-        .map_err(|e| eyre!("failed to parse expected b profit usdc from db: {e:}"))?;
+    let min_total_amount_usdc = BigUint::from_str(&row.min_total_amount_usdc)
+        .map_err(|e| eyre!("failed to parse min total amount usdc from db: {e:}"))?;
 
     let expected_profit = signals::ExpectedProfit {
         surplus,
@@ -273,10 +286,9 @@ fn try_signal_from_row(
         token_usdc_prices: (0f64, 0f64),
         // TODO: save max slippage token amounts to db
         max_slippage_token_amounts: (BigUint::zero(), BigUint::zero()),
-        min_usdc_amounts: (expected_profit_usdc_a, expected_profit_usdc_b),
+        min_usdc_amounts,
         pair: slow_pair.clone(),
-        // TODO: save total_usdc to db
-        min_total_amount_usdc: BigUint::zero(),
+        min_total_amount_usdc,
         gas_cost_eth: (BigUint::zero(), BigUint::zero()), // TODO
         eth_usdc_price: 0f64,                             // TODO
         gas_cost_usdc: (BigUint::zero(), BigUint::zero()), // TODO
