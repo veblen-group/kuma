@@ -81,7 +81,7 @@ impl RealizedProfit {
         // TODO: remove this option after providing gas prices
         let (gas_amount_usdc, gas_price_usdc) = match prices_eth_usdc {
             Some(prices_eth_usdc) => {
-                try_mul_amount_usdc_price(&gas_amount_eth, &Some(prices_eth_usdc))?
+                try_mul_amount_eth_usdc_price(&gas_amount_eth, &Some(prices_eth_usdc))?
             }
             None => (gas_amount_eth.clone(), 1.0f64),
         };
@@ -246,9 +246,9 @@ impl ExpectedProfit {
         // Step 7: Calculate gas costs in USDC using the ETH -> USDC price
         let (gas_cost_usdc_amounts, eth_usdc_price) = {
             let (slow_gas_cost, price_eth_usdc) =
-                try_mul_amount_usdc_price(&slow_gas_cost_eth, prices_eth_usdc)?;
+                try_mul_amount_eth_usdc_price(&slow_gas_cost_eth, prices_eth_usdc)?;
             let (fast_gas_cost, _) =
-                try_mul_amount_usdc_price(&fast_gas_cost_eth, prices_eth_usdc)?;
+                try_mul_amount_eth_usdc_price(&fast_gas_cost_eth, prices_eth_usdc)?;
             ((slow_gas_cost, fast_gas_cost), (price_eth_usdc))
         };
 
@@ -465,6 +465,27 @@ pub fn try_mul_amount_usdc_price(
             Ok((amount_usdc, price))
         }
         None => Ok((amount.clone(), 1.0f64)),
+    }
+}
+
+/// Convert an ETH amount to USDC using the ETH-USDC price.
+///
+/// Multiplies the ETH amount by the ETH-USDC price to get the equivalent USDC
+/// amount. This is used to convert gas costs from ETH to USDC for profit calculations.
+pub fn try_mul_amount_eth_usdc_price(
+    amount: &BigUint,
+    prices_eth_usdc: &Option<SpotPrices>,
+) -> eyre::Result<(BigUint, f64)> {
+    match prices_eth_usdc {
+        Some(prices) => {
+            let price = prices.max_price;
+            let amount_usdc = try_mul_biguint_f64(amount, price, &prices.pair)?;
+
+            Ok((amount_usdc, price))
+        }
+        None => Err(eyre!(
+            "ETH-USDC price is required to convert gas cost to USDC"
+        )),
     }
 }
 
