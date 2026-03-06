@@ -1,0 +1,4 @@
+watch:
+  - kuma.config.yaml
+ext: yaml
+exec: npm run build:config

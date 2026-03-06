@@ -21,8 +21,6 @@ import { columns } from "./columns"
 import { useFailedOnSlowTradeResults } from "@/lib/api-client"
 
 export function FailedOnSlowTradeResultTable() {
-  const selectedPair = "WETH-USDC" // Fixed pair for trade results
-
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -32,7 +30,6 @@ export function FailedOnSlowTradeResultTable() {
     data, isLoading, isError, error, refetch
   } = useFailedOnSlowTradeResults(
     {
-      pair: selectedPair,
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize
     },

@@ -22,10 +22,8 @@ import { columns } from "./columns"
 import { Signal } from "@/lib/types"
 import { apiClient, useSignals } from "@/lib/api-client"
 
-const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
 
 export function SignalTable() {
-  const [selectedPair, setSelectedPair] = React.useState(TOKEN_PAIRS[0])
 
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -36,7 +34,6 @@ export function SignalTable() {
     data, isLoading, isError, error, refetch
   } = useSignals(
     {
-      pair: selectedPair,
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize
     },

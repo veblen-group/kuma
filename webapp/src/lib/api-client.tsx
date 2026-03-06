@@ -3,13 +3,14 @@
 import { SpotPrice, Signal, TradeResult, PaginatedResponse } from "@/lib/types";
 import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-
+import config from "@/generated/kuma.config.json";
 import React, { useState } from "react";
 
+const firstStrategy = config.strategies[0];
+const pair = `${firstStrategy.token_a}-${firstStrategy.token_b}`;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface FetchParams {
-  pair: string;
   page?: number;
   pageSize?: number;
 }
@@ -41,7 +42,7 @@ class ApiClient {
 
   async getSpotPrices(params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
     return this.request<SpotPrice>('/spot_prices', {
-      pair: params.pair,
+      pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -49,7 +50,7 @@ class ApiClient {
 
   async getSignals(params: FetchParams): Promise<PaginatedResponse<Signal>> {
     return this.request<Signal>('/signals', {
-      pair: params.pair,
+      pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -57,7 +58,7 @@ class ApiClient {
 
   async getSuccessfulTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
     return this.request<TradeResult>('/trades/successful', {
-      pair: params.pair,
+      pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -65,7 +66,7 @@ class ApiClient {
 
   async getFailedOnSlowTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
     return this.request<TradeResult>('/trades/failed-on-slow', {
-      pair: params.pair,
+      pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -73,7 +74,7 @@ class ApiClient {
 
   async getFailedOnFastTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
     return this.request<TradeResult>('/trades/failed-on-fast', {
-      pair: params.pair,
+      pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -87,7 +88,7 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
     ...options,
     queryKey: [
       'spot_prices',
-      params.pair,
+      pair,
       params.page ?? 1,
       params.pageSize ?? 10
     ],
@@ -100,7 +101,7 @@ export function useSignals(params: FetchParams, options?: Partial<UseQueryOption
     ...options,
     queryKey: [
       'signals',
-      params.pair,
+      pair,
       params.page ?? 1,
       params.pageSize ?? 10
     ],
@@ -113,7 +114,7 @@ export function useSuccessfulTradeResults(params: FetchParams, options?: Partial
     ...options,
     queryKey: [
       'successful_trades',
-      params.pair,
+      pair,
       params.page ?? 1,
       params.pageSize ?? 10
     ],
@@ -126,7 +127,7 @@ export function useFailedOnSlowTradeResults(params: FetchParams, options?: Parti
     ...options,
     queryKey: [
       'failed_on_slow_trades',
-      params.pair,
+      pair,
       params.page ?? 1,
       params.pageSize ?? 10
     ],
@@ -139,7 +140,7 @@ export function useFailedOnFastTradeResults(params: FetchParams, options?: Parti
     ...options,
     queryKey: [
       'failed_on_fast_trades',
-      params.pair,
+      pair,
       params.page ?? 1,
       params.pageSize ?? 10
     ],

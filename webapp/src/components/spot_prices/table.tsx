@@ -20,11 +20,7 @@ import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
 import { useSpotPrices } from "@/lib/api-client"
 
-const TOKEN_PAIRS = ["WETH-USDC", "WBTC-USDC", "SOL-ETH"]
-
 export function SpotPriceTable() {
-  const [selectedPair, setSelectedPair] = React.useState(TOKEN_PAIRS[0])
-
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -34,7 +30,6 @@ export function SpotPriceTable() {
     data, isLoading, isError, error, refetch
   } = useSpotPrices(
     {
-      pair: selectedPair,
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize
     },

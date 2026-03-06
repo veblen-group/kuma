@@ -164,7 +164,7 @@ impl Config {
     pub fn get_eth_token<'a>(tokens: impl Iterator<Item = &'a Token>) -> Option<Token> {
         tokens
             .into_iter()
-            .find(|token| token.symbol.eq_ignore_ascii_case("ETH"))
+            .find(|token| token.symbol.eq_ignore_ascii_case("WETH"))
             .cloned()
     }
 
