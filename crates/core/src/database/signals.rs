@@ -31,17 +31,77 @@ impl SignalRepository {
     }
 
     #[instrument(skip(self, signal))]
-    pub async fn insert(
-        &self,
-        signal: signals::CrossChainSingleHop,
-        slow_prices_a_b_id: Option<i64>,
-        slow_prices_a_usdc_id: Option<i64>,
-        slow_prices_b_usdc_id: Option<i64>,
-        slow_prices_eth_usdc_id: Option<i64>,
-    ) -> eyre::Result<i64> {
+    pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<i64> {
         let ep = &signal.expected_profit;
+
+        // Extract optional pair symbols for spot price CTE lookups.
+        // The CTE subqueries match on (chain, token_a_symbol, token_b_symbol, block_height)
+        // and assume at most one spot price row per chain per pair per block — guaranteed
+        // by the strategy worker which writes exactly one row per pair per block arrival.
+        // The CTE subqueries return NULL naturally when no matching row exists.
+        let a_usdc_token_a = signal
+            .slow_prices_a_usdc
+            .as_ref()
+            .map(|p| p.pair.token_a().symbol.clone());
+        let a_usdc_token_b = signal
+            .slow_prices_a_usdc
+            .as_ref()
+            .map(|p| p.pair.token_b().symbol.clone());
+        let b_usdc_token_a = signal
+            .slow_prices_b_usdc
+            .as_ref()
+            .map(|p| p.pair.token_a().symbol.clone());
+        let b_usdc_token_b = signal
+            .slow_prices_b_usdc
+            .as_ref()
+            .map(|p| p.pair.token_b().symbol.clone());
+        let eth_usdc_token_a = signal
+            .slow_prices_eth_usdc
+            .as_ref()
+            .map(|p| p.pair.token_a().symbol.clone());
+        let eth_usdc_token_b = signal
+            .slow_prices_eth_usdc
+            .as_ref()
+            .map(|p| p.pair.token_b().symbol.clone());
+
+        let slow_chain = signal.slow_chain.name.to_string();
+        let slow_height = signal.slow_height as i64;
+
         let id = sqlx::query!(
             r#"
+            WITH
+              sp_ab AS (
+                SELECT id FROM spot_prices
+                WHERE chain = $1
+                  AND token_a_symbol = $36
+                  AND token_b_symbol = $37
+                  AND block_height = $2
+                LIMIT 1
+              ),
+              sp_a_usdc AS (
+                SELECT id FROM spot_prices
+                WHERE chain = $1
+                  AND token_a_symbol = $38
+                  AND token_b_symbol = $39
+                  AND block_height = $2
+                LIMIT 1
+              ),
+              sp_b_usdc AS (
+                SELECT id FROM spot_prices
+                WHERE chain = $1
+                  AND token_a_symbol = $40
+                  AND token_b_symbol = $41
+                  AND block_height = $2
+                LIMIT 1
+              ),
+              sp_eth_usdc AS (
+                SELECT id FROM spot_prices
+                WHERE chain = $1
+                  AND token_a_symbol = $42
+                  AND token_b_symbol = $43
+                  AND block_height = $2
+                LIMIT 1
+              )
             INSERT INTO signals (
                 slow_chain, slow_height, slow_pool_id,
                 fast_chain, fast_height, fast_pool_id,
@@ -61,57 +121,66 @@ impl SignalRepository {
                 slow_prices_a_b_id, slow_prices_a_usdc_id,
                 slow_prices_b_usdc_id, slow_prices_eth_usdc_id,
                 max_slippage_bps, congestion_risk_discount_bps
-            ) VALUES (
+            )
+            SELECT
                 $1,  $2,  $3,  $4,  $5,  $6,  $7,  $8,  $9,  $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                 $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-                $41, $42
-            )
+                $31, $32, $33, $34, $35,
+                (SELECT id FROM sp_ab),
+                (SELECT id FROM sp_a_usdc),
+                (SELECT id FROM sp_b_usdc),
+                (SELECT id FROM sp_eth_usdc),
+                $44, $45, $46
             RETURNING id
             "#,
-            &signal.slow_chain.name.to_string(),           // $1
-            signal.slow_height as i64,                      // $2
-            &signal.slow_pool_id.to_string(),               // $3
-            &signal.fast_chain.name.to_string(),            // $4
-            signal.fast_height as i64,                      // $5
-            &signal.fast_pool_id.to_string(),               // $6
-            &signal.slow_swap_sim.token_in.symbol,          // $7
-            &signal.slow_swap_sim.token_out.symbol,         // $8
-            &signal.slow_swap_sim.amount_in.to_string(),    // $9
-            &signal.slow_swap_sim.amount_out.to_string(),   // $10
-            &signal.slow_swap_sim.gas_cost.to_string(),     // $11
-            &signal.fast_swap_sim.token_in.symbol,          // $12
-            &signal.fast_swap_sim.token_out.symbol,         // $13
-            &signal.fast_swap_sim.amount_in.to_string(),    // $14
-            &signal.fast_swap_sim.amount_out.to_string(),   // $15
-            &signal.fast_swap_sim.gas_cost.to_string(),     // $16
-            &ep.surplus.0.to_string(),                      // $17
-            &ep.surplus.1.to_string(),                      // $18
-            &ep.min_token_amounts.0.to_string(),            // $19
-            &ep.min_token_amounts.1.to_string(),            // $20
-            &ep.min_usdc_amounts.0.to_string(),             // $21
-            &ep.min_usdc_amounts.1.to_string(),             // $22
-            &ep.min_total_amount_usdc.to_string(),          // $23
-            &ep.max_slippage_token_amounts.0.to_string(),   // $24
-            &ep.max_slippage_token_amounts.1.to_string(),   // $25
-            ep.token_usdc_prices.0,                         // $26
-            ep.token_usdc_prices.1,                         // $27
-            &ep.gas_cost_eth.0.to_string(),                 // $28
-            &ep.gas_cost_eth.1.to_string(),                 // $29
-            &ep.total_gas_cost_eth.to_string(),             // $30
-            ep.eth_usdc_price,                              // $31
-            &ep.gas_cost_usdc.0.to_string(),                // $32
-            &ep.gas_cost_usdc.1.to_string(),                // $33
-            &ep.total_gas_cost_usdc.to_string(),            // $34
-            signal.slow_base_fee as i64,                    // $35
-            signal.fast_base_fee as i64,                    // $36
-            slow_prices_a_b_id,                             // $37
-            slow_prices_a_usdc_id,                          // $38
-            slow_prices_b_usdc_id,                          // $39
-            slow_prices_eth_usdc_id,                        // $40
-            signal.max_slippage_bps as i64,                 // $41
-            signal.congestion_risk_discount_bps as i64,     // $42
+            &slow_chain,                                        // $1  slow_chain (also used in CTEs)
+            slow_height,                                        // $2  slow_height (also used in CTEs)
+            &signal.slow_pool_id.to_string(),                   // $3
+            &signal.fast_chain.name.to_string(),                // $4
+            signal.fast_height as i64,                          // $5
+            &signal.fast_pool_id.to_string(),                   // $6
+            &signal.slow_swap_sim.token_in.symbol,              // $7
+            &signal.slow_swap_sim.token_out.symbol,             // $8
+            &signal.slow_swap_sim.amount_in.to_string(),        // $9
+            &signal.slow_swap_sim.amount_out.to_string(),       // $10
+            &signal.slow_swap_sim.gas_cost.to_string(),         // $11
+            &signal.fast_swap_sim.token_in.symbol,              // $12
+            &signal.fast_swap_sim.token_out.symbol,             // $13
+            &signal.fast_swap_sim.amount_in.to_string(),        // $14
+            &signal.fast_swap_sim.amount_out.to_string(),       // $15
+            &signal.fast_swap_sim.gas_cost.to_string(),         // $16
+            &ep.surplus.0.to_string(),                          // $17
+            &ep.surplus.1.to_string(),                          // $18
+            &ep.min_token_amounts.0.to_string(),                // $19
+            &ep.min_token_amounts.1.to_string(),                // $20
+            &ep.min_usdc_amounts.0.to_string(),                 // $21
+            &ep.min_usdc_amounts.1.to_string(),                 // $22
+            &ep.min_total_amount_usdc.to_string(),              // $23
+            &ep.max_slippage_token_amounts.0.to_string(),       // $24
+            &ep.max_slippage_token_amounts.1.to_string(),       // $25
+            ep.token_usdc_prices.0,                             // $26
+            ep.token_usdc_prices.1,                             // $27
+            &ep.gas_cost_eth.0.to_string(),                     // $28
+            &ep.gas_cost_eth.1.to_string(),                     // $29
+            &ep.total_gas_cost_eth.to_string(),                 // $30
+            ep.eth_usdc_price,                                  // $31
+            &ep.gas_cost_usdc.0.to_string(),                    // $32
+            &ep.gas_cost_usdc.1.to_string(),                    // $33
+            &ep.total_gas_cost_usdc.to_string(),                // $34
+            signal.slow_base_fee as i64,                        // $35  (fast_base_fee via SELECT below)
+            // Note: $36-$43 are CTE lookup params, $44-$45 are after SELECT
+            &signal.slow_prices_a_b.pair.token_a().symbol,     // $36  sp_ab token_a
+            &signal.slow_prices_a_b.pair.token_b().symbol,     // $37  sp_ab token_b
+            a_usdc_token_a.as_deref(),                          // $38  sp_a_usdc token_a (nullable)
+            a_usdc_token_b.as_deref(),                          // $39  sp_a_usdc token_b (nullable)
+            b_usdc_token_a.as_deref(),                          // $40  sp_b_usdc token_a (nullable)
+            b_usdc_token_b.as_deref(),                          // $41  sp_b_usdc token_b (nullable)
+            eth_usdc_token_a.as_deref(),                        // $42  sp_eth_usdc token_a (nullable)
+            eth_usdc_token_b.as_deref(),                        // $43  sp_eth_usdc token_b (nullable)
+            signal.fast_base_fee as i64,                        // $44
+            signal.max_slippage_bps as i64,                     // $45
+            signal.congestion_risk_discount_bps as i64,         // $46
         )
         .fetch_one(self.pool.as_ref())
         .await?

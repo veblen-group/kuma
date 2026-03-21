@@ -25,8 +25,8 @@ impl SpotPriceRepository {
         }
     }
 
-    pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<i64> {
-        let id = sqlx::query!(
+    pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
+        sqlx::query!(
             r#"
             INSERT INTO spot_prices (
                 token_a_symbol,
@@ -34,7 +34,6 @@ impl SpotPriceRepository {
                 min_price, max_price, min_pool_id, max_pool_id,
                 block_height, chain
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
             "#,
             spot_prices.pair.token_a().symbol,
             spot_prices.pair.token_b().symbol,
@@ -45,11 +44,10 @@ impl SpotPriceRepository {
             spot_prices.block_height as i64,
             spot_prices.chain.name.to_string(),
         )
-        .fetch_one(self.pool.as_ref())
-        .await?
-        .id;
+        .execute(self.pool.as_ref())
+        .await?;
 
-        Ok(id)
+        Ok(())
     }
 
     pub async fn count_by_symbols(
