@@ -5,11 +5,30 @@ use tokio::sync::oneshot;
 use tracing::{error, instrument};
 
 use crate::{
-    database::{TradeFailedOnFastRow, TradeFailedOnSlowRow, TradeSuccessRow},
     encoder::{SignedTransaction, UnsignedTransaction, execute_tx, get_tx_request},
     signals::{self, CrossChainSingleHop, RealizedProfit},
     state,
 };
+
+/// Slim write-only structs used only for DB inserts. The full read-back row structs
+/// (TradeSuccessRow etc.) include joined signal data and live in database::trade.
+pub(crate) struct TradeSuccessInsert {
+    pub signal_id: i64,
+    pub slow_tx_hash: String,
+    pub fast_tx_hash: String,
+    pub realized_profit_str: String,
+}
+
+pub(crate) struct TradeFailedOnSlowInsert {
+    pub signal_id: i64,
+    pub slow_tx_hash: Option<String>,
+}
+
+pub(crate) struct TradeFailedOnFastInsert {
+    pub signal_id: i64,
+    pub slow_tx_hash: String,
+    pub fast_tx_hash: Option<String>,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TradeFailedOnSlow {
@@ -19,8 +38,8 @@ pub struct TradeFailedOnSlow {
 }
 
 impl TradeFailedOnSlow {
-    pub fn into_row(self) -> TradeFailedOnSlowRow {
-        TradeFailedOnSlowRow {
+    pub(crate) fn into_insert(self) -> TradeFailedOnSlowInsert {
+        TradeFailedOnSlowInsert {
             signal_id: self.signal_id,
             slow_tx_hash: self
                 .slow_receipt
@@ -38,8 +57,8 @@ pub struct TradeFailedOnFast {
 }
 
 impl TradeFailedOnFast {
-    pub fn into_row(self) -> TradeFailedOnFastRow {
-        TradeFailedOnFastRow {
+    pub(crate) fn into_insert(self) -> TradeFailedOnFastInsert {
+        TradeFailedOnFastInsert {
             signal_id: self.signal_id,
             slow_tx_hash: self.slow_receipt.transaction_hash.to_string(),
             fast_tx_hash: self
@@ -59,8 +78,8 @@ pub struct TradeSuccess {
 }
 
 impl TradeSuccess {
-    pub fn into_row(self) -> TradeSuccessRow {
-        TradeSuccessRow {
+    pub(crate) fn into_insert(self) -> TradeSuccessInsert {
+        TradeSuccessInsert {
             signal_id: self.signal_id,
             slow_tx_hash: self.slow_receipt.transaction_hash.to_string(),
             fast_tx_hash: self.fast_receipt.transaction_hash.to_string(),
