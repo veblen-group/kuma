@@ -1,6 +1,6 @@
-use clap::{Parser, Subcommand, command};
+use clap::{Parser, Subcommand};
 use color_eyre::eyre::{self, eyre};
-use core::config::Config;
+use kuma_core::config::Config;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 

@@ -1,4 +1,4 @@
-use core::spot_prices::try_make_sorted_spot_prices;
+use kuma_core::spot_prices::try_make_sorted_spot_prices;
 use std::{collections::HashMap, str::FromStr as _};
 
 use color_eyre::eyre::{self, Context as _};
@@ -7,8 +7,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
 use tycho_simulation::tycho_common::{self, models::token::Token};
 
-use core::strategy::CrossChainSingleHop;
-use core::{chain::Chain, collector, config::Config, signals, state::pair::Pair, strategy};
+use kuma_core::strategy::CrossChainSingleHop;
+use kuma_core::{chain::Chain, collector, config::Config, signals, state::pair::Pair, strategy};
 
 use crate::cli::StrategyArgs;
 

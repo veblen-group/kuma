@@ -1,4 +1,4 @@
-use core::{config::Config, encoder::get_tx_request, signals::CrossChainSingleHop};
+use kuma_core::{config::Config, encoder::get_tx_request, signals::CrossChainSingleHop};
 use std::{fs, path::PathBuf};
 
 use color_eyre::eyre::{self, Context as _};
