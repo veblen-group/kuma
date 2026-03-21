@@ -6,6 +6,7 @@ use axum::{
     Json, Router,
 };
 use kuma_core::signals::{CrossChainSingleHop, ExpectedProfit};
+use kuma_core::strategy::Swap;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -15,6 +16,63 @@ use crate::{
     routes::spot_prices::SpotPriceResponse,
     AppState,
 };
+
+/// One side of a cross-chain arbitrage — chain context plus the simulated swap.
+/// Used for both the slow and fast legs in `CrossChainSingleHopResponse`.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SwapResponse {
+    pub chain: String,
+    pub height: u64,
+    pub pool_id: String,
+    pub base_fee: u64,
+    pub token_in: String,
+    pub token_out: String,
+    pub amount_in: String,
+    pub amount_out: String,
+    pub gas_cost: String,
+}
+
+impl SwapResponse {
+    pub fn from_parts(chain: &str, height: u64, pool_id: &str, base_fee: u64, swap: &Swap) -> Self {
+        Self {
+            chain: chain.to_owned(),
+            height,
+            pool_id: pool_id.to_owned(),
+            base_fee,
+            token_in: swap.token_in.symbol.clone(),
+            token_out: swap.token_out.symbol.clone(),
+            amount_in: swap.amount_in.to_string(),
+            amount_out: swap.amount_out.to_string(),
+            gas_cost: swap.gas_cost.to_string(),
+        }
+    }
+
+    /// Construct directly from flat string fields — used when mapping from DB
+    /// row types that carry denormalized signal columns.
+    pub fn from_row_fields(
+        chain: String,
+        height: i64,
+        pool_id: String,
+        base_fee: i64,
+        token_in: String,
+        token_out: String,
+        amount_in: String,
+        amount_out: String,
+        gas_cost: String,
+    ) -> Self {
+        Self {
+            chain,
+            height: height as u64,
+            pool_id,
+            base_fee: base_fee as u64,
+            token_in,
+            token_out,
+            amount_in,
+            amount_out,
+            gas_cost,
+        }
+    }
+}
 
 /// API response type for `ExpectedProfit`. All `BigUint` fields are serialized
 /// as decimal strings to avoid precision loss.
@@ -69,27 +127,13 @@ impl From<ExpectedProfit> for ExpectedProfitResponse {
     }
 }
 
-/// API response type for `CrossChainSingleHop`. Replaces `Chain` objects with
-/// their name strings (omitting API keys, RPC URLs, etc.) and drops
-/// `protocol_component` (internal encoding detail not needed by consumers).
+/// API response type for `CrossChainSingleHop`. Chain objects are replaced with
+/// safe `SwapResponse` values (name strings only — no API keys or RPC URLs).
+/// `protocol_component` is omitted (internal encoding detail).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CrossChainSingleHopResponse {
-    pub slow_chain: String,
-    pub slow_height: u64,
-    pub slow_pool_id: String,
-    pub fast_chain: String,
-    pub fast_height: u64,
-    pub fast_pool_id: String,
-    pub slow_swap_token_in: String,
-    pub slow_swap_token_out: String,
-    pub slow_swap_amount_in: String,
-    pub slow_swap_amount_out: String,
-    pub slow_swap_gas_cost: String,
-    pub fast_swap_token_in: String,
-    pub fast_swap_token_out: String,
-    pub fast_swap_amount_in: String,
-    pub fast_swap_amount_out: String,
-    pub fast_swap_gas_cost: String,
+    pub slow: SwapResponse,
+    pub fast: SwapResponse,
     /// Spot prices on the slow chain at signal generation time.
     /// `None` for signals written before spot price FK tracking was added.
     pub slow_prices_a_b: Option<SpotPriceResponse>,
@@ -99,29 +143,25 @@ pub struct CrossChainSingleHopResponse {
     pub expected_profit: ExpectedProfitResponse,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
-    pub slow_base_fee: u64,
-    pub fast_base_fee: u64,
 }
 
 impl From<CrossChainSingleHop> for CrossChainSingleHopResponse {
     fn from(s: CrossChainSingleHop) -> Self {
         Self {
-            slow_chain: s.slow_chain.name.to_string(),
-            slow_height: s.slow_height,
-            slow_pool_id: s.slow_pool_id.to_string(),
-            fast_chain: s.fast_chain.name.to_string(),
-            fast_height: s.fast_height,
-            fast_pool_id: s.fast_pool_id.to_string(),
-            slow_swap_token_in: s.slow_swap_sim.token_in.symbol.clone(),
-            slow_swap_token_out: s.slow_swap_sim.token_out.symbol.clone(),
-            slow_swap_amount_in: s.slow_swap_sim.amount_in.to_string(),
-            slow_swap_amount_out: s.slow_swap_sim.amount_out.to_string(),
-            slow_swap_gas_cost: s.slow_swap_sim.gas_cost.to_string(),
-            fast_swap_token_in: s.fast_swap_sim.token_in.symbol.clone(),
-            fast_swap_token_out: s.fast_swap_sim.token_out.symbol.clone(),
-            fast_swap_amount_in: s.fast_swap_sim.amount_in.to_string(),
-            fast_swap_amount_out: s.fast_swap_sim.amount_out.to_string(),
-            fast_swap_gas_cost: s.fast_swap_sim.gas_cost.to_string(),
+            slow: SwapResponse::from_parts(
+                &s.slow_chain.name.to_string(),
+                s.slow_height,
+                &s.slow_pool_id.to_string(),
+                s.slow_base_fee,
+                &s.slow_swap_sim,
+            ),
+            fast: SwapResponse::from_parts(
+                &s.fast_chain.name.to_string(),
+                s.fast_height,
+                &s.fast_pool_id.to_string(),
+                s.fast_base_fee,
+                &s.fast_swap_sim,
+            ),
             slow_prices_a_b: Some(SpotPriceResponse::from(s.slow_prices_a_b)),
             slow_prices_a_usdc: s.slow_prices_a_usdc.map(SpotPriceResponse::from),
             slow_prices_b_usdc: s.slow_prices_b_usdc.map(SpotPriceResponse::from),
@@ -129,8 +169,6 @@ impl From<CrossChainSingleHop> for CrossChainSingleHopResponse {
             expected_profit: ExpectedProfitResponse::from(s.expected_profit),
             max_slippage_bps: s.max_slippage_bps,
             congestion_risk_discount_bps: s.congestion_risk_discount_bps,
-            slow_base_fee: s.slow_base_fee,
-            fast_base_fee: s.fast_base_fee,
         }
     }
 }
