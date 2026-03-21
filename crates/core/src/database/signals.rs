@@ -455,8 +455,9 @@ struct SignalRow {
     sp_eth_chain: Option<String>,
 }
 
-/// Try to reconstruct a `SpotPrices` from the optional joined columns for one price series.
+/// Try to reconstruct a `SpotPrices` from joined columns for one price series.
 /// Returns `None` if the FK was NULL (no joined row).
+#[allow(clippy::too_many_arguments)]
 fn try_spot_prices_from_row_cols(
     token_a_symbol: Option<String>,
     token_b_symbol: Option<String>,
