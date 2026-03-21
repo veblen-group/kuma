@@ -18,6 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_spot_prices_max_pool_height ON spot_prices(max_po
 CREATE INDEX IF NOT EXISTS idx_spot_prices_block_height ON spot_prices(block_height DESC);
 CREATE INDEX IF NOT EXISTS idx_spot_prices_chain ON spot_prices(chain);
 CREATE INDEX IF NOT EXISTS idx_spot_prices_chain_block ON spot_prices(chain, block_height DESC);
+CREATE INDEX IF NOT EXISTS idx_spot_prices_chain_pair_height ON spot_prices(chain, token_a_symbol, token_b_symbol, block_height DESC);
 
 CREATE DOMAIN uint_bps AS INTEGER
   CHECK (VALUE BETWEEN 0 AND 10000);
