@@ -225,6 +225,8 @@ impl Worker {
                         "✅ Precomputed trade sizes for slow chain"
                     );
 
+                    // Persist spot prices for the slow chain — fire and forget.
+                    // Spot price FKs on the signal are resolved at insert time via a SQL CTE.
                     db_writes.push(write_slow_spot_prices(
                         self.db.spot_price_repository(),
                         new_precompute.prices_a_b.clone(),
@@ -254,11 +256,13 @@ impl Worker {
                             Ok(signal) => {
                                 info!(%signal, "📡 Generated cross-chain signal");
 
+                                // Persist fast chain spot prices — fire and forget.
                                 db_writes.push(write_fast_spot_prices(
                                     self.db.spot_price_repository(),
                                     prices_a_b,
                                 ).boxed());
 
+                                // Save signal to db; send id to trade executor via oneshot.
                                 let (signal_id_tx, signal_id_rx) = oneshot::channel();
                                 curr_signal = Some((signal.clone(), signal_id_rx));
 
@@ -276,6 +280,7 @@ impl Worker {
                                     "No signal found for given blocks"
                                 );
 
+                                // No signal generated — still persist fast spot prices.
                                 db_writes.push(write_fast_spot_prices(
                                     self.db.spot_price_repository(),
                                     prices_a_b,
@@ -288,6 +293,7 @@ impl Worker {
                             "New fast chain state but no slow chain precompute, skipping signal generation"
                         );
 
+                        // Still persist fast spot prices even without a signal.
                         db_writes.push(write_fast_spot_prices(
                             self.db.spot_price_repository(),
                             prices_a_b,
