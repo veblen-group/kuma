@@ -252,64 +252,60 @@ impl SignalRepository {
     #[instrument(skip(self, signal))]
     pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<i64> {
         let ep = &signal.expected_profit;
+        let slow_chain = signal.slow_chain.name.to_string();
+        let slow_height = signal.slow_height as i64;
 
-        // CTE looks up spot price IDs by (chain, token_a_symbol, token_b_symbol, block_height).
-        // Assumes at most one spot price row per chain per pair per block — guaranteed
-        // by the strategy worker. Returns NULL naturally when no matching row exists.
+        // CTE lookup symbols
         let a_usdc_token_a = signal
             .slow_prices_a_usdc
             .as_ref()
-            .map(|p| p.pair.token_a().symbol.clone());
+            .map(|p| p.pair.token_a().symbol.as_str());
         let a_usdc_token_b = signal
             .slow_prices_a_usdc
             .as_ref()
-            .map(|p| p.pair.token_b().symbol.clone());
+            .map(|p| p.pair.token_b().symbol.as_str());
         let b_usdc_token_a = signal
             .slow_prices_b_usdc
             .as_ref()
-            .map(|p| p.pair.token_a().symbol.clone());
+            .map(|p| p.pair.token_a().symbol.as_str());
         let b_usdc_token_b = signal
             .slow_prices_b_usdc
             .as_ref()
-            .map(|p| p.pair.token_b().symbol.clone());
+            .map(|p| p.pair.token_b().symbol.as_str());
         let eth_usdc_token_a = signal
             .slow_prices_eth_usdc
             .as_ref()
-            .map(|p| p.pair.token_a().symbol.clone());
+            .map(|p| p.pair.token_a().symbol.as_str());
         let eth_usdc_token_b = signal
             .slow_prices_eth_usdc
             .as_ref()
-            .map(|p| p.pair.token_b().symbol.clone());
+            .map(|p| p.pair.token_b().symbol.as_str());
 
-        let id = sqlx::query!(
+        let row = sqlx::query!(
             r#"
             WITH
               sp_ab AS (
                 SELECT id FROM spot_prices
-                WHERE
-                    chain = $1 AND block_height = $2
-                    AND token_a_symbol = $36 AND token_b_symbol = $37
+                WHERE chain = $1 AND block_height = $2
+                  AND token_a_symbol = $36 AND token_b_symbol = $37
                 LIMIT 1
               ),
               sp_a_usdc AS (
                 SELECT id FROM spot_prices
-                WHERE
-                    chain = $1 AND block_height = $2
-                    AND token_a_symbol = $38 AND token_b_symbol = $39
+                WHERE chain = $1 AND block_height = $2
+                  AND token_a_symbol = $38 AND token_b_symbol = $39
                 LIMIT 1
               ),
               sp_b_usdc AS (
                 SELECT id FROM spot_prices
-                WHERE
-                    chain = $1 AND block_height = $2
-                    AND token_a_symbol = $40 AND token_b_symbol = $41
+                WHERE chain = $1 AND block_height = $2
+                  AND token_a_symbol = $40 AND token_b_symbol = $41
                 LIMIT 1
               ),
               sp_eth_usdc AS (
                 SELECT id FROM spot_prices
-                WHERE
-                    chain = $1 AND block_height = $2
-                    AND token_a_symbol = $42 AND token_b_symbol = $43
+                WHERE chain = $1 AND block_height = $2
+                  AND token_a_symbol = $42 AND token_b_symbol = $43
                 LIMIT 1
               )
             INSERT INTO signals (
@@ -336,26 +332,25 @@ impl SignalRepository {
                 $1,  $2,  $3,  $4,  $5,  $6,  $7,  $8,  $9,  $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                 $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                $31, $32, $33, $34, $35,
+                $31, $32, $33, $34, $35, $44,
                 (SELECT id FROM sp_ab),
                 (SELECT id FROM sp_a_usdc),
                 (SELECT id FROM sp_b_usdc),
                 (SELECT id FROM sp_eth_usdc),
-                $44, $45, $46
+                $45, $46
             RETURNING id
             "#,
-            // TODO: fix the numbers
             &slow_chain,                                   // $1
             slow_height,                                   // $2
             &signal.slow_pool_id.to_string(),              // $3
-            &signal.fast_chain.name.to_string(),           // $4
-            signal.fast_height as i64,                     // $5
-            &signal.fast_pool_id.to_string(),              // $6
-            &signal.slow_swap_sim.token_in.symbol,         // $7
-            &signal.slow_swap_sim.token_out.symbol,        // $8
-            &signal.slow_swap_sim.amount_in.to_string(),   // $9
-            &signal.slow_swap_sim.amount_out.to_string(),  // $10
-            &signal.slow_swap_sim.gas_cost.to_string(),    // $11
+            &signal.slow_swap_sim.token_in.symbol,         // $4
+            &signal.slow_swap_sim.token_out.symbol,        // $5
+            &signal.slow_swap_sim.amount_in.to_string(),   // $6
+            &signal.slow_swap_sim.amount_out.to_string(),  // $7
+            &signal.slow_swap_sim.gas_cost.to_string(),    // $8
+            &signal.fast_chain.name.to_string(),           // $9
+            signal.fast_height as i64,                     // $10
+            &signal.fast_pool_id.to_string(),              // $11
             &signal.fast_swap_sim.token_in.symbol,         // $12
             &signal.fast_swap_sim.token_out.symbol,        // $13
             &signal.fast_swap_sim.amount_in.to_string(),   // $14
@@ -382,21 +377,20 @@ impl SignalRepository {
             signal.slow_base_fee as i64,                   // $35
             &signal.slow_prices_a_b.pair.token_a().symbol, // $36
             &signal.slow_prices_a_b.pair.token_b().symbol, // $37
-            a_usdc_token_a.as_deref(),                     // $38
-            a_usdc_token_b.as_deref(),                     // $39
-            b_usdc_token_a.as_deref(),                     // $40
-            b_usdc_token_b.as_deref(),                     // $41
-            eth_usdc_token_a.as_deref(),                   // $42
-            eth_usdc_token_b.as_deref(),                   // $43
+            a_usdc_token_a,                                // $38
+            a_usdc_token_b,                                // $39
+            b_usdc_token_a,                                // $40
+            b_usdc_token_b,                                // $41
+            eth_usdc_token_a,                              // $42
+            eth_usdc_token_b,                              // $43
             signal.fast_base_fee as i64,                   // $44
             signal.max_slippage_bps as i64,                // $45
             signal.congestion_risk_discount_bps as i64,    // $46
         )
         .fetch_one(self.pool.as_ref())
-        .await?
-        .id;
+        .await?;
 
-        Ok(id)
+        Ok(row.id)
     }
 
     #[instrument(skip(self))]

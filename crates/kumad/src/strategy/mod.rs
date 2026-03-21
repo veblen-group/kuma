@@ -8,11 +8,7 @@ use std::{pin::Pin, time::Duration};
 
 use color_eyre::eyre::{self, WrapErr as _, eyre};
 use futures::{Future, FutureExt as _, stream::FuturesUnordered};
-use tokio::{
-    select,
-    sync::{mpsc, oneshot},
-    time::Instant,
-};
+use tokio::{select, sync::mpsc, time::Instant};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
@@ -24,8 +20,6 @@ use kuma_core::{
     state::block::BlockStateStream,
     strategy::{self, Precomputes},
 };
-
-
 
 pub use builder::Builder;
 mod builder;
@@ -85,7 +79,7 @@ struct Worker {
     strategy: strategy::CrossChainSingleHop,
     slow_stream: BlockStateStream,
     fast_stream: BlockStateStream,
-    signal_tx: mpsc::Sender<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
+    signal_tx: mpsc::Sender<signals::CrossChainSingleHop>,
     shutdown_token: CancellationToken,
     slow_block_time: Duration,
     db: database::Handle,
@@ -152,16 +146,11 @@ async fn write_fast_spot_prices(
 async fn write_signal(
     repo: SignalRepository,
     signal: signals::CrossChainSingleHop,
-    signal_id_tx: oneshot::Sender<i64>,
 ) -> eyre::Result<()> {
-    let id = repo
+    let _id = repo
         .insert(signal)
         .await
         .map_err(|e| eyre!("failed to write signal to db: {e:}"))?;
-
-    signal_id_tx
-        .send(id)
-        .map_err(|_| eyre!("failed to send signal id to channel"))?;
 
     Ok(())
 }
@@ -182,7 +171,7 @@ impl Worker {
         let mut submission_deadline = None;
 
         let mut precompute: Option<Precomputes> = None;
-        let mut curr_signal: Option<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)> = None;
+        let mut curr_signal: Option<signals::CrossChainSingleHop> = None;
 
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
@@ -205,9 +194,9 @@ impl Worker {
                         futures::future::pending().await
                     }
                 }, if curr_signal.is_some() => {
-                    let (signal, id_rx) = curr_signal.take().expect("Signal checked to be Some");
+                    let signal = curr_signal.take().expect("Signal checked to be Some");
                     debug!(%signal, "📡 Emitting signal");
-                    self.signal_tx.send((signal, id_rx)).await
+                    self.signal_tx.send(signal).await
                         .wrap_err("failed to send signal to emitter")?;
                 }
 
@@ -262,14 +251,12 @@ impl Worker {
                                     prices_a_b,
                                 ).boxed());
 
-                                // Save signal to db; send id to trade executor via oneshot.
-                                let (signal_id_tx, signal_id_rx) = oneshot::channel();
-                                curr_signal = Some((signal.clone(), signal_id_rx));
+                                // Save signal to db
+                                curr_signal = Some(signal.clone());
 
                                 db_writes.push(write_signal(
                                     self.db.signal_repository(),
                                     signal,
-                                    signal_id_tx,
                                 ).boxed());
                             }
                             Err(e) => {
