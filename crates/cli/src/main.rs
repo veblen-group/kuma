@@ -12,7 +12,7 @@ use tracing_subscriber::{self, EnvFilter};
 
 // use crate::kuma::Kuma;
 
-use core::config::Config;
+use kuma_core::config::Config;
 
 mod cli;
 mod dryrun;

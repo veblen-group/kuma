@@ -203,12 +203,6 @@ pub(crate) fn create_solution(
         component,
         swap.token_in.address.clone(),
         swap.token_out.address.clone(),
-        // Split defines the fraction of the amount to be swapped. A value of 0 indicates 100% of
-        // the amount or the total remaining balance.
-        0f64,
-        None,
-        None, // protocol_sim
-        None, // output_amount
     );
 
     Ok(Solution {

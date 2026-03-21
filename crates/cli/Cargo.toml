@@ -7,7 +7,7 @@ edition = "2024"
 alloy = { workspace = true }
 alloy-chains = { workspace = true }
 clap = { version = "4.5.40", features = ["derive"] }
-core = { package = "kuma-core", path = "../core" }
+kuma-core = { path = "../core" }
 color-eyre = { workspace = true }
 figment = { workspace = true, features = ["env", "yaml"] }
 futures = { workspace = true }

@@ -1,4 +1,4 @@
-use core::{config::Config, signals::CrossChainSingleHop};
+use kuma_core::{config::Config, signals::CrossChainSingleHop};
 use std::{fs, path::PathBuf};
 
 use color_eyre::eyre::{self, Context as _};
