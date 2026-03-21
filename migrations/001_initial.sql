@@ -74,16 +74,19 @@ CREATE TABLE IF NOT EXISTS signals (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Natural identity of a signal: the two chain legs it spans
+CREATE INDEX IF NOT EXISTS idx_signals_slow_leg ON signals(slow_chain, slow_height, slow_pool_id);
+CREATE INDEX IF NOT EXISTS idx_signals_fast_leg ON signals(fast_chain, fast_height, fast_pool_id);
+
+-- Chain and height indexes for filtering by chain and block height
+CREATE INDEX IF NOT EXISTS idx_signals_slow_chain ON signals(slow_chain);
+CREATE INDEX IF NOT EXISTS idx_signals_fast_chain ON signals(fast_chain);
 CREATE INDEX IF NOT EXISTS idx_signals_slow_height ON signals(slow_height DESC);
 CREATE INDEX IF NOT EXISTS idx_signals_fast_height ON signals(fast_height DESC);
 
-CREATE INDEX IF NOT EXISTS idx_signals_slow_chain ON signals(slow_chain);
-CREATE INDEX IF NOT EXISTS idx_signals_fast_chain ON signals(fast_chain);
-
+-- Token symbol indexes used for pair-based listing queries
 CREATE INDEX IF NOT EXISTS idx_signals_slow_token_in_symbol ON signals(slow_swap_token_in_symbol);
 CREATE INDEX IF NOT EXISTS idx_signals_slow_token_out_symbol ON signals(slow_swap_token_out_symbol);
-CREATE INDEX IF NOT EXISTS idx_signals_fast_token_in_symbol ON signals(fast_swap_token_in_symbol);
-CREATE INDEX IF NOT EXISTS idx_signals_fast_token_out_symbol ON signals(fast_swap_token_out_symbol);
 
 CREATE INDEX IF NOT EXISTS idx_signals_created_at ON signals(created_at DESC);
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, eyre};
 use sqlx::PgPool;
@@ -10,6 +10,40 @@ use crate::{
 };
 
 use super::{try_chain_from_str, try_token_from_chain_symbol};
+
+struct SpotPricesRow {
+    id: i64,
+    chain: String,
+    block_height: i64,
+    min_pool_id: String,
+    max_pool_id: String,
+    min_price: f64,
+    max_price: f64,
+    token_a_symbol: String,
+    token_b_symbol: String,
+}
+
+impl SpotPricesRow {
+    fn try_into_spot_prices(
+        self,
+        token_configs: &TokenAddressesForChain,
+    ) -> eyre::Result<SpotPrices> {
+        let chain = try_chain_from_str(&self.chain, token_configs)?;
+        let token_a = try_token_from_chain_symbol(&self.token_a_symbol, &chain, token_configs)
+            .map_err(|e| eyre!("failed to parse token a from db: {e:}"))?;
+        let token_b = try_token_from_chain_symbol(&self.token_b_symbol, &chain, token_configs)
+            .map_err(|e| eyre!("failed to parse token b from db: {e:}"))?;
+        Ok(SpotPrices {
+            pair: Pair::new(token_a, token_b),
+            block_height: self.block_height as u64,
+            min_price: self.min_price,
+            max_price: self.max_price,
+            min_pool_id: PoolId::from(self.min_pool_id.as_str()),
+            max_pool_id: PoolId::from(self.max_pool_id.as_str()),
+            chain,
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct SpotPriceRepository {
@@ -26,13 +60,13 @@ impl SpotPriceRepository {
     }
 
     pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
-        sqlx::query!(
+        let _ = sqlx::query!(
             r#"
             INSERT INTO spot_prices (
-                token_a_symbol,
-                token_b_symbol,
-                min_price, max_price, min_pool_id, max_pool_id,
-                block_height, chain
+                token_a_symbol, token_b_symbol,
+                min_price, max_price,
+                min_pool_id, max_pool_id,
+                chain, block_height
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             spot_prices.pair.token_a().symbol,
@@ -41,8 +75,8 @@ impl SpotPriceRepository {
             spot_prices.max_price,
             spot_prices.min_pool_id.to_string(),
             spot_prices.max_pool_id.to_string(),
-            spot_prices.block_height as i64,
             spot_prices.chain.name.to_string(),
+            spot_prices.block_height as i64,
         )
         .execute(self.pool.as_ref())
         .await?;
@@ -50,17 +84,56 @@ impl SpotPriceRepository {
         Ok(())
     }
 
+    /// Fetch multiple spot price rows by their IDs in a single query.
+    /// Returns a map of `id → SpotPrices` for efficient lookup when
+    /// reconstructing signals from `SignalRow` spot price FK IDs.
+    pub async fn get_by_ids(&self, ids: &[i64]) -> eyre::Result<HashMap<i64, SpotPrices>> {
+        if ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = sqlx::query_as!(
+            SpotPricesRow,
+            r#"
+            SELECT
+                id,
+                token_a_symbol, token_b_symbol,
+                min_price, max_price,
+                min_pool_id, max_pool_id,
+                chain, block_height
+            FROM spot_prices
+            WHERE id = ANY($1)
+            "#,
+            ids
+        )
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        rows.into_iter()
+            .map(|r| {
+                let id = r.id;
+                r.try_into_spot_prices(&self.token_configs)
+                    .map(|sp| (id, sp))
+            })
+            .collect()
+    }
+
     pub async fn count_by_symbols(
         &self,
         token_a_symbol: &str,
         token_b_symbol: &str,
     ) -> eyre::Result<u64> {
+        let (token_a_symbol, token_b_symbol) = if token_a_symbol < token_b_symbol {
+            (token_a_symbol, token_b_symbol)
+        } else {
+            (token_b_symbol, token_a_symbol)
+        };
+
         let count: i64 = sqlx::query_scalar(
             r#"
-            SELECT COUNT(*) as count
+            SELECT
+                COUNT(*) as count
             FROM spot_prices
-            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)
-                OR (token_a_symbol = $2 AND token_b_symbol = $1))
+            WHERE token_a_symbol = $1 AND token_b_symbol = $2
             "#,
         )
         .bind(token_a_symbol)
@@ -78,16 +151,23 @@ impl SpotPriceRepository {
         limit: u32,
         offset: u32,
     ) -> eyre::Result<Vec<SpotPrices>> {
+        let (token_a_symbol, token_b_symbol) = if token_a_symbol < token_b_symbol {
+            (token_a_symbol, token_b_symbol)
+        } else {
+            (token_b_symbol, token_a_symbol)
+        };
+
         let rows = sqlx::query_as!(
-            SpotPriceRow,
+            SpotPricesRow,
             r#"
             SELECT
-                token_a_symbol,
-                token_b_symbol,
-                block_height, min_price, max_price, min_pool_id, max_pool_id, chain
+                id,
+                token_a_symbol, token_b_symbol,
+                min_price, max_price,
+                min_pool_id, max_pool_id,
+                chain, block_height
             FROM spot_prices
-            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)
-                OR (token_a_symbol = $2 AND token_b_symbol = $1))
+            WHERE token_a_symbol = $1 AND token_b_symbol = $2
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -100,45 +180,7 @@ impl SpotPriceRepository {
         .await?;
 
         rows.into_iter()
-            .map(|r| try_spot_price_from_row(r, &self.token_configs))
+            .map(|r| r.try_into_spot_prices(&self.token_configs))
             .collect()
     }
-}
-
-struct SpotPriceRow {
-    chain: String,
-    block_height: i64,
-    min_pool_id: String,
-    max_pool_id: String,
-    min_price: f64,
-    max_price: f64,
-    token_a_symbol: String,
-    token_b_symbol: String,
-}
-
-fn try_spot_price_from_row(
-    row: SpotPriceRow,
-    token_configs: &TokenAddressesForChain,
-) -> eyre::Result<SpotPrices> {
-    let min_pool_id = PoolId::from(row.min_pool_id.as_str());
-    let max_pool_id = PoolId::from(row.max_pool_id.as_str());
-
-    let block_height = row.block_height as u64;
-
-    let chain = try_chain_from_str(&row.chain, token_configs)?;
-
-    let token_a = try_token_from_chain_symbol(&row.token_a_symbol, &chain, token_configs)
-        .map_err(|e| eyre!("failed to parse token a from db: {e:}"))?;
-    let token_b = try_token_from_chain_symbol(&row.token_b_symbol, &chain, token_configs)
-        .map_err(|e| eyre!("failed to parse token b from db: {e:}"))?;
-
-    Ok(SpotPrices {
-        pair: Pair::new(token_a, token_b),
-        block_height,
-        min_price: row.min_price,
-        max_price: row.max_price,
-        min_pool_id,
-        max_pool_id,
-        chain,
-    })
 }
