@@ -4,7 +4,7 @@ resolver = "3"
 
 [workspace.dependencies]
 alloy = "1.0.12"
-alloy-chains = "0.2.5"
+alloy-chains = { version = "0.2.5", features = ["serde"] }
 alloy-primitives = "^1.0.0"
 axum = "0.7"
 binance = "0.21.0"
@@ -37,16 +37,8 @@ tracing-subscriber = { version = "0.3.19", features = [
     "once_cell",
     "tracing",
 ] }
-tycho-execution = "0.121.0"
-tycho-simulation = { git = "https://github.com/veblen-group/tycho-simulation.git", package = "tycho-simulation", branch = "quasystaty1/protocol/deserialize-pc", features = [
-    "evm",
-] }
-tycho-common = "0.82.0"
+tycho-execution = "0.165.1"
+tycho-simulation = { version = "0.250.0", features = ["evm"] }
+tycho-common = "0.152.1"
 uniswap-sdk-core = "5.1.0"
 uniswap-v3-sdk = { version = "5.0.0", features = ["extensions"] }
-
-[patch.crates-io]
-solar-interface = { git = "https://github.com/paradigmxyz/solar.git", package = "solar-interface", rev = "3062e90c0f1aacfee7b01d2c3812a14804140daf" }
-solar-sema = { git = "https://github.com/paradigmxyz/solar.git", package = "solar-sema", rev = "3062e90c0f1aacfee7b01d2c3812a14804140daf" }
-solar-parse = { git = "https://github.com/paradigmxyz/solar.git", package = "solar-parse", rev = "3062e90c0f1aacfee7b01d2c3812a14804140daf" }
-solar-ast = { git = "https://github.com/paradigmxyz/solar.git", package = "solar-ast", rev = "3062e90c0f1aacfee7b01d2c3812a14804140daf" }

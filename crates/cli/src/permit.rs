@@ -8,7 +8,7 @@ use alloy::{
 };
 
 use color_eyre::eyre::{self, Context as _};
-use core::config::Config;
+use kuma_core::config::Config;
 use tracing::info;
 
 #[derive(clap::Args, Debug)]

@@ -272,6 +272,7 @@ impl Worker {
                                     "📡 Generated cross-chain signal"
                                 );
 
+                                // TODO: only save/send signal if no trade is executing
                                 let json_signal = serde_json::to_string(&signal).wrap_err("failed to serialize signal to json")?;
                                 info!(%json_signal, "Serialized signal to json");
 

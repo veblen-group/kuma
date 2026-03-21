@@ -1,4 +1,4 @@
-use core::config::Config;
+use kuma_core::config::Config;
 use std::{collections::HashMap, str::FromStr};
 
 use color_eyre::eyre::{self, Context, Ok};
@@ -6,7 +6,7 @@ use tokio::fs;
 use tracing::info;
 use tycho_simulation::{
     evm::tycho_models,
-    tycho_client::{HttpRPCClient, rpc::RPCClient as _},
+    tycho_client::{HttpRPCClient, rpc::RPCClient as _, rpc::HttpRPCClientOptions},
     tycho_common::{self, Bytes, models::token::Token},
 };
 
@@ -82,7 +82,9 @@ pub async fn load_all_tokens(
     } else {
         format!("https://{tycho_url}")
     };
-    let rpc_client = HttpRPCClient::new(rpc_url.as_str(), auth_key).unwrap();
+    let options = HttpRPCClientOptions::new()
+        .with_auth_key(auth_key.map(|k| k.to_string()));
+    let rpc_client = HttpRPCClient::new(rpc_url.as_str(), options).unwrap();
 
     // Chain specific defaults for special case chains. Otherwise defaults to 42 days.
     let default_min_days = HashMap::from([(tycho_common::models::Chain::Base, 1_u64)]);
@@ -93,7 +95,8 @@ pub async fn load_all_tokens(
             chain.into(),
             min_quality.or(Some(100)),
             max_days_since_last_trade.or(default_min_days.get(&chain).or(Some(&42)).copied()),
-            3_000,
+            Some(3_000),
+            4,
         )
         .await
         .expect("Unable to load tokens")
