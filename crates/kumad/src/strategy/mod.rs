@@ -282,7 +282,7 @@ impl Worker {
                                 // Save generated signal to db and update it for emission
                                 let repo = self.db.signal_repository();
                                 db_writes.push(async move {
-                                    let id = repo.insert(signal.clone()).await.map_err(|e| {
+                                    let id = repo.insert(signal.clone(), None, None, None, None).await.map_err(|e| {
                                         eyre!("failed to write signal to db: {e:}")
                                     })?;
 

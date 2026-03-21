@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO signals (\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b,\n                min_token_amount_a, min_token_amount_b,\n                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,\n                max_slippage_token_amount_a, max_slippage_token_amount_b,\n                token_usdc_price_a, token_usdc_price_b,\n                gas_cost_eth_slow, gas_cost_eth_fast, total_gas_cost_eth,\n                eth_usdc_price,\n                gas_cost_usdc_slow, gas_cost_usdc_fast, total_gas_cost_usdc,\n                slow_base_fee, fast_base_fee,\n                slow_prices_a_b_id, slow_prices_a_usdc_id,\n                slow_prices_b_usdc_id, slow_prices_eth_usdc_id,\n                max_slippage_bps, congestion_risk_discount_bps\n            ) VALUES (\n                $1,  $2,  $3,  $4,  $5,  $6,  $7,  $8,  $9,  $10,\n                $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,\n                $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,\n                $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,\n                $41, $42\n            )\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Text",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Float8",
+        "Float8",
+        "Text",
+        "Text",
+        "Text",
+        "Float8",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        {
+          "Custom": {
+            "name": "uint_bps",
+            "kind": {
+              "Domain": "Int4"
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "uint_bps",
+            "kind": {
+              "Domain": "Int4"
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "858e145fc0e856f0265dd11a007e0a57845a1537fc9bad5516020612226e537c"
+}

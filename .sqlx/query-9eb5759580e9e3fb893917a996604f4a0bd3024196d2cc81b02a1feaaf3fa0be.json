@@ -1,0 +1,436 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.slow_chain, s.slow_height, s.slow_pool_id,\n                s.fast_chain, s.fast_height, s.fast_pool_id,\n                s.slow_swap_token_in_symbol, s.slow_swap_token_out_symbol,\n                s.slow_swap_amount_in, s.slow_swap_amount_out, s.slow_swap_gas_cost,\n                s.fast_swap_token_in_symbol, s.fast_swap_token_out_symbol,\n                s.fast_swap_amount_in, s.fast_swap_amount_out, s.fast_swap_gas_cost,\n                s.surplus_a, s.surplus_b,\n                s.min_token_amount_a, s.min_token_amount_b,\n                s.min_usdc_amount_a, s.min_usdc_amount_b, s.min_total_amount_usdc,\n                s.max_slippage_token_amount_a, s.max_slippage_token_amount_b,\n                s.token_usdc_price_a, s.token_usdc_price_b,\n                s.gas_cost_eth_slow, s.gas_cost_eth_fast, s.total_gas_cost_eth,\n                s.eth_usdc_price,\n                s.gas_cost_usdc_slow, s.gas_cost_usdc_fast, s.total_gas_cost_usdc,\n                s.slow_base_fee, s.fast_base_fee,\n                s.max_slippage_bps, s.congestion_risk_discount_bps,\n                p_ab.token_a_symbol  AS \"sp_ab_token_a_symbol?\",\n                p_ab.token_b_symbol  AS \"sp_ab_token_b_symbol?\",\n                p_ab.block_height    AS \"sp_ab_block_height?\",\n                p_ab.min_price       AS \"sp_ab_min_price?\",\n                p_ab.max_price       AS \"sp_ab_max_price?\",\n                p_ab.min_pool_id     AS \"sp_ab_min_pool_id?\",\n                p_ab.max_pool_id     AS \"sp_ab_max_pool_id?\",\n                p_ab.chain           AS \"sp_ab_chain?\",\n                p_ausdc.token_a_symbol AS \"sp_ausdc_token_a_symbol?\",\n                p_ausdc.token_b_symbol AS \"sp_ausdc_token_b_symbol?\",\n                p_ausdc.block_height   AS \"sp_ausdc_block_height?\",\n                p_ausdc.min_price      AS \"sp_ausdc_min_price?\",\n                p_ausdc.max_price      AS \"sp_ausdc_max_price?\",\n                p_ausdc.min_pool_id    AS \"sp_ausdc_min_pool_id?\",\n                p_ausdc.max_pool_id    AS \"sp_ausdc_max_pool_id?\",\n                p_ausdc.chain          AS \"sp_ausdc_chain?\",\n                p_busdc.token_a_symbol AS \"sp_busdc_token_a_symbol?\",\n                p_busdc.token_b_symbol AS \"sp_busdc_token_b_symbol?\",\n                p_busdc.block_height   AS \"sp_busdc_block_height?\",\n                p_busdc.min_price      AS \"sp_busdc_min_price?\",\n                p_busdc.max_price      AS \"sp_busdc_max_price?\",\n                p_busdc.min_pool_id    AS \"sp_busdc_min_pool_id?\",\n                p_busdc.max_pool_id    AS \"sp_busdc_max_pool_id?\",\n                p_busdc.chain          AS \"sp_busdc_chain?\",\n                p_eth.token_a_symbol AS \"sp_eth_token_a_symbol?\",\n                p_eth.token_b_symbol AS \"sp_eth_token_b_symbol?\",\n                p_eth.block_height   AS \"sp_eth_block_height?\",\n                p_eth.min_price      AS \"sp_eth_min_price?\",\n                p_eth.max_price      AS \"sp_eth_max_price?\",\n                p_eth.min_pool_id    AS \"sp_eth_min_pool_id?\",\n                p_eth.max_pool_id    AS \"sp_eth_max_pool_id?\",\n                p_eth.chain          AS \"sp_eth_chain?\"\n            FROM signals s\n            LEFT JOIN spot_prices p_ab    ON p_ab.id    = s.slow_prices_a_b_id\n            LEFT JOIN spot_prices p_ausdc ON p_ausdc.id = s.slow_prices_a_usdc_id\n            LEFT JOIN spot_prices p_busdc ON p_busdc.id = s.slow_prices_b_usdc_id\n            LEFT JOIN spot_prices p_eth   ON p_eth.id   = s.slow_prices_eth_usdc_id\n            WHERE s.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "slow_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "slow_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "fast_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "fast_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "fast_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "slow_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "slow_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "slow_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "slow_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "slow_swap_gas_cost",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "fast_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "fast_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "fast_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "fast_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "fast_swap_gas_cost",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "surplus_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "surplus_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "min_token_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "min_token_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "min_usdc_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "min_usdc_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "min_total_amount_usdc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "max_slippage_token_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "max_slippage_token_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "token_usdc_price_a",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 26,
+        "name": "token_usdc_price_b",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 27,
+        "name": "gas_cost_eth_slow",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 28,
+        "name": "gas_cost_eth_fast",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 29,
+        "name": "total_gas_cost_eth",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 30,
+        "name": "eth_usdc_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 31,
+        "name": "gas_cost_usdc_slow",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 32,
+        "name": "gas_cost_usdc_fast",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 33,
+        "name": "total_gas_cost_usdc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 34,
+        "name": "slow_base_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 35,
+        "name": "fast_base_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 36,
+        "name": "max_slippage_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 37,
+        "name": "congestion_risk_discount_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 38,
+        "name": "sp_ab_token_a_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 39,
+        "name": "sp_ab_token_b_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 40,
+        "name": "sp_ab_block_height?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 41,
+        "name": "sp_ab_min_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 42,
+        "name": "sp_ab_max_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 43,
+        "name": "sp_ab_min_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 44,
+        "name": "sp_ab_max_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 45,
+        "name": "sp_ab_chain?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 46,
+        "name": "sp_ausdc_token_a_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 47,
+        "name": "sp_ausdc_token_b_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 48,
+        "name": "sp_ausdc_block_height?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 49,
+        "name": "sp_ausdc_min_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 50,
+        "name": "sp_ausdc_max_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 51,
+        "name": "sp_ausdc_min_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 52,
+        "name": "sp_ausdc_max_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 53,
+        "name": "sp_ausdc_chain?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 54,
+        "name": "sp_busdc_token_a_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 55,
+        "name": "sp_busdc_token_b_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 56,
+        "name": "sp_busdc_block_height?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 57,
+        "name": "sp_busdc_min_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 58,
+        "name": "sp_busdc_max_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 59,
+        "name": "sp_busdc_min_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 60,
+        "name": "sp_busdc_max_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 61,
+        "name": "sp_busdc_chain?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 62,
+        "name": "sp_eth_token_a_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 63,
+        "name": "sp_eth_token_b_symbol?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 64,
+        "name": "sp_eth_block_height?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 65,
+        "name": "sp_eth_min_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 66,
+        "name": "sp_eth_max_price?",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 67,
+        "name": "sp_eth_min_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 68,
+        "name": "sp_eth_max_pool_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 69,
+        "name": "sp_eth_chain?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9eb5759580e9e3fb893917a996604f4a0bd3024196d2cc81b02a1feaaf3fa0be"
+}
