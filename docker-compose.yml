@@ -106,8 +106,6 @@ services:
       - KUMA_DATABASE__HOST=postgres
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
-    ports:
-      - "8080:8080"
     restart: unless-stopped
     networks:
       - kuma-network
@@ -121,7 +119,7 @@ services:
     depends_on:
       - kuma-backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
+      - BACKEND_URL=http://kuma-api:8080
     ports:
       - "3000:3000"
     restart: unless-stopped

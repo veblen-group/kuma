@@ -8,7 +8,10 @@ import React, { useState } from "react";
 
 const firstStrategy = config.strategies[0];
 const pair = `${firstStrategy.token_a}-${firstStrategy.token_b}`;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// In production the browser hits /api/* which Next.js SSR proxies to the
+// internal backend (BACKEND_URL). For local dev without the proxy, fall back
+// to the backend directly.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export interface FetchParams {
   page?: number;
