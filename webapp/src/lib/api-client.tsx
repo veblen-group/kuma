@@ -26,15 +26,12 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, params?: Record<string, string>): Promise<PaginatedResponse<T>> {
-    const url = new URL(`${this.baseUrl}${endpoint}`);
+    const queryString = params
+      ? '?' + new URLSearchParams(params).toString()
+      : '';
+    const url = `${this.baseUrl}${endpoint}${queryString}`;
 
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
-      });
-    }
-
-    const response = await fetch(url.toString());
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
