@@ -7,8 +7,8 @@ use tracing::instrument;
 use crate::{
     config::TokenAddressesForChain,
     trade::{
-        TradeFailedOnFast, TradeFailedOnFastInsert, TradeFailedOnSlow, TradeFailedOnSlowInsert,
-        TradeResult, TradeSuccess, TradeSuccessInsert,
+        TradeFailedOnFast, TradeFailedOnFastInsertRow, TradeFailedOnSlow, TradeFailedOnSlowInsertRow,
+        TradeResult, TradeSuccess, TradeSuccessInsertRow,
     },
 };
 
@@ -181,11 +181,11 @@ impl TradeRepository {
     }
 
     pub async fn insert_successful_trade(&self, trade: TradeSuccess) -> eyre::Result<()> {
-        let insert = trade.into_insert();
+        let insert = trade.into_row();
         self.insert_successful(insert).await
     }
 
-    async fn insert_successful(&self, insert: TradeSuccessInsert) -> eyre::Result<()> {
+    async fn insert_successful(&self, insert: TradeSuccessInsertRow) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO successful_trade (
@@ -206,11 +206,11 @@ impl TradeRepository {
 
     #[instrument(skip(self, trade_result))]
     pub async fn insert_failed_on_slow(&self, trade_result: TradeFailedOnSlow) -> eyre::Result<()> {
-        let insert = trade_result.into_insert();
+        let insert = trade_result.into_row();
         self.insert_failed_slow(insert).await
     }
 
-    async fn insert_failed_slow(&self, insert: TradeFailedOnSlowInsert) -> eyre::Result<()> {
+    async fn insert_failed_slow(&self, insert: TradeFailedOnSlowInsertRow) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO failed_on_slow_chain_trade (
@@ -229,11 +229,11 @@ impl TradeRepository {
 
     #[instrument(skip(self, trade_result))]
     pub async fn insert_failed_on_fast(&self, trade_result: TradeFailedOnFast) -> eyre::Result<()> {
-        let insert = trade_result.into_insert();
+        let insert = trade_result.into_row();
         self.insert_failed_fast(insert).await
     }
 
-    async fn insert_failed_fast(&self, insert: TradeFailedOnFastInsert) -> eyre::Result<()> {
+    async fn insert_failed_fast(&self, insert: TradeFailedOnFastInsertRow) -> eyre::Result<()> {
         sqlx::query!(
             r#"
             INSERT INTO failed_on_fast_chain_trade (

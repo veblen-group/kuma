@@ -12,19 +12,19 @@ use crate::{
 
 /// Slim write-only structs used only for DB inserts. The full read-back row structs
 /// (TradeSuccessRow etc.) include joined signal data and live in database::trade.
-pub(crate) struct TradeSuccessInsert {
+pub(crate) struct TradeSuccessInsertRow {
     pub signal_id: i64,
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
     pub realized_profit_str: String,
 }
 
-pub(crate) struct TradeFailedOnSlowInsert {
+pub(crate) struct TradeFailedOnSlowInsertRow {
     pub signal_id: i64,
     pub slow_tx_hash: Option<String>,
 }
 
-pub(crate) struct TradeFailedOnFastInsert {
+pub(crate) struct TradeFailedOnFastInsertRow {
     pub signal_id: i64,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
@@ -38,8 +38,8 @@ pub struct TradeFailedOnSlow {
 }
 
 impl TradeFailedOnSlow {
-    pub(crate) fn into_insert(self) -> TradeFailedOnSlowInsert {
-        TradeFailedOnSlowInsert {
+    pub(crate) fn into_row(self) -> TradeFailedOnSlowInsertRow {
+        TradeFailedOnSlowInsertRow {
             signal_id: self.signal_id,
             slow_tx_hash: self
                 .slow_receipt
@@ -57,8 +57,8 @@ pub struct TradeFailedOnFast {
 }
 
 impl TradeFailedOnFast {
-    pub(crate) fn into_insert(self) -> TradeFailedOnFastInsert {
-        TradeFailedOnFastInsert {
+    pub(crate) fn into_row(self) -> TradeFailedOnFastInsertRow {
+        TradeFailedOnFastInsertRow {
             signal_id: self.signal_id,
             slow_tx_hash: self.slow_receipt.transaction_hash.to_string(),
             fast_tx_hash: self
@@ -78,8 +78,8 @@ pub struct TradeSuccess {
 }
 
 impl TradeSuccess {
-    pub(crate) fn into_insert(self) -> TradeSuccessInsert {
-        TradeSuccessInsert {
+    pub(crate) fn into_row(self) -> TradeSuccessInsertRow {
+        TradeSuccessInsertRow {
             signal_id: self.signal_id,
             slow_tx_hash: self.slow_receipt.transaction_hash.to_string(),
             fast_tx_hash: self.fast_receipt.transaction_hash.to_string(),
