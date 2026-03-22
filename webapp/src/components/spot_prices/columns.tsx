@@ -47,13 +47,24 @@ export const columns: ColumnDef<SpotPrice>[] = [
   {
     header: "Block",
     accessorKey: "block_height",
-    cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.chain}
-        type="block"
-        value={row.getValue("block_height") as number}
-      />
-    ),
+    cell: ({ row }) => {
+      const createdAt = row.original.created_at
+      const height = row.getValue("block_height") as number
+      if (!createdAt) return <ExplorerLink chain={row.original.chain} type="block" value={height} />
+      return (
+        <div className="relative group inline-block">
+          <ExplorerLink chain={row.original.chain} type="block" value={height} />
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 pb-1.5 z-10
+                          invisible group-hover:visible opacity-0 group-hover:opacity-100
+                          transition-opacity duration-150">
+            <div className="bg-popover border border-border rounded-md shadow-md
+                            px-2.5 py-1.5 whitespace-nowrap text-xs text-muted-foreground">
+              {new Date(createdAt).toLocaleString()}
+            </div>
+          </div>
+        </div>
+      )
+    },
   },
   {
     header: "Min Price",
