@@ -4160,6 +4160,7 @@ dependencies = [
  "axum-test",
  "color-eyre",
  "figment",
+ "futures 0.3.32",
  "kuma-core",
  "num-bigint",
  "serde",

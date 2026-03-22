@@ -1,22 +1,22 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                token_a_symbol,\n                token_b_symbol,\n                block_height, min_price, max_price, min_pool_id, max_pool_id, chain\n            FROM spot_prices\n            WHERE ((token_a_symbol = $1 AND token_b_symbol = $2)\n                OR (token_a_symbol = $2 AND token_b_symbol = $1))\n            ORDER BY created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT\n                id,\n                token_a_symbol, token_b_symbol,\n                min_price, max_price,\n                min_pool_id, max_pool_id,\n                chain, block_height\n            FROM spot_prices\n            WHERE id = ANY($1)\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
         "name": "token_a_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 1,
+        "ordinal": 2,
         "name": "token_b_symbol",
         "type_info": "Varchar"
-      },
-      {
-        "ordinal": 2,
-        "name": "block_height",
-        "type_info": "Int8"
       },
       {
         "ordinal": 3,
@@ -42,14 +42,16 @@
         "ordinal": 7,
         "name": "chain",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "block_height",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Int8",
-        "Int8"
+        "Int8Array"
       ]
     },
     "nullable": [
@@ -60,8 +62,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "8a51af17e9c1b7876144c12b3175f95944cd7baf1186d3e0e89935398b92c33f"
+  "hash": "26621623520adbe6df57fdd4baa5e8f88283c8d55f17cc0c45bddcea48462639"
 }

@@ -6,7 +6,6 @@ use axum::{
     Json, Router,
 };
 use kuma_core::signals::{CrossChainSingleHop, ExpectedProfit};
-use kuma_core::strategy::Swap;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -30,48 +29,6 @@ pub struct SwapResponse {
     pub amount_out: String,
     pub base_fee: u64,
     pub gas_cost: String,
-}
-
-impl SwapResponse {
-    pub fn from_parts(chain: &str, height: u64, pool_id: &str, base_fee: u64, swap: &Swap) -> Self {
-        Self {
-            chain: chain.to_owned(),
-            height,
-            pool_id: pool_id.to_owned(),
-            base_fee,
-            token_in: swap.token_in.symbol.clone(),
-            token_out: swap.token_out.symbol.clone(),
-            amount_in: swap.amount_in.to_string(),
-            amount_out: swap.amount_out.to_string(),
-            gas_cost: swap.gas_cost.to_string(),
-        }
-    }
-
-    /// Construct directly from flat string fields — used when mapping from DB
-    /// row types that carry denormalized signal columns.
-    pub fn from_row_fields(
-        chain: String,
-        height: i64,
-        pool_id: String,
-        base_fee: i64,
-        token_in: String,
-        token_out: String,
-        amount_in: String,
-        amount_out: String,
-        gas_cost: String,
-    ) -> Self {
-        Self {
-            chain,
-            height: height as u64,
-            pool_id,
-            base_fee: base_fee as u64,
-            token_in,
-            token_out,
-            amount_in,
-            amount_out,
-            gas_cost,
-        }
-    }
 }
 
 /// API response type for `ExpectedProfit`. All `BigUint` fields are serialized
@@ -148,20 +105,28 @@ pub struct CrossChainSingleHopResponse {
 impl From<CrossChainSingleHop> for CrossChainSingleHopResponse {
     fn from(s: CrossChainSingleHop) -> Self {
         Self {
-            slow: SwapResponse::from_parts(
-                &s.slow_chain.name.to_string(),
-                s.slow_height,
-                &s.slow_pool_id.to_string(),
-                s.slow_base_fee,
-                &s.slow_swap_sim,
-            ),
-            fast: SwapResponse::from_parts(
-                &s.fast_chain.name.to_string(),
-                s.fast_height,
-                &s.fast_pool_id.to_string(),
-                s.fast_base_fee,
-                &s.fast_swap_sim,
-            ),
+            slow: SwapResponse {
+                chain: s.slow_chain.name.to_string(),
+                height: s.slow_height,
+                pool_id: s.slow_pool_id.to_string(),
+                base_fee: s.slow_base_fee,
+                token_in: s.slow_swap_sim.token_in.symbol.clone(),
+                token_out: s.slow_swap_sim.token_out.symbol.clone(),
+                amount_in: s.slow_swap_sim.amount_in.to_string(),
+                amount_out: s.slow_swap_sim.amount_out.to_string(),
+                gas_cost: s.slow_swap_sim.gas_cost.to_string(),
+            },
+            fast: SwapResponse {
+                chain: s.fast_chain.name.to_string(),
+                height: s.fast_height,
+                pool_id: s.fast_pool_id.to_string(),
+                base_fee: s.fast_base_fee,
+                token_in: s.fast_swap_sim.token_in.symbol.clone(),
+                token_out: s.fast_swap_sim.token_out.symbol.clone(),
+                amount_in: s.fast_swap_sim.amount_in.to_string(),
+                amount_out: s.fast_swap_sim.amount_out.to_string(),
+                gas_cost: s.fast_swap_sim.gas_cost.to_string(),
+            },
             slow_prices_a_b: SpotPriceResponse::from(s.slow_prices_a_b),
             slow_prices_a_usdc: s.slow_prices_a_usdc.map(SpotPriceResponse::from),
             slow_prices_b_usdc: s.slow_prices_b_usdc.map(SpotPriceResponse::from),

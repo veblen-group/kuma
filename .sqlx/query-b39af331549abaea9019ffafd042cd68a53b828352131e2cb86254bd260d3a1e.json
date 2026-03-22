@@ -1,206 +1,206 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str,\n                s.slow_chain, s.slow_height, s.slow_pool_id,\n                s.fast_chain, s.fast_height, s.fast_pool_id,\n                s.slow_swap_token_in_symbol, s.slow_swap_token_out_symbol,\n                s.slow_swap_amount_in, s.slow_swap_amount_out, s.slow_swap_gas_cost,\n                s.fast_swap_token_in_symbol, s.fast_swap_token_out_symbol,\n                s.fast_swap_amount_in, s.fast_swap_amount_out, s.fast_swap_gas_cost,\n                s.surplus_a, s.surplus_b,\n                s.min_token_amount_a, s.min_token_amount_b,\n                s.min_usdc_amount_a, s.min_usdc_amount_b, s.min_total_amount_usdc,\n                s.max_slippage_token_amount_a, s.max_slippage_token_amount_b,\n                s.token_usdc_price_a, s.token_usdc_price_b,\n                s.gas_cost_eth_slow, s.gas_cost_eth_fast, s.total_gas_cost_eth,\n                s.eth_usdc_price,\n                s.gas_cost_usdc_slow, s.gas_cost_usdc_fast, s.total_gas_cost_usdc,\n                s.slow_base_fee, s.fast_base_fee,\n                s.max_slippage_bps, s.congestion_risk_discount_bps\n            FROM successful_trade st\n            JOIN signals s ON st.signal_id = s.id\n            WHERE (\n                (s.slow_swap_token_in_symbol = $1 AND s.slow_swap_token_out_symbol = $2)\n                OR (s.slow_swap_token_in_symbol = $2 AND s.slow_swap_token_out_symbol = $1)\n            )\n            ORDER BY st.created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b,\n                min_token_amount_a, min_token_amount_b,\n                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,\n                max_slippage_token_amount_a, max_slippage_token_amount_b,\n                token_usdc_price_a, token_usdc_price_b,\n                gas_cost_eth_slow, gas_cost_eth_fast, total_gas_cost_eth,\n                eth_usdc_price,\n                gas_cost_usdc_slow, gas_cost_usdc_fast, total_gas_cost_usdc,\n                slow_base_fee, fast_base_fee,\n                slow_prices_a_b_id, slow_prices_a_usdc_id,\n                slow_prices_b_usdc_id, slow_prices_eth_usdc_id,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "signal_id",
-        "type_info": "Int8"
-      },
-      {
-        "ordinal": 1,
-        "name": "slow_tx_hash",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 2,
-        "name": "fast_tx_hash",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 3,
-        "name": "realized_profit_str",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "slow_chain",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 5,
+        "ordinal": 1,
         "name": "slow_height",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 2,
         "name": "slow_pool_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 7,
+        "ordinal": 3,
         "name": "fast_chain",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 8,
+        "ordinal": 4,
         "name": "fast_height",
         "type_info": "Int8"
       },
       {
-        "ordinal": 9,
+        "ordinal": 5,
         "name": "fast_pool_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 10,
+        "ordinal": 6,
         "name": "slow_swap_token_in_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 11,
+        "ordinal": 7,
         "name": "slow_swap_token_out_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 8,
         "name": "slow_swap_amount_in",
         "type_info": "Text"
       },
       {
-        "ordinal": 13,
+        "ordinal": 9,
         "name": "slow_swap_amount_out",
         "type_info": "Text"
       },
       {
-        "ordinal": 14,
+        "ordinal": 10,
         "name": "slow_swap_gas_cost",
         "type_info": "Text"
       },
       {
-        "ordinal": 15,
+        "ordinal": 11,
         "name": "fast_swap_token_in_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 16,
+        "ordinal": 12,
         "name": "fast_swap_token_out_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 17,
+        "ordinal": 13,
         "name": "fast_swap_amount_in",
         "type_info": "Text"
       },
       {
-        "ordinal": 18,
+        "ordinal": 14,
         "name": "fast_swap_amount_out",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 15,
         "name": "fast_swap_gas_cost",
         "type_info": "Text"
       },
       {
-        "ordinal": 20,
+        "ordinal": 16,
         "name": "surplus_a",
         "type_info": "Text"
       },
       {
-        "ordinal": 21,
+        "ordinal": 17,
         "name": "surplus_b",
         "type_info": "Text"
       },
       {
-        "ordinal": 22,
+        "ordinal": 18,
         "name": "min_token_amount_a",
         "type_info": "Text"
       },
       {
-        "ordinal": 23,
+        "ordinal": 19,
         "name": "min_token_amount_b",
         "type_info": "Text"
       },
       {
-        "ordinal": 24,
+        "ordinal": 20,
         "name": "min_usdc_amount_a",
         "type_info": "Text"
       },
       {
-        "ordinal": 25,
+        "ordinal": 21,
         "name": "min_usdc_amount_b",
         "type_info": "Text"
       },
       {
-        "ordinal": 26,
+        "ordinal": 22,
         "name": "min_total_amount_usdc",
         "type_info": "Text"
       },
       {
-        "ordinal": 27,
+        "ordinal": 23,
         "name": "max_slippage_token_amount_a",
         "type_info": "Text"
       },
       {
-        "ordinal": 28,
+        "ordinal": 24,
         "name": "max_slippage_token_amount_b",
         "type_info": "Text"
       },
       {
-        "ordinal": 29,
+        "ordinal": 25,
         "name": "token_usdc_price_a",
         "type_info": "Float8"
       },
       {
-        "ordinal": 30,
+        "ordinal": 26,
         "name": "token_usdc_price_b",
         "type_info": "Float8"
       },
       {
-        "ordinal": 31,
+        "ordinal": 27,
         "name": "gas_cost_eth_slow",
         "type_info": "Text"
       },
       {
-        "ordinal": 32,
+        "ordinal": 28,
         "name": "gas_cost_eth_fast",
         "type_info": "Text"
       },
       {
-        "ordinal": 33,
+        "ordinal": 29,
         "name": "total_gas_cost_eth",
         "type_info": "Text"
       },
       {
-        "ordinal": 34,
+        "ordinal": 30,
         "name": "eth_usdc_price",
         "type_info": "Float8"
       },
       {
-        "ordinal": 35,
+        "ordinal": 31,
         "name": "gas_cost_usdc_slow",
         "type_info": "Text"
       },
       {
-        "ordinal": 36,
+        "ordinal": 32,
         "name": "gas_cost_usdc_fast",
         "type_info": "Text"
       },
       {
-        "ordinal": 37,
+        "ordinal": 33,
         "name": "total_gas_cost_usdc",
         "type_info": "Text"
       },
       {
-        "ordinal": 38,
+        "ordinal": 34,
         "name": "slow_base_fee",
         "type_info": "Int8"
       },
       {
-        "ordinal": 39,
+        "ordinal": 35,
         "name": "fast_base_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 36,
+        "name": "slow_prices_a_b_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 37,
+        "name": "slow_prices_a_usdc_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 38,
+        "name": "slow_prices_b_usdc_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 39,
+        "name": "slow_prices_eth_usdc_id",
         "type_info": "Int8"
       },
       {
@@ -216,9 +216,6 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Int8",
         "Int8"
       ]
     },
@@ -259,13 +256,13 @@
       false,
       false,
       false,
-      false,
-      false,
-      false,
-      false,
+      true,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "0f3d02b8c02a36e4b84cadf4c39abbdc61380169cbf1b680e6e2276d47f6baf9"
+  "hash": "b39af331549abaea9019ffafd042cd68a53b828352131e2cb86254bd260d3a1e"
 }
