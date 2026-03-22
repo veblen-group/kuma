@@ -1,26 +1,19 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { TradeResult } from "@/lib/types";
+import { FailedOnSlowTrade } from "@/lib/types";
 
-export const columns: ColumnDef<TradeResult>[] = [
-  {
-    header: "ID",
-    accessorKey: "id",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs">#{row.getValue("id")}</span>
-    ),
-  },
-  {
-    header: "Signal ID",
-    accessorFn: (row) => row.signal_id,
-  },
+export const columns: ColumnDef<FailedOnSlowTrade>[] = [
   {
     header: "Slow Chain",
-    accessorFn: (row) => row.slow_chain,
+    accessorFn: (row) => row.signal.slow.chain,
   },
   {
     header: "Fast Chain",
-    accessorFn: (row) => row.fast_chain,
-  }
+    accessorFn: (row) => row.signal.fast.chain,
+  },
+  {
+    header: "Slow Tx Hash",
+    accessorFn: (row) => row.slow_tx_hash ?? "—",
+  },
 ];

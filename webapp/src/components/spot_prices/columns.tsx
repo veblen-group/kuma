@@ -6,7 +6,7 @@ import { SpotPrice } from "@/lib/types";
 export const columns: ColumnDef<SpotPrice>[] = [
   {
     header: "Chain",
-    accessorFn: (row) => row.chain.name,
+    accessorKey: "chain",
   },
   {
     header: "Block Height",
@@ -14,11 +14,11 @@ export const columns: ColumnDef<SpotPrice>[] = [
   },
   {
     header: "Token A",
-    accessorFn: (row) => row.pair[0].symbol,
+    accessorKey: "pair_token_a",
   },
   {
     header: "Token B",
-    accessorFn: (row) => row.pair[1].symbol,
+    accessorKey: "pair_token_b",
   },
   {
     header: "Min Pool ID",

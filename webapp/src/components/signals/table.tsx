@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
 import { Signal } from "@/lib/types"
 import { apiClient, useSignals } from "@/lib/api-client"
+import { useStablePageCount } from "@/lib/use-stable-page-count"
 
 
 export function SignalTable() {
@@ -43,13 +44,15 @@ export function SignalTable() {
     }
   );
 
+  const pageCount = useStablePageCount(data)
+
   const table = useReactTable({
     data: data?.data || [],
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     manualPagination: true,
-    pageCount: data?.pagination.total_pages ?? 0,
+    pageCount,
     onPaginationChange: setPagination,
     state: {
       pagination,
@@ -133,7 +136,7 @@ export function SignalTable() {
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
           Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {data?.pagination.total_pages ?? 0}
+          {pageCount}
         </div>
         <Button
           variant="outline"

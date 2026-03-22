@@ -1,6 +1,6 @@
 'use client';
 
-import { SpotPrice, Signal, TradeResult, PaginatedResponse } from "@/lib/types";
+import { SpotPrice, Signal, SuccessfulTrade, FailedOnSlowTrade, FailedOnFastTrade, PaginatedResponse } from "@/lib/types";
 import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import config from "@/generated/kuma.config.json";
@@ -56,24 +56,24 @@ class ApiClient {
     });
   }
 
-  async getSuccessfulTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
-    return this.request<TradeResult>('/trades/successful', {
+  async getSuccessfulTradeResults(params: FetchParams): Promise<PaginatedResponse<SuccessfulTrade>> {
+    return this.request<SuccessfulTrade>('/trades/successful', {
       pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getFailedOnSlowTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
-    return this.request<TradeResult>('/trades/failed-on-slow', {
+  async getFailedOnSlowTradeResults(params: FetchParams): Promise<PaginatedResponse<FailedOnSlowTrade>> {
+    return this.request<FailedOnSlowTrade>('/trades/failed-on-slow', {
       pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getFailedOnFastTradeResults(params: FetchParams): Promise<PaginatedResponse<TradeResult>> {
-    return this.request<TradeResult>('/trades/failed-on-fast', {
+  async getFailedOnFastTradeResults(params: FetchParams): Promise<PaginatedResponse<FailedOnFastTrade>> {
+    return this.request<FailedOnFastTrade>('/trades/failed-on-fast', {
       pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
@@ -109,8 +109,8 @@ export function useSignals(params: FetchParams, options?: Partial<UseQueryOption
   });
 }
 
-export function useSuccessfulTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
-  return useQuery<PaginatedResponse<TradeResult>>({
+export function useSuccessfulTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<SuccessfulTrade>>>) {
+  return useQuery<PaginatedResponse<SuccessfulTrade>>({
     ...options,
     queryKey: [
       'successful_trades',
@@ -122,8 +122,8 @@ export function useSuccessfulTradeResults(params: FetchParams, options?: Partial
   });
 }
 
-export function useFailedOnSlowTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
-  return useQuery<PaginatedResponse<TradeResult>>({
+export function useFailedOnSlowTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<FailedOnSlowTrade>>>) {
+  return useQuery<PaginatedResponse<FailedOnSlowTrade>>({
     ...options,
     queryKey: [
       'failed_on_slow_trades',
@@ -135,8 +135,8 @@ export function useFailedOnSlowTradeResults(params: FetchParams, options?: Parti
   });
 }
 
-export function useFailedOnFastTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<TradeResult>>>) {
-  return useQuery<PaginatedResponse<TradeResult>>({
+export function useFailedOnFastTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<FailedOnFastTrade>>>) {
+  return useQuery<PaginatedResponse<FailedOnFastTrade>>({
     ...options,
     queryKey: [
       'failed_on_fast_trades',
@@ -156,11 +156,11 @@ export default function ApiClientProvider({
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        // Global settings
-        staleTime: 1000 * 60 * 5, // 5 minutes
-        gcTime: 1000 * 60 * 60, // 1 hour
-        retry: 2, // Retry failed requests twice
-        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: 2,
+        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       },
     },
   }));
