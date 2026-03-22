@@ -62,6 +62,8 @@ pub async fn get_spot_prices_by_pair(
 ) -> Result<Json<PaginatedResponse<SpotPriceResponse>>, Response> {
     let (page, page_size) = params.pagination.sanitize();
     let (offset, limit) = params.pagination.to_offset_limit();
+    let max_rows = page_size * 10;
+    let capped_limit = limit.min(max_rows.saturating_sub(offset));
 
     info!(
         pair = ?params.pair,
@@ -89,7 +91,7 @@ pub async fn get_spot_prices_by_pair(
 
     let (count_result, data_result) = tokio::join!(
         repo.count_by_symbols(&token_a_symbol, &token_b_symbol),
-        repo.get_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
+        repo.get_by_symbols(&token_a_symbol, &token_b_symbol, capped_limit, offset)
     );
 
     match (count_result, data_result) {
@@ -104,7 +106,7 @@ pub async fn get_spot_prices_by_pair(
                 .collect(),
             page,
             page_size,
-            Some(total_count),
+            Some(total_count.min(u64::from(page_size) * 10)),
         ))),
         (Err(e), _) | (_, Err(e)) => {
             tracing::error!("Failed to fetch spot prices: {}", e);
