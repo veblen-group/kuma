@@ -1,7 +1,9 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table";
-import { SuccessfulTrade } from "@/lib/types";
+import type { ColumnDef } from "@tanstack/react-table"
+import { SuccessfulTrade } from "@/lib/types"
+import { ExplorerLink } from "@/components/ui/explorer-link"
+import { ChainBadge } from "@/components/ui/chain-badge"
 
 export const columns: ColumnDef<SuccessfulTrade>[] = [
   {
@@ -19,38 +21,38 @@ export const columns: ColumnDef<SuccessfulTrade>[] = [
   },
   {
     header: "Slow Chain",
-    accessorFn: (row) => row.signal.slow.chain,
+    id: "slow_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
   },
   {
     header: "Fast Chain",
-    accessorFn: (row) => row.signal.fast.chain,
+    id: "fast_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
   },
   {
-    header: "Slow Tx Hash",
+    header: "Slow Tx",
     accessorKey: "slow_tx_hash",
-    cell: ({ row }) => {
-      const hash = row.getValue("slow_tx_hash") as string;
-      return (
-        <span className="font-mono text-xs" title={hash}>
-          {hash.slice(0, 8)}...{hash.slice(-6)}
-        </span>
-      );
-    },
+    cell: ({ row }) => (
+      <ExplorerLink
+        chain={row.original.signal.slow.chain}
+        type="tx"
+        value={row.getValue("slow_tx_hash") as string}
+      />
+    ),
   },
   {
-    header: "Fast Tx Hash",
+    header: "Fast Tx",
     accessorKey: "fast_tx_hash",
-    cell: ({ row }) => {
-      const hash = row.getValue("fast_tx_hash") as string;
-      return (
-        <span className="font-mono text-xs" title={hash}>
-          {hash.slice(0, 8)}...{hash.slice(-6)}
-        </span>
-      );
-    },
+    cell: ({ row }) => (
+      <ExplorerLink
+        chain={row.original.signal.fast.chain}
+        type="tx"
+        value={row.getValue("fast_tx_hash") as string}
+      />
+    ),
   },
   {
     header: "Realized Profit",
     accessorKey: "realized_profit_str",
   },
-];
+]
