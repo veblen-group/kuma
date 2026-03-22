@@ -79,7 +79,7 @@ export function SpotPriceTable() {
   return (
     <div>
       <div className="rounded-md border">
-        <Table>
+        <Table containerClassName="overflow-visible">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
