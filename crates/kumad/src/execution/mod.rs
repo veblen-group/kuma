@@ -7,10 +7,7 @@ use futures::{
     pin_mut,
     stream::{FuturesUnordered, StreamExt, select_all},
 };
-use tokio::{
-    select,
-    sync::{mpsc, oneshot},
-};
+use tokio::{select, sync::mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
@@ -67,10 +64,8 @@ impl Future for Handle {
 }
 
 struct Worker {
-    signal_rxs: HashMap<
-        strategy::CrossChainSingleHop,
-        mpsc::Receiver<(signals::CrossChainSingleHop, oneshot::Receiver<i64>)>,
-    >,
+    signal_rxs:
+        HashMap<strategy::CrossChainSingleHop, mpsc::Receiver<signals::CrossChainSingleHop>>,
     shutdown_token: CancellationToken,
     #[allow(dead_code)]
     db: database::Handle,
@@ -128,7 +123,7 @@ impl Worker {
                 }
 
                 // If no running trade, process next generated signal
-                Some((signal, id_rx)) = signal_stream.next(), if curr_trade.is_terminated() => {
+                Some(signal) = signal_stream.next(), if curr_trade.is_terminated() => {
                     info!(
                         %signal,
                         "💰 Received trade signal. executing cross-chain arbitrage",
@@ -142,7 +137,7 @@ impl Worker {
                         }
                     };
 
-                    curr_trade.set(trade.run(id_rx).fuse());
+                    curr_trade.set(trade.run().fuse());
                 },
 
                 Some(res) = db_writes.next() => {

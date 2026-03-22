@@ -109,19 +109,14 @@ impl TokenBalances {
 
 impl Display for TokenBalances {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let balances = self
+        let balances_str = self
             .balances
             .iter()
             .map(|(token, bal)| format!("{}: {}", token.symbol, bal))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(
-            f,
-            "TokenBalances {{\n
-                account_addr: {}\n,
-                balances: \n{:?},\n
-            }}",
-            self.account_addr, balances
-        )
+
+        // Keep it on one line for cleaner log parsing
+        write!(f, "[{}] Balances: {}", self.account_addr, balances_str)
     }
 }

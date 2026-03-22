@@ -5,64 +5,85 @@ use axum::{
     routing::get,
     Json, Router,
 };
+use color_eyre::eyre::{Context as _, OptionExt as _};
+use kuma_core::{
+    database::{
+        SignalRepository, SpotPriceRepository, TradeFailedOnFastRow, TradeFailedOnSlowRow,
+        TradeSuccessRow,
+    },
+    signals::{self, CrossChainSingleHop},
+};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::{
     models::{PaginatedResponse, PaginationQuery},
     pair::parse_pair,
+    routes::signals::CrossChainSingleHopResponse,
     AppState,
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BaseTradeResponse {
-    pub signal_id: i64,
-    pub slow_chain: String,
-    pub slow_height: u64,
-    pub slow_pool_id: String,
-    pub fast_chain: String,
-    pub fast_height: u64,
-    pub fast_pool_id: String,
-    pub slow_swap_token_in_symbol: String,
-    pub slow_swap_token_out_symbol: String,
-    pub slow_swap_amount_in: String,
-    pub slow_swap_amount_out: String,
-    pub slow_swap_gas_cost: String,
-    pub fast_swap_token_in_symbol: String,
-    pub fast_swap_token_out_symbol: String,
-    pub fast_swap_amount_in: String,
-    pub fast_swap_amount_out: String,
-    pub fast_swap_gas_cost: String,
-    pub surplus_a: String,
-    pub surplus_b: String,
-    pub expected_profit_a: String,
-    pub expected_profit_b: String,
-    pub max_slippage_bps: u64,
-    pub congestion_risk_discount_bps: u64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuccessfulTradeResponse {
-    #[serde(flatten)]
-    pub base: BaseTradeResponse,
+    pub id: i64,
+    pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
     pub realized_profit_str: String,
 }
 
+impl SuccessfulTradeResponse {
+    fn from_row_and_signal(row: TradeSuccessRow, signal: signals::CrossChainSingleHop) -> Self {
+        Self {
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            slow_tx_hash: row.slow_tx_hash,
+            fast_tx_hash: row.fast_tx_hash,
+            realized_profit_str: row.realized_profit_str,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnSlowTradeResponse {
-    #[serde(flatten)]
-    pub base: BaseTradeResponse,
+    pub id: i64,
+    pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: Option<String>,
+}
+
+impl FailedOnSlowTradeResponse {
+    fn from_row_and_signal(
+        row: TradeFailedOnSlowRow,
+        signal: signals::CrossChainSingleHop,
+    ) -> Self {
+        Self {
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            slow_tx_hash: row.slow_tx_hash,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnFastTradeResponse {
-    #[serde(flatten)]
-    pub base: BaseTradeResponse,
+    pub id: i64,
+    pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
+}
+
+impl FailedOnFastTradeResponse {
+    fn from_row_and_signal(
+        row: TradeFailedOnFastRow,
+        signal: signals::CrossChainSingleHop,
+    ) -> Self {
+        Self {
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            slow_tx_hash: row.slow_tx_hash,
+            fast_tx_hash: row.fast_tx_hash,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -80,48 +101,44 @@ pub struct TradeResultQuery {
     pub pagination: PaginationQuery,
 }
 
-// Helper function to fetch signal and build base response
-async fn get_base_trade_response(
-    signal_id: i64,
-    signal_repo: &kuma_core::database::SignalRepository,
-) -> Result<BaseTradeResponse, Response> {
-    println!("Fetching signal for trade ID: {}", signal_id);
-    let signal = signal_repo.get_by_id(signal_id).await.map_err(|e| {
-        tracing::error!("Failed to fetch signal for trade {}: {}", signal_id, e);
-        (StatusCode::INTERNAL_SERVER_ERROR,
-         Json(serde_json::json!({ "error": "Database error", "message": format!("Failed to fetch signal for trade {}", signal_id) }))).into_response()
-    })?;
-    let signal = signal.ok_or_else(|| {
-        tracing::error!("Signal not found for trade {}", signal_id);
-        (StatusCode::INTERNAL_SERVER_ERROR,
-         Json(serde_json::json!({ "error": "Data inconsistency", "message": format!("Signal {} not found", signal_id) }))).into_response()
-    })?;
-
-    Ok(BaseTradeResponse {
-        signal_id,
-        slow_chain: signal.slow_chain.name.to_string(),
-        slow_height: signal.slow_height,
-        slow_pool_id: signal.slow_pool_id.to_string(),
-        fast_chain: signal.fast_chain.name.to_string(),
-        fast_height: signal.fast_height,
-        fast_pool_id: signal.fast_pool_id.to_string(),
-        slow_swap_token_in_symbol: signal.slow_swap_sim.token_in.symbol,
-        slow_swap_token_out_symbol: signal.slow_swap_sim.token_out.symbol,
-        slow_swap_amount_in: signal.slow_swap_sim.amount_in.to_string(),
-        slow_swap_amount_out: signal.slow_swap_sim.amount_out.to_string(),
-        slow_swap_gas_cost: signal.slow_swap_sim.gas_cost.to_string(),
-        fast_swap_token_in_symbol: signal.fast_swap_sim.token_in.symbol,
-        fast_swap_token_out_symbol: signal.fast_swap_sim.token_out.symbol,
-        fast_swap_amount_in: signal.fast_swap_sim.amount_in.to_string(),
-        fast_swap_amount_out: signal.fast_swap_sim.amount_out.to_string(),
-        fast_swap_gas_cost: signal.fast_swap_sim.gas_cost.to_string(),
-        surplus_a: signal.expected_profit.surplus.0.to_string(),
-        surplus_b: signal.expected_profit.surplus.1.to_string(),
-        expected_profit_a: signal.expected_profit.min_usdc_amounts.0.to_string(),
-        expected_profit_b: signal.expected_profit.min_usdc_amounts.1.to_string(),
-        max_slippage_bps: signal.max_slippage_bps,
-        congestion_risk_discount_bps: signal.congestion_risk_discount_bps,
+#[allow(clippy::result_large_err)]
+fn parse_pair_or_err(pair: &str) -> Result<(String, String), Response> {
+    parse_pair(&pair.to_uppercase()).map_err(|e| {
+        tracing::error!("Failed to parse pair: {}", e);
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": "Invalid pair format",
+                "message": format!("Failed to parse pair '{}': {}", pair, e)
+            })),
+        )
+            .into_response()
     })
+}
+
+async fn enrich_rows<Row>(
+    rows: Vec<Row>,
+    signal_repo: SignalRepository,
+    spot_price_repo: SpotPriceRepository,
+    get_id: impl Fn(&Row) -> i64,
+) -> color_eyre::eyre::Result<Vec<(Row, CrossChainSingleHop)>>
+where
+    Row: Send + 'static,
+{
+    futures::future::try_join_all(rows.into_iter().map(|row| {
+        let signal_id = get_id(&row);
+        let signal_repo = signal_repo.clone();
+        let spot_price_repo = spot_price_repo.clone();
+        async move {
+            let signal = signal_repo
+                .get_by_id(signal_id, &spot_price_repo)
+                .await
+                .wrap_err("failed to get signal from db for trade")?
+                .ok_or_eyre("no signal found in db for trade")?;
+            Ok((row, signal))
+        }
+    }))
+    .await
 }
 
 pub async fn get_all_trade_results_by_pair(
@@ -139,95 +156,95 @@ pub async fn get_all_trade_results_by_pair(
     );
 
     let trade_repo = state.db.trade_repository();
-    let signal_repo = state.db.signal_repository();
+    let (token_a, token_b) = parse_pair_or_err(&params.pair)?;
 
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
-        Ok(pair) => pair,
-        Err(e) => {
-            tracing::error!("Failed to parse pair: {}", e);
+    let (
+        success,
+        success_count,
+        failed_on_slow,
+        failed_on_slow_count,
+        failed_on_fast,
+        failed_on_fast_count,
+    ) = tokio::join!(
+        trade_repo.get_successful_by_symbols(&token_a, &token_b, limit, offset),
+        trade_repo.count_successful_by_symbols(&token_a, &token_b),
+        trade_repo.get_failed_on_slow_by_symbols(&token_a, &token_b, limit, offset),
+        trade_repo.count_failed_on_slow_by_symbols(&token_a, &token_b),
+        trade_repo.get_failed_on_fast_by_symbols(&token_a, &token_b, limit, offset),
+        trade_repo.count_failed_on_fast_by_symbols(&token_a, &token_b)
+    );
+
+    let signal_repo = state.db.signal_repository();
+    let spot_price_repo = state.db.spot_price_repository();
+
+    let mut responses: Vec<TradeResultResponse> = Vec::new();
+
+    if let Ok(rows) = success {
+        if let Ok(enriched) = enrich_rows(rows, signal_repo.clone(), spot_price_repo.clone(), |r| {
+            r.signal_id
+        })
+        .await
+        {
+            responses.extend(enriched.into_iter().map(|(row, signal)| {
+                TradeResultResponse::Successful(SuccessfulTradeResponse::from_row_and_signal(
+                    row, signal,
+                ))
+            }));
+        }
+    }
+    if let Ok(rows) = failed_on_slow {
+        if let Ok(enriched) = enrich_rows(rows, signal_repo.clone(), spot_price_repo.clone(), |r| {
+            r.signal_id
+        })
+        .await
+        {
+            responses.extend(enriched.into_iter().map(|(row, signal)| {
+                TradeResultResponse::FailedOnSlow(FailedOnSlowTradeResponse::from_row_and_signal(
+                    row, signal,
+                ))
+            }));
+        }
+    }
+    if let Ok(rows) = failed_on_fast {
+        if let Ok(enriched) = enrich_rows(rows, signal_repo, spot_price_repo, |r| r.signal_id).await
+        {
+            responses.extend(enriched.into_iter().map(|(row, signal)| {
+                TradeResultResponse::FailedOnFast(FailedOnFastTradeResponse::from_row_and_signal(
+                    row, signal,
+                ))
+            }));
+        }
+    }
+
+    let total_count = match (success_count, failed_on_slow_count, failed_on_fast_count) {
+        (Ok(s), Ok(slow), Ok(fast)) => s + slow + fast,
+        (s, slow, fast) => {
+            tracing::error!(
+                success_count_err = ?s.err(),
+                failed_on_slow_count_err = ?slow.err(),
+                failed_on_fast_count_err = ?fast.err(),
+                "Failed to fetch total trade counts"
+            );
             return Err((
-                StatusCode::BAD_REQUEST,
+                StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
-                    "error": "Invalid pair format",
-                    "message": format!("Failed to parse pair '{}': {}", params.pair, e)
+                    "error": "Database error",
+                    "message": "Failed to fetch total trade counts"
                 })),
             )
                 .into_response());
         }
     };
 
-    // Get total count and data for all trade types
-    let (
-        successful_count_res,
-        failed_slow_count_res,
-        failed_fast_count_res,
-        successful_data_res,
-        failed_slow_data_res,
-        failed_fast_data_res,
-    ) = tokio::join!(
-        trade_repo.count_successful_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.count_failed_on_slow_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.count_failed_on_fast_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.get_successful_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset),
-        trade_repo.get_failed_on_slow_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset),
-        trade_repo.get_failed_on_fast_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
-    );
-
-    let total_count = successful_count_res.unwrap_or(0)
-        + failed_slow_count_res.unwrap_or(0)
-        + failed_fast_count_res.unwrap_or(0);
-
-    println!("Total trade count: {}", total_count);
-    let mut all_trade_responses: Vec<TradeResultResponse> = Vec::new();
-
-    if let Ok(successful_trades) = successful_data_res {
-        for row in successful_trades {
-            let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-            all_trade_responses.push(TradeResultResponse::Successful(SuccessfulTradeResponse {
-                base,
-                slow_tx_hash: row.slow_tx_hash,
-                fast_tx_hash: row.fast_tx_hash,
-                realized_profit_str: row.realized_profit_str,
-            }));
-        }
-    }
-
-    if let Ok(failed_slow_trades) = failed_slow_data_res {
-        for row in failed_slow_trades {
-            let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-            all_trade_responses.push(TradeResultResponse::FailedOnSlow(
-                FailedOnSlowTradeResponse {
-                    base,
-                    slow_tx_hash: row.slow_tx_hash,
-                },
-            ));
-        }
-    }
-
-    if let Ok(failed_fast_trades) = failed_fast_data_res {
-        for row in failed_fast_trades {
-            let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-            all_trade_responses.push(TradeResultResponse::FailedOnFast(
-                FailedOnFastTradeResponse {
-                    base,
-                    slow_tx_hash: row.slow_tx_hash,
-                    fast_tx_hash: row.fast_tx_hash,
-                },
-            ));
-        }
-    }
-
-    // TODO: Sort all_trade_responses by created_at DESC from signals
-
+    // TODO: sort responses by created_at DESC (requires created_at in the joined row)
     Ok(Json(PaginatedResponse::new(
-        all_trade_responses,
+        responses,
         page,
         page_size,
         Some(total_count),
     )))
 }
 
-// Specific handlers for each trade type
 pub async fn get_successful_trade_results_by_pair(
     State(state): State<AppState>,
     Query(params): Query<TradeResultQuery>,
@@ -243,59 +260,54 @@ pub async fn get_successful_trade_results_by_pair(
     );
 
     let trade_repo = state.db.trade_repository();
-    let signal_repo = state.db.signal_repository();
-
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
-        Ok(pair) => pair,
-        Err(e) => {
-            tracing::error!("Failed to parse pair: {}", e);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": "Invalid pair format",
-                    "message": format!("Failed to parse pair '{}': {}", params.pair, e)
-                })),
-            )
-                .into_response());
-        }
-    };
+    let (token_a, token_b) = parse_pair_or_err(&params.pair)?;
 
     let (count_result, data_result) = tokio::join!(
-        trade_repo.count_successful_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.get_successful_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
+        trade_repo.count_successful_by_symbols(&token_a, &token_b),
+        trade_repo.get_successful_by_symbols(&token_a, &token_b, limit, offset)
     );
 
-    match (count_result, data_result) {
-        (Ok(total_count), Ok(trade_rows)) => {
-            let mut responses: Vec<SuccessfulTradeResponse> = Vec::with_capacity(trade_rows.len());
-            for row in trade_rows {
-                let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-                responses.push(SuccessfulTradeResponse {
-                    base,
-                    slow_tx_hash: row.slow_tx_hash,
-                    fast_tx_hash: row.fast_tx_hash,
-                    realized_profit_str: row.realized_profit_str,
-                });
-            }
-            Ok(Json(PaginatedResponse::new(
-                responses,
-                page,
-                page_size,
-                Some(total_count),
-            )))
-        }
+    let (total_count, rows) = match (count_result, data_result) {
+        (Ok(c), Ok(r)) => (c, r),
         (Err(e), _) | (_, Err(e)) => {
             tracing::error!("Failed to fetch successful trade results: {}", e);
-            Err((
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": "Database error",
                     "message": "Failed to fetch successful trade results"
                 })),
             )
-                .into_response())
+                .into_response());
         }
-    }
+    };
+    let responses = enrich_rows(
+        rows,
+        state.db.signal_repository(),
+        state.db.spot_price_repository(),
+        |r| r.signal_id,
+    )
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Database error",
+                "message": "Failed to fetch successful trade results"
+            })),
+        )
+            .into_response()
+    })?
+    .into_iter()
+    .map(|(row, signal)| SuccessfulTradeResponse::from_row_and_signal(row, signal))
+    .collect::<Vec<_>>();
+
+    Ok(Json(PaginatedResponse::new(
+        responses,
+        page,
+        page_size,
+        Some(total_count),
+    )))
 }
 
 pub async fn get_failed_on_slow_trade_results_by_pair(
@@ -313,58 +325,55 @@ pub async fn get_failed_on_slow_trade_results_by_pair(
     );
 
     let trade_repo = state.db.trade_repository();
-    let signal_repo = state.db.signal_repository();
-
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
-        Ok(pair) => pair,
-        Err(e) => {
-            tracing::error!("Failed to parse pair: {}", e);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": "Invalid pair format",
-                    "message": format!("Failed to parse pair '{}': {}", params.pair, e)
-                })),
-            )
-                .into_response());
-        }
-    };
+    let (token_a, token_b) = parse_pair_or_err(&params.pair)?;
 
     let (count_result, data_result) = tokio::join!(
-        trade_repo.count_failed_on_slow_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.get_failed_on_slow_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
+        trade_repo.count_failed_on_slow_by_symbols(&token_a, &token_b),
+        trade_repo.get_failed_on_slow_by_symbols(&token_a, &token_b, limit, offset)
     );
 
-    match (count_result, data_result) {
-        (Ok(total_count), Ok(trade_rows)) => {
-            let mut responses: Vec<FailedOnSlowTradeResponse> =
-                Vec::with_capacity(trade_rows.len());
-            for row in trade_rows {
-                let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-                responses.push(FailedOnSlowTradeResponse {
-                    base,
-                    slow_tx_hash: row.slow_tx_hash,
-                });
-            }
-            Ok(Json(PaginatedResponse::new(
-                responses,
-                page,
-                page_size,
-                Some(total_count),
-            )))
-        }
+    let (total_count, rows) = match (count_result, data_result) {
+        (Ok(c), Ok(r)) => (c, r),
         (Err(e), _) | (_, Err(e)) => {
             tracing::error!("Failed to fetch failed on slow trade results: {}", e);
-            Err((
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": "Database error",
                     "message": "Failed to fetch failed on slow trade results"
                 })),
             )
-                .into_response())
+                .into_response());
         }
-    }
+    };
+
+    let responses = enrich_rows(
+        rows,
+        state.db.signal_repository(),
+        state.db.spot_price_repository(),
+        |r| r.signal_id,
+    )
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Database error",
+                "message": "Failed to fetch failed on slow trade results"
+            })),
+        )
+            .into_response()
+    })?
+    .into_iter()
+    .map(|(row, signal)| FailedOnSlowTradeResponse::from_row_and_signal(row, signal))
+    .collect::<Vec<_>>();
+
+    Ok(Json(PaginatedResponse::new(
+        responses,
+        page,
+        page_size,
+        Some(total_count),
+    )))
 }
 
 pub async fn get_failed_on_fast_trade_results_by_pair(
@@ -382,59 +391,55 @@ pub async fn get_failed_on_fast_trade_results_by_pair(
     );
 
     let trade_repo = state.db.trade_repository();
-    let signal_repo = state.db.signal_repository();
-
-    let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
-        Ok(pair) => pair,
-        Err(e) => {
-            tracing::error!("Failed to parse pair: {}", e);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({
-                    "error": "Invalid pair format",
-                    "message": format!("Failed to parse pair '{}': {}", params.pair, e)
-                })),
-            )
-                .into_response());
-        }
-    };
+    let (token_a, token_b) = parse_pair_or_err(&params.pair)?;
 
     let (count_result, data_result) = tokio::join!(
-        trade_repo.count_failed_on_fast_by_symbols(&token_a_symbol, &token_b_symbol),
-        trade_repo.get_failed_on_fast_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
+        trade_repo.count_failed_on_fast_by_symbols(&token_a, &token_b),
+        trade_repo.get_failed_on_fast_by_symbols(&token_a, &token_b, limit, offset)
     );
 
-    match (count_result, data_result) {
-        (Ok(total_count), Ok(trade_rows)) => {
-            let mut responses: Vec<FailedOnFastTradeResponse> =
-                Vec::with_capacity(trade_rows.len());
-            for row in trade_rows {
-                let base = get_base_trade_response(row.signal_id, &signal_repo).await?;
-                responses.push(FailedOnFastTradeResponse {
-                    base,
-                    slow_tx_hash: row.slow_tx_hash,
-                    fast_tx_hash: row.fast_tx_hash,
-                });
-            }
-            Ok(Json(PaginatedResponse::new(
-                responses,
-                page,
-                page_size,
-                Some(total_count),
-            )))
-        }
+    let (total_count, rows) = match (count_result, data_result) {
+        (Ok(c), Ok(r)) => (c, r),
         (Err(e), _) | (_, Err(e)) => {
             tracing::error!("Failed to fetch failed on fast trade results: {}", e);
-            Err((
+            return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": "Database error",
                     "message": "Failed to fetch failed on fast trade results"
                 })),
             )
-                .into_response())
+                .into_response());
         }
-    }
+    };
+
+    let responses = enrich_rows(
+        rows,
+        state.db.signal_repository(),
+        state.db.spot_price_repository(),
+        |r| r.signal_id,
+    )
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": "Database error",
+                "message": "Failed to fetch failed on fast trade results"
+            })),
+        )
+            .into_response()
+    })?
+    .into_iter()
+    .map(|(row, signal)| FailedOnFastTradeResponse::from_row_and_signal(row, signal))
+    .collect::<Vec<_>>();
+
+    Ok(Json(PaginatedResponse::new(
+        responses,
+        page,
+        page_size,
+        Some(total_count),
+    )))
 }
 
 pub fn routes() -> Router<AppState> {
@@ -449,9 +454,4 @@ pub fn routes() -> Router<AppState> {
             "/failed-on-fast",
             get(get_failed_on_fast_trade_results_by_pair),
         )
-}
-
-#[cfg(test)]
-mod tests {
-    // TODO: Add tests
 }

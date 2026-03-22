@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO successful_trade (signal_id, slow_tx_hash, fast_tx_hash, realized_profit_str)\n            SELECT id, $7, $8, $9 FROM signals\n            WHERE slow_chain = $1 AND slow_height = $2 AND slow_pool_id = $3\n              AND fast_chain = $4 AND fast_height = $5 AND fast_pool_id = $6\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3cb24c6ebaaa5b9eb5dcebc4ad4bf1ea25f3593f0938334e2204266928e005bb"
+}
