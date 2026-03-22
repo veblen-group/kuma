@@ -11,6 +11,11 @@ export const columns: ColumnDef<SuccessfulTrade>[] = [
   {
     header: "Signal ID",
     accessorFn: (row) => row.signal.id,
+    cell: ({ getValue }) => (
+      <a href={`#signal-${getValue()}`} className="font-mono text-xs underline hover:text-primary">
+        {getValue() as number}
+      </a>
+    ),
   },
   {
     header: "Slow Chain",

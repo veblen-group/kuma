@@ -105,6 +105,7 @@ export function SignalTable() {
               table.getRowModel().rows.map((row) => (
                 // row definition
                 <TableRow
+                  id={`signal-${row.original.id}`}
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
                 >

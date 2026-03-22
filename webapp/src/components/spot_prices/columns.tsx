@@ -5,10 +5,6 @@ import { SpotPrice } from "@/lib/types";
 
 export const columns: ColumnDef<SpotPrice>[] = [
   {
-    header: "ID",
-    accessorKey: "id",
-  },
-  {
     header: "Created At",
     accessorKey: "created_at",
     cell: ({ row }) => {
