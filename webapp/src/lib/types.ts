@@ -1,5 +1,7 @@
 // Matches SpotPriceResponse
 export interface SpotPrice {
+  id: number | null;
+  created_at: string | null;
   chain: string;
   pair_token_a: string;
   pair_token_b: string;
@@ -49,6 +51,7 @@ export interface ExpectedProfit {
 
 // Matches CrossChainSingleHopResponse
 export interface Signal {
+  id: number;
   slow: Swap;
   fast: Swap;
   slow_prices_a_b: SpotPrice;
@@ -62,6 +65,7 @@ export interface Signal {
 
 // Matches SuccessfulTradeResponse
 export interface SuccessfulTrade {
+  id: number;
   signal: Signal;
   slow_tx_hash: string;
   fast_tx_hash: string;
@@ -70,12 +74,14 @@ export interface SuccessfulTrade {
 
 // Matches FailedOnSlowTradeResponse
 export interface FailedOnSlowTrade {
+  id: number;
   signal: Signal;
   slow_tx_hash: string | null;
 }
 
 // Matches FailedOnFastTradeResponse
 export interface FailedOnFastTrade {
+  id: number;
   signal: Signal;
   slow_tx_hash: string;
   fast_tx_hash: string | null;

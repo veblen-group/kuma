@@ -5,6 +5,10 @@ import { Signal } from "@/lib/types";
 
 export const columns: ColumnDef<Signal>[] = [
   {
+    header: "Signal ID",
+    accessorKey: "id",
+  },
+  {
     header: "Slow Chain",
     accessorFn: (row) => row.slow.chain,
   },

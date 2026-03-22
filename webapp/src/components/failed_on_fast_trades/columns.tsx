@@ -5,6 +5,14 @@ import { FailedOnFastTrade } from "@/lib/types";
 
 export const columns: ColumnDef<FailedOnFastTrade>[] = [
   {
+    header: "Trade ID",
+    accessorKey: "id",
+  },
+  {
+    header: "Signal ID",
+    accessorFn: (row) => row.signal.id,
+  },
+  {
     header: "Slow Chain",
     accessorFn: (row) => row.signal.slow.chain,
   },

@@ -57,6 +57,46 @@ pub struct Precomputes {
     pub base_fee: u64,
 }
 
+impl Precomputes {
+    pub fn log_spot_prices(&self) -> String {
+        let fmt_row = |p_opt: &Option<SpotPrices>| {
+            p_opt
+                .as_ref()
+                .map(|p| {
+                    let label = format!("{}/{}", p.pair.token_a().symbol, p.pair.token_b().symbol);
+                    format!("{: <12} | [{:.6}, {:.6}]", label, p.min_price, p.max_price)
+                })
+                .unwrap_or_else(|| "N/A".to_string())
+        };
+
+        let primary_label = format!(
+            "{}/{}",
+            self.prices_a_b.pair.token_a().symbol,
+            self.prices_a_b.pair.token_b().symbol
+        );
+
+        let primary_row = format!(
+            "{: <12} | [{:.6}, {:.6}]",
+            primary_label, self.prices_a_b.min_price, self.prices_a_b.max_price
+        );
+
+        // Note: Using the '\' at the end of the line tells Rust to ignore the
+        // leading whitespace on the next line of the source code.
+        format!(
+            "📈 Spot Price Update [Block: {}]\n\
+             Asset Pair   | [Min, Max]\n\
+             {}\n\
+             {}\n\
+             {}\n\
+             {}",
+            self.block_height,
+            primary_row,
+            fmt_row(&self.prices_a_usdc),
+            fmt_row(&self.prices_b_usdc),
+            fmt_row(&self.prices_eth_usdc)
+        )
+    }
+}
 /// Strategy configuration for cross-chain single-hop arbitrage.
 ///
 /// Encapsulates all the parameters needed to detect and execute arbitrage opportunities
