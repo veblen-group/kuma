@@ -19,6 +19,7 @@ use crate::{
 /// full `Chain` struct which contains API keys and RPC credentials.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpotPriceResponse {
+    // TODO: add id, created at
     pub chain: String,
     pub pair_token_a: String,
     pub pair_token_b: String,

@@ -224,6 +224,15 @@ impl Worker {
                         new_precompute.prices_eth_usdc.clone(),
                     ).boxed());
 
+                    info!(
+                        prices_a_b = %new_precompute.prices_a_b,
+                        prices_a_usdc = %new_precompute.prices_a_usdc.as_ref().map_or("N/A".into(), |p| p.to_string()),
+                        prices_b_usdc = %new_precompute.prices_b_usdc.as_ref().map_or("N/A".into(), |p| p.to_string()),
+                        prices_eth_usdc = %new_precompute.prices_eth_usdc.as_ref().map_or("N/A".into(), |p| p.to_string()),
+                        "📈 Computed new spot prices"
+                    );
+
+
                     precompute = Some(new_precompute);
                 }
 

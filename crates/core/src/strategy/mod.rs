@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{error, instrument, trace};
+use tracing::{error, info, instrument, trace};
 use tycho_common::models::token::Token;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_core::simulation::protocol_sim::ProtocolSim,
@@ -166,12 +166,6 @@ impl CrossChainSingleHop {
                 self.slow_pair, self.slow_chain
             )
         })?;
-        trace!(
-            %prices_a_b,
-            block.height = prices_a_b.block_height,
-            chain.name = %self.slow_chain.name,
-            "✅ Generated spot prices"
-        );
 
         // calculate usdc spot prices
         let prices_a_usdc = if let (Some(token_a_usdc), Some(token_a_usdc_state)) =
@@ -188,12 +182,6 @@ impl CrossChainSingleHop {
                     token_a_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_a_usdc,
-                block.height = prices_a_b.block_height,
-                chain.name = %self.slow_chain.name,
-                "✅ Generated spot prices"
-            );
             Some(prices_a_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for token A == USDC");
@@ -214,10 +202,6 @@ impl CrossChainSingleHop {
                     token_b_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_b_usdc,
-                "✅ Generated spot prices"
-            );
             Some(prices_b_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for token B == USDC");
@@ -238,12 +222,6 @@ impl CrossChainSingleHop {
                     eth_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_eth_usdc,
-                block.height = prices_eth_usdc.block_height,
-                chain.name = %self.slow_chain.name,
-                "✅ Generated ETH-USDC spot prices"
-            );
             Some(prices_eth_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for ETH == USDC");

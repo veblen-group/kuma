@@ -25,6 +25,7 @@ use crate::{
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuccessfulTradeResponse {
+    // TODO: add trade id
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
@@ -44,6 +45,7 @@ impl SuccessfulTradeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnSlowTradeResponse {
+    // TODO: add trade id
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: Option<String>,
 }
@@ -62,6 +64,7 @@ impl FailedOnSlowTradeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnFastTradeResponse {
+    // TODO: add trade id
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,

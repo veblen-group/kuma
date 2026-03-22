@@ -89,6 +89,7 @@ impl From<ExpectedProfit> for ExpectedProfitResponse {
 /// `protocol_component` is omitted (internal encoding detail).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CrossChainSingleHopResponse {
+    // TODO: add id
     pub slow: SwapResponse,
     pub fast: SwapResponse,
     /// Spot prices on the slow chain at signal generation time.
