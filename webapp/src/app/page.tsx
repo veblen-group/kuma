@@ -3,6 +3,7 @@ import { SpotPriceTable } from "@/components/spot_prices/table";
 import { SuccessfulTradeResultTable } from "@/components/successful_trades/table";
 import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
 import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades/table";
+import { SpotPriceChart } from "@/components/spot_prices/chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -29,9 +30,7 @@ export default function Home() {
               <CardTitle>Price Chart</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-96 flex items-center justify-center text-muted-foreground bg-muted/25 rounded-md">
-                Price Chart Placeholder
-              </div>
+              <SpotPriceChart />
             </CardContent>
           </Card>
         </div>
