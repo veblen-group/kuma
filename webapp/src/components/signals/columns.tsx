@@ -7,6 +7,11 @@ export const columns: ColumnDef<Signal>[] = [
   {
     header: "Signal ID",
     accessorKey: "id",
+    cell: ({ getValue }) => (
+      <a href={`#signal-${getValue()}`} className="font-mono text-xs underline hover:text-primary">
+        {getValue() as number}
+      </a>
+    ),
   },
   {
     header: "Slow Chain",

@@ -36,7 +36,8 @@ export function SpotPriceTable() {
     },
     {
       placeholderData: previousData => previousData,
-      staleTime: 1000 * 60 * 5, // 1 minute
+      staleTime: 30_000,
+      refetchInterval: 30_000,
     }
   );
 
