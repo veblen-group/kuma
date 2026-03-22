@@ -1,7 +1,9 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table";
-import { FailedOnSlowTrade } from "@/lib/types";
+import type { ColumnDef } from "@tanstack/react-table"
+import { FailedOnSlowTrade } from "@/lib/types"
+import { ExplorerLink } from "@/components/ui/explorer-link"
+import { ChainBadge } from "@/components/ui/chain-badge"
 
 export const columns: ColumnDef<FailedOnSlowTrade>[] = [
   {
@@ -19,14 +21,23 @@ export const columns: ColumnDef<FailedOnSlowTrade>[] = [
   },
   {
     header: "Slow Chain",
-    accessorFn: (row) => row.signal.slow.chain,
+    id: "slow_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
   },
   {
     header: "Fast Chain",
-    accessorFn: (row) => row.signal.fast.chain,
+    id: "fast_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
   },
   {
-    header: "Slow Tx Hash",
-    accessorFn: (row) => row.slow_tx_hash ?? "—",
+    header: "Slow Tx",
+    id: "slow_tx",
+    cell: ({ row }) => {
+      const hash = row.original.slow_tx_hash
+      if (!hash) return <span className="text-muted-foreground">—</span>
+      return (
+        <ExplorerLink chain={row.original.signal.slow.chain} type="tx" value={hash} />
+      )
+    },
   },
-];
+]
