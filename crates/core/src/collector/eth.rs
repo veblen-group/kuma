@@ -155,7 +155,7 @@ impl Worker {
 
         let curr_token_balances =
             TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?;
-        info!(curr_token_balances=%curr_token_balances, "Initialized token balances");
+        info!(curr_token_balances=%curr_token_balances, "🏦 Initialized token balances");
 
         let curr_token_balances = Arc::new(Mutex::new(curr_token_balances));
 

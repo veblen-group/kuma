@@ -22,7 +22,8 @@ pub fn get_subscriber() -> impl Subscriber + Send + Sync {
         .with_target("alloy_rpc_client", LevelFilter::WARN)
         .with_target("alloy_pubsub", LevelFilter::WARN)
         .with_target("alloy_transport_ws", LevelFilter::WARN)
-        .with_target("alloy_json_rpc", LevelFilter::WARN);
+        .with_target("alloy_json_rpc", LevelFilter::WARN)
+        .with_target("sqlx", LevelFilter::WARN);
 
     let is_split_view = env::var("KUMA_SPLIT_VIEW")
         .map(|val| val == "1" || val.to_lowercase() == "true")
