@@ -3,8 +3,9 @@
 import type { ColumnDef } from "@tanstack/react-table"
 import { Signal } from "@/lib/types"
 import { ExplorerLink } from "@/components/ui/explorer-link"
+import { BlockCell } from "@/components/ui/block-cell"
 import { TokenBadge } from "@/components/ui/token-badge"
-import { formatTokenAmount, formatWithDecimals } from "@/lib/token-config"
+import { TokenAmount } from "@/components/ui/token-amount"
 import { ChainBadge } from "@/components/ui/chain-badge"
 
 function TokenPair({ tokenIn, tokenOut }: { tokenIn: string; tokenOut: string }) {
@@ -36,10 +37,10 @@ export const columns: ColumnDef<Signal>[] = [
     header: "Slow Block",
     id: "slow_block",
     cell: ({ row }) => (
-      <ExplorerLink
+      <BlockCell
         chain={row.original.slow.chain}
-        type="block"
-        value={row.original.slow.height}
+        height={row.original.slow.height}
+        timestamp={row.original.slow_prices_a_b?.created_at}
       />
     ),
   },
@@ -54,17 +55,20 @@ export const columns: ColumnDef<Signal>[] = [
     header: "Slow Pool",
     id: "slow_pool",
     cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.slow.chain}
-        type="address"
-        value={row.original.slow.pool_id}
-      />
+      <ExplorerLink chain={row.original.slow.chain} type="address" value={row.original.slow.pool_id} />
     ),
   },
   {
     header: "Fast Chain",
     id: "fast_chain",
     cell: ({ row }) => <ChainBadge chain={row.original.fast.chain} />,
+  },
+  {
+    header: "Fast Block",
+    id: "fast_block",
+    cell: ({ row }) => (
+      <BlockCell chain={row.original.fast.chain} height={row.original.fast.height} />
+    ),
   },
   {
     header: "Fast Pair",
@@ -77,35 +81,34 @@ export const columns: ColumnDef<Signal>[] = [
     header: "Fast Pool",
     id: "fast_pool",
     cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.fast.chain}
-        type="address"
-        value={row.original.fast.pool_id}
-      />
+      <ExplorerLink chain={row.original.fast.chain} type="address" value={row.original.fast.pool_id} />
     ),
   },
   {
     header: "Surplus A",
     id: "surplus_a",
-    cell: ({ row }) => {
-      const { surplus_a, token_a } = row.original.expected_profit
-      return formatTokenAmount(surplus_a, token_a)
-    },
+    cell: ({ row }) => (
+      <TokenAmount
+        amount={row.original.expected_profit.surplus_a}
+        symbol={row.original.expected_profit.token_a}
+      />
+    ),
   },
   {
     header: "Surplus B",
     id: "surplus_b",
-    cell: ({ row }) => {
-      const { surplus_b, token_b } = row.original.expected_profit
-      return formatTokenAmount(surplus_b, token_b)
-    },
+    cell: ({ row }) => (
+      <TokenAmount
+        amount={row.original.expected_profit.surplus_b}
+        symbol={row.original.expected_profit.token_b}
+      />
+    ),
   },
   {
-    header: "Min Profit (USDC)",
+    header: "Min Profit",
     id: "min_profit",
-    cell: ({ row }) => {
-      // USDC has 6 decimals
-      return formatWithDecimals(row.original.expected_profit.min_total_amount_usdc, 6)
-    },
+    cell: ({ row }) => (
+      <TokenAmount amount={row.original.expected_profit.min_total_amount_usdc} symbol="USDC" />
+    ),
   },
 ]
