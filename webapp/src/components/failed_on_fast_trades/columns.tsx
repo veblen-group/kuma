@@ -1,7 +1,9 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table";
-import { FailedOnFastTrade } from "@/lib/types";
+import type { ColumnDef } from "@tanstack/react-table"
+import { FailedOnFastTrade } from "@/lib/types"
+import { ExplorerLink } from "@/components/ui/explorer-link"
+import { ChainBadge } from "@/components/ui/chain-badge"
 
 export const columns: ColumnDef<FailedOnFastTrade>[] = [
   {
@@ -19,26 +21,34 @@ export const columns: ColumnDef<FailedOnFastTrade>[] = [
   },
   {
     header: "Slow Chain",
-    accessorFn: (row) => row.signal.slow.chain,
+    id: "slow_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
   },
   {
     header: "Fast Chain",
-    accessorFn: (row) => row.signal.fast.chain,
+    id: "fast_chain",
+    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
   },
   {
-    header: "Slow Tx Hash",
+    header: "Slow Tx",
     accessorKey: "slow_tx_hash",
+    cell: ({ row }) => (
+      <ExplorerLink
+        chain={row.original.signal.slow.chain}
+        type="tx"
+        value={row.getValue("slow_tx_hash") as string}
+      />
+    ),
+  },
+  {
+    header: "Fast Tx",
+    id: "fast_tx",
     cell: ({ row }) => {
-      const hash = row.getValue("slow_tx_hash") as string;
+      const hash = row.original.fast_tx_hash
+      if (!hash) return <span className="text-muted-foreground">—</span>
       return (
-        <span className="font-mono text-xs" title={hash}>
-          {hash.slice(0, 8)}...{hash.slice(-6)}
-        </span>
-      );
+        <ExplorerLink chain={row.original.signal.fast.chain} type="tx" value={hash} />
+      )
     },
   },
-  {
-    header: "Fast Tx Hash",
-    accessorFn: (row) => row.fast_tx_hash ?? "—",
-  },
-];
+]

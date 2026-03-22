@@ -79,7 +79,7 @@ export function SpotPriceTable() {
   return (
     <div>
       <div className="rounded-md border">
-        <Table>
+        <Table containerClassName="overflow-visible">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -101,7 +101,6 @@ export function SpotPriceTable() {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                // row definition
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -117,7 +116,6 @@ export function SpotPriceTable() {
                 </TableRow>
               ))
             ) : (
-              // empty table
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
