@@ -153,12 +153,11 @@ impl Worker {
             })
             .collect::<eyre::Result<HashMap<_, _>>>()?;
 
-        let curr_token_balances = Arc::new(Mutex::new(
-            TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?,
-        ));
+        let curr_token_balances =
+            TokenBalances::get_curr_balances(account_addr, addrs, provider.clone()).await?;
+        info!(curr_token_balances=%curr_token_balances, "🏦 Initialized token balances");
 
-        // TODO: print this nicely
-        debug!(?curr_token_balances, "Initialized token balances");
+        let curr_token_balances = Arc::new(Mutex::new(curr_token_balances));
 
         // set up header stream
         let headers = provider

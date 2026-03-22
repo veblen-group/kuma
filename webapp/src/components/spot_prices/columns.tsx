@@ -5,8 +5,21 @@ import { SpotPrice } from "@/lib/types";
 
 export const columns: ColumnDef<SpotPrice>[] = [
   {
+    header: "ID",
+    accessorKey: "id",
+  },
+  {
+    header: "Created At",
+    accessorKey: "created_at",
+    cell: ({ row }) => {
+      const raw = row.getValue("created_at") as string | null;
+      if (!raw) return "—";
+      return new Date(raw).toLocaleString();
+    },
+  },
+  {
     header: "Chain",
-    accessorFn: (row) => row.chain.name,
+    accessorKey: "chain",
   },
   {
     header: "Block Height",
@@ -14,11 +27,11 @@ export const columns: ColumnDef<SpotPrice>[] = [
   },
   {
     header: "Token A",
-    accessorFn: (row) => row.pair[0].symbol,
+    accessorKey: "pair_token_a",
   },
   {
     header: "Token B",
-    accessorFn: (row) => row.pair[1].symbol,
+    accessorKey: "pair_token_b",
   },
   {
     header: "Min Pool ID",

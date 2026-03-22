@@ -1,27 +1,24 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { TradeResult } from "@/lib/types";
+import { FailedOnFastTrade } from "@/lib/types";
 
-export const columns: ColumnDef<TradeResult>[] = [
+export const columns: ColumnDef<FailedOnFastTrade>[] = [
   {
-    header: "ID",
+    header: "Trade ID",
     accessorKey: "id",
-    cell: ({ row }) => (
-      <span className="font-mono text-xs">#{row.getValue("id")}</span>
-    ),
   },
   {
     header: "Signal ID",
-    accessorFn: (row) => row.signal_id,
+    accessorFn: (row) => row.signal.id,
   },
   {
     header: "Slow Chain",
-    accessorFn: (row) => row.slow_chain,
+    accessorFn: (row) => row.signal.slow.chain,
   },
   {
     header: "Fast Chain",
-    accessorFn: (row) => row.fast_chain,
+    accessorFn: (row) => row.signal.fast.chain,
   },
   {
     header: "Slow Tx Hash",
@@ -34,5 +31,9 @@ export const columns: ColumnDef<TradeResult>[] = [
         </span>
       );
     },
-  }
+  },
+  {
+    header: "Fast Tx Hash",
+    accessorFn: (row) => row.fast_tx_hash ?? "—",
+  },
 ];

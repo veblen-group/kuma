@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{error, instrument, trace};
 use tycho_common::models::token::Token;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_core::simulation::protocol_sim::ProtocolSim,
@@ -57,6 +57,46 @@ pub struct Precomputes {
     pub base_fee: u64,
 }
 
+impl Precomputes {
+    pub fn log_spot_prices(&self) -> String {
+        let fmt_row = |p_opt: &Option<SpotPrices>| {
+            p_opt
+                .as_ref()
+                .map(|p| {
+                    let label = format!("{}/{}", p.pair.token_a().symbol, p.pair.token_b().symbol);
+                    format!("{: <12} | [{:.6}, {:.6}]", label, p.min_price, p.max_price)
+                })
+                .unwrap_or_else(|| "N/A".to_string())
+        };
+
+        let primary_label = format!(
+            "{}/{}",
+            self.prices_a_b.pair.token_a().symbol,
+            self.prices_a_b.pair.token_b().symbol
+        );
+
+        let primary_row = format!(
+            "{: <12} | [{:.6}, {:.6}]",
+            primary_label, self.prices_a_b.min_price, self.prices_a_b.max_price
+        );
+
+        // Note: Using the '\' at the end of the line tells Rust to ignore the
+        // leading whitespace on the next line of the source code.
+        format!(
+            "📈 Spot Price Update [Block: {}]\n\
+             Asset Pair   | [Min, Max]\n\
+             {}\n\
+             {}\n\
+             {}\n\
+             {}",
+            self.block_height,
+            primary_row,
+            fmt_row(&self.prices_a_usdc),
+            fmt_row(&self.prices_b_usdc),
+            fmt_row(&self.prices_eth_usdc)
+        )
+    }
+}
 /// Strategy configuration for cross-chain single-hop arbitrage.
 ///
 /// Encapsulates all the parameters needed to detect and execute arbitrage opportunities
@@ -166,12 +206,6 @@ impl CrossChainSingleHop {
                 self.slow_pair, self.slow_chain
             )
         })?;
-        trace!(
-            %prices_a_b,
-            block.height = prices_a_b.block_height,
-            chain.name = %self.slow_chain.name,
-            "✅ Generated spot prices"
-        );
 
         // calculate usdc spot prices
         let prices_a_usdc = if let (Some(token_a_usdc), Some(token_a_usdc_state)) =
@@ -188,12 +222,6 @@ impl CrossChainSingleHop {
                     token_a_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_a_usdc,
-                block.height = prices_a_b.block_height,
-                chain.name = %self.slow_chain.name,
-                "✅ Generated spot prices"
-            );
             Some(prices_a_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for token A == USDC");
@@ -214,10 +242,6 @@ impl CrossChainSingleHop {
                     token_b_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_b_usdc,
-                "✅ Generated spot prices"
-            );
             Some(prices_b_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for token B == USDC");
@@ -238,12 +262,6 @@ impl CrossChainSingleHop {
                     eth_usdc, self.slow_chain
                 )
             })?;
-            trace!(
-                %prices_eth_usdc,
-                block.height = prices_eth_usdc.block_height,
-                chain.name = %self.slow_chain.name,
-                "✅ Generated ETH-USDC spot prices"
-            );
             Some(prices_eth_usdc)
         } else {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for ETH == USDC");
@@ -300,14 +318,14 @@ impl CrossChainSingleHop {
                     } else {
                         Direction::BtoA
                     };
-                    debug!(
+                    trace!(
                         %slow_direction,
                         %spread,
                         %slow_price,
                         %fast_price,
                         %slow_id,
                         %fast_id,
-                        "found crossed pools"
+                        "Found crossed pools"
                     );
 
                     (slow_id, fast_id, slow_direction)

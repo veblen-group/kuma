@@ -1,0 +1,274 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b,\n                min_token_amount_a, min_token_amount_b,\n                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,\n                max_slippage_token_amount_a, max_slippage_token_amount_b,\n                token_usdc_price_a, token_usdc_price_b,\n                gas_cost_eth_slow, gas_cost_eth_fast, total_gas_cost_eth,\n                eth_usdc_price,\n                gas_cost_usdc_slow, gas_cost_usdc_fast, total_gas_cost_usdc,\n                slow_base_fee, fast_base_fee,\n                slow_prices_a_b_id, slow_prices_a_usdc_id,\n                slow_prices_b_usdc_id, slow_prices_eth_usdc_id,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "slow_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "slow_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "fast_chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "fast_height",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "fast_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "slow_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "slow_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "slow_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "slow_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "slow_swap_gas_cost",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "fast_swap_token_in_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "fast_swap_token_out_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "fast_swap_amount_in",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "fast_swap_amount_out",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "fast_swap_gas_cost",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
+        "name": "surplus_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "surplus_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "min_token_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "min_token_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "min_usdc_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "min_usdc_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 23,
+        "name": "min_total_amount_usdc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "max_slippage_token_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 25,
+        "name": "max_slippage_token_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 26,
+        "name": "token_usdc_price_a",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 27,
+        "name": "token_usdc_price_b",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 28,
+        "name": "gas_cost_eth_slow",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 29,
+        "name": "gas_cost_eth_fast",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 30,
+        "name": "total_gas_cost_eth",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 31,
+        "name": "eth_usdc_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 32,
+        "name": "gas_cost_usdc_slow",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 33,
+        "name": "gas_cost_usdc_fast",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 34,
+        "name": "total_gas_cost_usdc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 35,
+        "name": "slow_base_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 36,
+        "name": "fast_base_fee",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 37,
+        "name": "slow_prices_a_b_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 38,
+        "name": "slow_prices_a_usdc_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 39,
+        "name": "slow_prices_b_usdc_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 40,
+        "name": "slow_prices_eth_usdc_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 41,
+        "name": "max_slippage_bps",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 42,
+        "name": "congestion_risk_discount_bps",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "7505898fafc71e007bf553e9418e3e04eb96b0b62c52c6a3efa52c0a3e53976a"
+}

@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                id,\n                created_at as \"created_at!\",\n                token_a_symbol, token_b_symbol,\n                min_price, max_price,\n                min_pool_id, max_pool_id,\n                chain, block_height\n            FROM spot_prices\n            WHERE id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "token_a_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "token_b_symbol",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "min_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 5,
+        "name": "max_price",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 6,
+        "name": "min_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "max_pool_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "chain",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "block_height",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e26d3438bc87cb2294fa0bdbe719a9ebd4878eac31b6ce09e54ea84c00e75abf"
+}

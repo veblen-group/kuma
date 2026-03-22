@@ -19,7 +19,7 @@ num-traits = "0.2.19"
 pin-project = "1.1.10"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.140"
-sqlx = "0.7"
+sqlx = "0.8"
 taplo = "0.13.2"
 tokio = { version = "1.43.0", features = [
     "macros",
