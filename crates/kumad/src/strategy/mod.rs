@@ -282,7 +282,7 @@ impl Worker {
                             "New fast chain state but no slow chain precompute, skipping signal generation"
                         );
 
-                        // Still persist fast spot prices even without a signal.
+                        // Still persist fast spot prices even without a signal. (do it in the conditional to avoid a clone)
                         db_writes.push(write_fast_spot_prices(
                             self.db.spot_price_repository(),
                             prices_a_b,
