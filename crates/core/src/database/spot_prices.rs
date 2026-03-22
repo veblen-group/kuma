@@ -1,7 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, eyre};
-use sqlx::PgPool;
+use sqlx::{
+    PgPool,
+    types::chrono::{DateTime, Utc},
+};
 
 use crate::{
     config::TokenAddressesForChain,
@@ -13,6 +16,7 @@ use super::{try_chain_from_str, try_token_from_chain_symbol};
 
 struct SpotPricesRow {
     id: i64,
+    created_at: DateTime<Utc>,
     chain: String,
     block_height: i64,
     min_pool_id: String,
@@ -96,6 +100,7 @@ impl SpotPriceRepository {
             r#"
             SELECT
                 id,
+                created_at as "created_at!",
                 token_a_symbol, token_b_symbol,
                 min_price, max_price,
                 min_pool_id, max_pool_id,
@@ -150,7 +155,7 @@ impl SpotPriceRepository {
         token_b_symbol: &str,
         limit: u32,
         offset: u32,
-    ) -> eyre::Result<Vec<SpotPrices>> {
+    ) -> eyre::Result<Vec<(i64, DateTime<Utc>, SpotPrices)>> {
         let (token_a_symbol, token_b_symbol) = if token_a_symbol < token_b_symbol {
             (token_a_symbol, token_b_symbol)
         } else {
@@ -162,6 +167,7 @@ impl SpotPriceRepository {
             r#"
             SELECT
                 id,
+                created_at as "created_at!",
                 token_a_symbol, token_b_symbol,
                 min_price, max_price,
                 min_pool_id, max_pool_id,
@@ -180,7 +186,12 @@ impl SpotPriceRepository {
         .await?;
 
         rows.into_iter()
-            .map(|r| r.try_into_spot_prices(&self.token_configs))
+            .map(|r| {
+                let id = r.id;
+                let created_at = r.created_at;
+                r.try_into_spot_prices(&self.token_configs)
+                    .map(|sp| (id, created_at, sp))
+            })
             .collect()
     }
 }

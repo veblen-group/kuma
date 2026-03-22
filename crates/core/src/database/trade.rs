@@ -10,17 +10,20 @@ use crate::{
 };
 
 pub struct TradeFailedOnSlowRow {
+    pub id: i64,
     pub signal_id: i64,
     pub slow_tx_hash: Option<String>,
 }
 
 pub struct TradeFailedOnFastRow {
+    pub id: i64,
     pub signal_id: i64,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
 }
 
 pub struct TradeSuccessRow {
+    pub id: i64,
     pub signal_id: i64,
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
@@ -225,7 +228,7 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeSuccessRow,
             r#"
-            SELECT st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str
+            SELECT st.id, st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str
             FROM successful_trade st
             JOIN signals s ON st.signal_id = s.id
             WHERE (
@@ -255,7 +258,7 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeFailedOnSlowRow,
             r#"
-            SELECT fst.signal_id, fst.slow_tx_hash
+            SELECT fst.id, fst.signal_id, fst.slow_tx_hash
             FROM failed_on_slow_chain_trade fst
             JOIN signals s ON fst.signal_id = s.id
             WHERE (
@@ -285,7 +288,7 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeFailedOnFastRow,
             r#"
-            SELECT fft.signal_id, fft.slow_tx_hash, fft.fast_tx_hash
+            SELECT fft.id, fft.signal_id, fft.slow_tx_hash, fft.fast_tx_hash
             FROM failed_on_fast_chain_trade fft
             JOIN signals s ON fft.signal_id = s.id
             WHERE (

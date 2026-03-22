@@ -89,7 +89,7 @@ impl From<ExpectedProfit> for ExpectedProfitResponse {
 /// `protocol_component` is omitted (internal encoding detail).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CrossChainSingleHopResponse {
-    // TODO: add id
+    pub id: i64,
     pub slow: SwapResponse,
     pub fast: SwapResponse,
     /// Spot prices on the slow chain at signal generation time.
@@ -103,9 +103,10 @@ pub struct CrossChainSingleHopResponse {
     pub congestion_risk_discount_bps: u64,
 }
 
-impl From<CrossChainSingleHop> for CrossChainSingleHopResponse {
-    fn from(s: CrossChainSingleHop) -> Self {
+impl CrossChainSingleHopResponse {
+    pub fn new(id: i64, s: CrossChainSingleHop) -> Self {
         Self {
+            id,
             slow: SwapResponse {
                 chain: s.slow_chain.name.to_string(),
                 height: s.slow_height,
@@ -193,7 +194,7 @@ pub async fn get_signals_by_pair(
         (Ok(total_count), Ok(signals)) => Ok(Json(PaginatedResponse::new(
             signals
                 .into_iter()
-                .map(CrossChainSingleHopResponse::from)
+                .map(|(id, signal)| CrossChainSingleHopResponse::new(id, signal))
                 .collect(),
             page,
             page_size,

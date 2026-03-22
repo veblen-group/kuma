@@ -17,9 +17,11 @@ use crate::{
 
 /// API response type for spot prices. Exposes only the chain name — never the
 /// full `Chain` struct which contains API keys and RPC credentials.
+/// `id` and `created_at` are `None` for spot prices embedded inside signal responses.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpotPriceResponse {
-    // TODO: add id, created at
+    pub id: Option<i64>,
+    pub created_at: Option<String>,
     pub chain: String,
     pub pair_token_a: String,
     pub pair_token_b: String,
@@ -33,6 +35,8 @@ pub struct SpotPriceResponse {
 impl From<SpotPrices> for SpotPriceResponse {
     fn from(sp: SpotPrices) -> Self {
         Self {
+            id: None,
+            created_at: None,
             chain: sp.chain.name.to_string(),
             pair_token_a: sp.pair.token_a().symbol.clone(),
             pair_token_b: sp.pair.token_b().symbol.clone(),
@@ -90,7 +94,14 @@ pub async fn get_spot_prices_by_pair(
 
     match (count_result, data_result) {
         (Ok(total_count), Ok(prices)) => Ok(Json(PaginatedResponse::new(
-            prices.into_iter().map(SpotPriceResponse::from).collect(),
+            prices
+                .into_iter()
+                .map(|(id, created_at, sp)| SpotPriceResponse {
+                    id: Some(id),
+                    created_at: Some(created_at.to_rfc3339()),
+                    ..SpotPriceResponse::from(sp)
+                })
+                .collect(),
             page,
             page_size,
             Some(total_count),

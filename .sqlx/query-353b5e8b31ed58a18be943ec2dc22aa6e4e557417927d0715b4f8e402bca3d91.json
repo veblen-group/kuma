@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                token_a_symbol, token_b_symbol,\n                min_price, max_price,\n                min_pool_id, max_pool_id,\n                chain, block_height\n            FROM spot_prices\n            WHERE id = ANY($1)\n            ",
+  "query": "\n            SELECT\n                id,\n                created_at as \"created_at!\",\n                token_a_symbol, token_b_symbol,\n                min_price, max_price,\n                min_pool_id, max_pool_id,\n                chain, block_height\n            FROM spot_prices\n            WHERE token_a_symbol = $1 AND token_b_symbol = $2\n            ORDER BY created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
   "describe": {
     "columns": [
       {
@@ -10,52 +10,61 @@
       },
       {
         "ordinal": 1,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
         "name": "token_a_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "token_b_symbol",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "min_price",
         "type_info": "Float8"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "max_price",
         "type_info": "Float8"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "min_pool_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "max_pool_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "chain",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "block_height",
         "type_info": "Int8"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8Array"
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
       false,
+      true,
       false,
       false,
       false,
@@ -66,5 +75,5 @@
       false
     ]
   },
-  "hash": "26621623520adbe6df57fdd4baa5e8f88283c8d55f17cc0c45bddcea48462639"
+  "hash": "353b5e8b31ed58a18be943ec2dc22aa6e4e557417927d0715b4f8e402bca3d91"
 }

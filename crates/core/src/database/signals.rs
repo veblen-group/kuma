@@ -17,6 +17,7 @@ use crate::{
 use super::{SpotPriceRepository, try_chain_from_str, try_token_from_chain_symbol};
 
 struct SignalRow {
+    id: i64,
     // slow chain info
     slow_chain: String,
     slow_height: i64,
@@ -74,7 +75,8 @@ impl SignalRow {
         self,
         token_configs: &TokenAddressesForChain,
         spot_prices: &HashMap<i64, SpotPrices>,
-    ) -> eyre::Result<signals::CrossChainSingleHop> {
+    ) -> eyre::Result<(i64, signals::CrossChainSingleHop)> {
+        let id = self.id;
         let slow_chain = try_chain_from_str(&self.slow_chain, token_configs)
             .wrap_err("failed to parse slow chain from db")?;
         let fast_chain = try_chain_from_str(&self.fast_chain, token_configs)
@@ -184,7 +186,7 @@ impl SignalRow {
             .slow_prices_eth_usdc_id
             .and_then(|id| spot_prices.get(&id).cloned());
 
-        Ok(signals::CrossChainSingleHop {
+        Ok((id, signals::CrossChainSingleHop {
             slow_chain,
             slow_pair,
             slow_protocol_component: None,
@@ -206,7 +208,7 @@ impl SignalRow {
             congestion_risk_discount_bps: self.congestion_risk_discount_bps as u64,
             slow_base_fee: self.slow_base_fee as u64,
             fast_base_fee: self.fast_base_fee as u64,
-        })
+        }))
     }
 }
 
@@ -424,11 +426,12 @@ impl SignalRepository {
         limit: u32,
         offset: u32,
         spot_price_repo: &SpotPriceRepository,
-    ) -> eyre::Result<Vec<signals::CrossChainSingleHop>> {
+    ) -> eyre::Result<Vec<(i64, signals::CrossChainSingleHop)>> {
         let rows: Vec<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
             SELECT
+                id,
                 slow_chain, slow_height, slow_pool_id,
                 fast_chain, fast_height, fast_pool_id,
                 slow_swap_token_in_symbol, slow_swap_token_out_symbol,
@@ -477,9 +480,9 @@ impl SignalRepository {
     ) -> eyre::Result<Option<signals::CrossChainSingleHop>> {
         let row: Option<SignalRow> = sqlx::query_as!(
             SignalRow,
-            // TODO:
             r#"
             SELECT
+                id,
                 slow_chain, slow_height, slow_pool_id,
                 fast_chain, fast_height, fast_pool_id,
                 slow_swap_token_in_symbol, slow_swap_token_out_symbol,
@@ -510,7 +513,7 @@ impl SignalRepository {
             Some(r) => {
                 let rows = std::slice::from_ref(&r);
                 let spot_prices = fetch_spot_prices_for_rows(rows, spot_price_repo).await?;
-                Some(r.try_into_cross_chain_single_hop(&self.tokens_config, &spot_prices))
+                Some(r.try_into_cross_chain_single_hop(&self.tokens_config, &spot_prices).map(|(_, s)| s))
                     .transpose()
             }
             None => Ok(None),

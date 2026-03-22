@@ -25,7 +25,7 @@ use crate::{
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuccessfulTradeResponse {
-    // TODO: add trade id
+    pub id: i64,
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
@@ -35,7 +35,8 @@ pub struct SuccessfulTradeResponse {
 impl SuccessfulTradeResponse {
     fn from_row_and_signal(row: TradeSuccessRow, signal: signals::CrossChainSingleHop) -> Self {
         Self {
-            signal: CrossChainSingleHopResponse::from(signal),
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
             realized_profit_str: row.realized_profit_str,
@@ -45,7 +46,7 @@ impl SuccessfulTradeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnSlowTradeResponse {
-    // TODO: add trade id
+    pub id: i64,
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: Option<String>,
 }
@@ -56,7 +57,8 @@ impl FailedOnSlowTradeResponse {
         signal: signals::CrossChainSingleHop,
     ) -> Self {
         Self {
-            signal: CrossChainSingleHopResponse::from(signal),
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
             slow_tx_hash: row.slow_tx_hash,
         }
     }
@@ -64,7 +66,7 @@ impl FailedOnSlowTradeResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FailedOnFastTradeResponse {
-    // TODO: add trade id
+    pub id: i64,
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
@@ -76,7 +78,8 @@ impl FailedOnFastTradeResponse {
         signal: signals::CrossChainSingleHop,
     ) -> Self {
         Self {
-            signal: CrossChainSingleHopResponse::from(signal),
+            id: row.id,
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
         }

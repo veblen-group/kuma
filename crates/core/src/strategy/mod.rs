@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use tracing::{error, info, instrument, trace};
+use tracing::{error, instrument, trace};
 use tycho_common::models::token::Token;
 use tycho_simulation::{
     protocol::models::ProtocolComponent, tycho_core::simulation::protocol_sim::ProtocolSim,
