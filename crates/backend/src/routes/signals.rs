@@ -23,12 +23,12 @@ use crate::{
 pub struct SwapResponse {
     pub chain: String,
     pub height: u64,
-    pub pool_id: String,
-    pub base_fee: u64,
     pub token_in: String,
     pub token_out: String,
+    pub pool_id: String,
     pub amount_in: String,
     pub amount_out: String,
+    pub base_fee: u64,
     pub gas_cost: String,
 }
 
@@ -78,8 +78,8 @@ impl SwapResponse {
 /// as decimal strings to avoid precision loss.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ExpectedProfitResponse {
-    pub pair_token_a: String,
-    pub pair_token_b: String,
+    pub token_a: String,
+    pub token_b: String,
     pub surplus_a: String,
     pub surplus_b: String,
     pub max_slippage_token_amount_a: String,
@@ -103,8 +103,8 @@ pub struct ExpectedProfitResponse {
 impl From<ExpectedProfit> for ExpectedProfitResponse {
     fn from(ep: ExpectedProfit) -> Self {
         Self {
-            pair_token_a: ep.pair.token_a().symbol.clone(),
-            pair_token_b: ep.pair.token_b().symbol.clone(),
+            token_a: ep.pair.token_a().symbol.clone(),
+            token_b: ep.pair.token_b().symbol.clone(),
             surplus_a: ep.surplus.0.to_string(),
             surplus_b: ep.surplus.1.to_string(),
             max_slippage_token_amount_a: ep.max_slippage_token_amounts.0.to_string(),
@@ -136,7 +136,7 @@ pub struct CrossChainSingleHopResponse {
     pub fast: SwapResponse,
     /// Spot prices on the slow chain at signal generation time.
     /// `None` for signals written before spot price FK tracking was added.
-    pub slow_prices_a_b: Option<SpotPriceResponse>,
+    pub slow_prices_a_b: SpotPriceResponse,
     pub slow_prices_a_usdc: Option<SpotPriceResponse>,
     pub slow_prices_b_usdc: Option<SpotPriceResponse>,
     pub slow_prices_eth_usdc: Option<SpotPriceResponse>,
@@ -162,7 +162,7 @@ impl From<CrossChainSingleHop> for CrossChainSingleHopResponse {
                 s.fast_base_fee,
                 &s.fast_swap_sim,
             ),
-            slow_prices_a_b: Some(SpotPriceResponse::from(s.slow_prices_a_b)),
+            slow_prices_a_b: SpotPriceResponse::from(s.slow_prices_a_b),
             slow_prices_a_usdc: s.slow_prices_a_usdc.map(SpotPriceResponse::from),
             slow_prices_b_usdc: s.slow_prices_b_usdc.map(SpotPriceResponse::from),
             slow_prices_eth_usdc: s.slow_prices_eth_usdc.map(SpotPriceResponse::from),
@@ -194,7 +194,8 @@ pub async fn get_signals_by_pair(
         "Fetching arbitrage signals"
     );
 
-    let repo = state.db.signal_repository();
+    let signal_repo = state.db.signal_repository();
+    let spot_price_repo = state.db.spot_price_repository();
 
     let (token_a_symbol, token_b_symbol) = match parse_pair(&params.pair.to_uppercase()) {
         Ok(pair) => pair,
@@ -212,8 +213,14 @@ pub async fn get_signals_by_pair(
     };
 
     let (count_result, data_result) = tokio::join!(
-        repo.count_by_symbols(&token_a_symbol, &token_b_symbol),
-        repo.get_by_symbols(&token_a_symbol, &token_b_symbol, limit, offset)
+        signal_repo.count_by_symbols(&token_a_symbol, &token_b_symbol),
+        signal_repo.get_by_symbols(
+            &token_a_symbol,
+            &token_b_symbol,
+            limit,
+            offset,
+            &spot_price_repo,
+        )
     );
 
     match (count_result, data_result) {

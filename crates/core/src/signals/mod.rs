@@ -40,28 +40,32 @@ impl Display for Direction {
 pub struct CrossChainSingleHop {
     /// The chain with longer block times where the first leg of the arbitrage executes.
     pub slow_chain: Chain,
-    /// The token pair being traded on the slow chain (e.g., WETH/USDC).
-    pub slow_pair: Pair,
-    /// Protocol component metadata for the slow chain pool, used for transaction encoding.
-    pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// Unique identifier for the AMM pool on the slow chain.
-    pub slow_pool_id: state::PoolId,
-    /// Simulated swap parameters for the slow chain leg (token_in, amount_in, token_out, amount_out).
-    pub slow_swap_sim: Swap,
     /// Block height on the slow chain when this signal was generated.
     pub slow_height: u64,
+    /// The token pair being traded on the slow chain (e.g., WETH/USDC).
+    pub slow_pair: Pair,
+    /// Unique identifier for the AMM pool on the slow chain.
+    pub slow_pool_id: state::PoolId,
+    /// Protocol component metadata for the slow chain pool, used for transaction encoding.
+    pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// Simulated swap parameters for the slow chain leg (token_in, amount_in, token_out, amount_out).
+    pub slow_swap_sim: Swap,
+    /// Base fee in wei for slow chain
+    pub slow_base_fee: u64,
     /// The chain with shorter block times where the second leg of the arbitrage executes.
     pub fast_chain: Chain,
-    /// The token pair being traded on the fast chain (mirrors slow_pair tokens).
-    pub fast_pair: Pair,
-    /// Protocol component metadata for the fast chain pool, used for transaction encoding.
-    pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// Unique identifier for the AMM pool on the fast chain.
-    pub fast_pool_id: state::PoolId,
-    /// Simulated swap parameters for the fast chain leg (token_in, amount_in, token_out, amount_out).
-    pub fast_swap_sim: Swap,
     /// Block height on the fast chain when this signal was generated.
     pub fast_height: u64,
+    /// The token pair being traded on the fast chain (mirrors slow_pair tokens).
+    pub fast_pair: Pair,
+    /// Unique identifier for the AMM pool on the fast chain.
+    pub fast_pool_id: state::PoolId,
+    /// Protocol component metadata for the fast chain pool, used for transaction encoding.
+    pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
+    /// Simulated swap parameters for the fast chain leg (token_in, amount_in, token_out, amount_out).
+    pub fast_swap_sim: Swap,
+    /// Base fee in wei for fast chain
+    pub fast_base_fee: u64,
     /// Spot prices between token A and token B on the slow chain, used for profit calculation.
     pub slow_prices_a_b: SpotPrices,
     /// Spot prices for token A to USDC conversion, None if token A is USDC.
@@ -76,10 +80,6 @@ pub struct CrossChainSingleHop {
     pub congestion_risk_discount_bps: u64,
     /// Calculated expected profit after applying slippage and congestion discounts.
     pub expected_profit: ExpectedProfit,
-    /// Base fee in wei for slow chain
-    pub slow_base_fee: u64,
-    /// Base fee in wei for fast chain
-    pub fast_base_fee: u64,
 }
 
 impl CrossChainSingleHop {
