@@ -11,6 +11,11 @@ export const columns: ColumnDef<SpotPrice>[] = [
   {
     header: "Created At",
     accessorKey: "created_at",
+    cell: ({ row }) => {
+      const raw = row.getValue("created_at") as string | null;
+      if (!raw) return "—";
+      return new Date(raw).toLocaleString();
+    },
   },
   {
     header: "Chain",
