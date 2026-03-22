@@ -101,7 +101,6 @@ export function SpotPriceTable() {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                // row definition
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
@@ -117,7 +116,6 @@ export function SpotPriceTable() {
                 </TableRow>
               ))
             ) : (
-              // empty table
               <TableRow>
                 <TableCell
                   colSpan={columns.length}

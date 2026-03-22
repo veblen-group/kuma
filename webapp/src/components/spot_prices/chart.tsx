@@ -91,7 +91,11 @@ function CustomTooltip({ active, payload, label }: {
 }
 
 export function SpotPriceChart() {
-  const { data, isLoading, isError } = useSpotPrices({ page: 1, pageSize: 200 });
+  const { data, isLoading, isError } = useSpotPrices(
+    { page: 1, pageSize: 50 },
+    { staleTime: 30_000, refetchInterval: 30_000 }
+  );
+  const prices = data?.data ?? [];
 
   if (isLoading) {
     return (
@@ -101,7 +105,7 @@ export function SpotPriceChart() {
     );
   }
 
-  if (isError || !data?.data?.length) {
+  if (isError || !prices.length) {
     return (
       <div className="h-96 flex items-center justify-center text-muted-foreground">
         No data available
@@ -109,27 +113,43 @@ export function SpotPriceChart() {
     );
   }
 
-  const { chains, points } = buildChartData(data.data);
+  const { chains, points } = buildChartData(prices);
 
   return (
     <div className="h-96">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
           {chains.map((chain, i) => (
-            <Line
-              key={chain}
-              type="monotone"
-              dataKey={`${chain}_max`}
-              name={`${chain}_max`}
-              stroke={COLORS[i % COLORS.length]}
-              dot={false}
-              activeDot={{ r: 4 }}
-              strokeWidth={2}
-            />
+            [
+              <Line
+                key={`${chain}_gap`}
+                type="monotone"
+                dataKey={`${chain}_max`}
+                name={`${chain}_max`}
+                stroke={COLORS[i % COLORS.length]}
+                dot={false}
+                activeDot={false}
+                strokeWidth={2}
+                strokeDasharray="4 4"
+                strokeOpacity={0.5}
+                connectNulls
+                legendType="none"
+              />,
+              <Line
+                key={chain}
+                type="monotone"
+                dataKey={`${chain}_max`}
+                name={`${chain}_max`}
+                stroke={COLORS[i % COLORS.length]}
+                dot={{ r: 3, fill: COLORS[i % COLORS.length] }}
+                activeDot={{ r: 5 }}
+                strokeWidth={2}
+              />
+            ]
           ))}
         </LineChart>
       </ResponsiveContainer>

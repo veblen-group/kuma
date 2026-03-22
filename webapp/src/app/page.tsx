@@ -1,9 +1,9 @@
 import { SignalTable } from "@/components/signals/table";
 import { SpotPriceTable } from "@/components/spot_prices/table";
+import { SpotPriceChart } from "@/components/spot_prices/chart";
 import { SuccessfulTradeResultTable } from "@/components/successful_trades/table";
 import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
 import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades/table";
-import { SpotPriceChart } from "@/components/spot_prices/chart";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
