@@ -183,6 +183,7 @@ impl ExpectedProfit {
         fast_base_fee: u64,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
+        ignore_gas_costs_in_profit: bool,
     ) -> eyre::Result<Self> {
         // Extract (amount_in, amount_out) pairs for token A and token B from the swap simulations
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_sim, fast_sim)?;
@@ -262,8 +263,8 @@ impl ExpectedProfit {
                 )
             })?;
 
-        // Step 8: Assert total gas cost < total profit
-        if total_gas_cost_usdc > min_total_amount_usdc {
+        // Step 8: Skip gas cost validation when ignore_gas_costs_in_profit is enabled
+        if !ignore_gas_costs_in_profit && total_gas_cost_usdc > min_total_amount_usdc {
             Err(eyre!(
                 "total_gas_cost_usdc {} - min_total_amount_usdc {} = {} ",
                 total_gas_cost_usdc.clone(),

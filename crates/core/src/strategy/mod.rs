@@ -138,6 +138,8 @@ pub struct CrossChainSingleHop {
     pub max_slippage_bps: u64,
     // TODO: docstring
     pub congestion_risk_discount_bps: u64,
+    /// Whether to ignore gas costs when determining trade profitability
+    pub ignore_gas_costs_in_profit: bool,
 }
 
 impl CrossChainSingleHop {
@@ -628,6 +630,7 @@ impl CrossChainSingleHop {
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
             fast_base_fee,
+            self.ignore_gas_costs_in_profit,
         )
         .map_err(|err| {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
@@ -1262,6 +1265,7 @@ mod tests {
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
+            ignore_gas_costs_in_profit: false,
         })
     }
 
@@ -1337,6 +1341,7 @@ mod tests {
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
+            ignore_gas_costs_in_profit: true,
         })
     }
 
@@ -1554,6 +1559,7 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
             )
             .unwrap()
         )
@@ -1651,6 +1657,7 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
             )
             .unwrap()
         )
@@ -1749,6 +1756,7 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
             )
             .unwrap()
         )
@@ -1846,6 +1854,7 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
             )
             .unwrap()
         )

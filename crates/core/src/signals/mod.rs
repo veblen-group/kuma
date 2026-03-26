@@ -105,6 +105,7 @@ impl CrossChainSingleHop {
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
         fast_base_fee: u64,
+        ignore_gas_costs_in_profit: bool,
     ) -> eyre::Result<Self> {
         if slow_swap_sim.amount_out < fast_swap_sim.amount_in {
             eyre::bail!("Slow chain output is less than fast chain input");
@@ -120,6 +121,7 @@ impl CrossChainSingleHop {
             fast_base_fee,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            ignore_gas_costs_in_profit,
         )?;
 
         Ok(Self {

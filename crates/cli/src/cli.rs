@@ -35,6 +35,10 @@ pub(crate) struct StrategyArgs {
     /// Fast blockchain for the arbitrage
     #[arg(long)]
     pub(crate) fast_chain: String,
+
+    /// Ignore gas costs when determining trade profitability (still track for reporting)
+    #[arg(long)]
+    pub(crate) ignore_gas_costs_in_profit: bool,
 }
 
 #[derive(Subcommand)]

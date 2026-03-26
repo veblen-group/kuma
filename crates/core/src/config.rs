@@ -41,6 +41,10 @@ pub struct Config {
 
     /// Number of binary search steps
     pub binary_search_steps: usize,
+
+    /// Whether to ignore gas costs when determining trade profitability
+    /// Gas costs will still be calculated and tracked for reporting
+    pub ignore_gas_costs_in_profit: Option<bool>,
 }
 
 pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;

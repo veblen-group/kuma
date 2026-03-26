@@ -64,6 +64,7 @@ impl Kuma {
             max_slippage_bps,
             congestion_risk_discount_bps,
             binary_search_steps,
+            ignore_gas_costs_in_profit,
             ..
         } = cfg;
 
@@ -111,6 +112,7 @@ impl Kuma {
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            ignore_gas_costs_in_profit: strategy_config.ignore_gas_costs_in_profit || ignore_gas_costs_in_profit.unwrap_or(false),
         }
         .build()
         .wrap_err("failed to build strategy")?;
