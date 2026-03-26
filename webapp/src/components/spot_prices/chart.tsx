@@ -151,7 +151,7 @@ export function SpotPriceChart() {
               name={`${chain}_wick`}
               barSize={12}
               legendType="none"
-              shape={(props: any) => {
+              shape={(props: { x: number; y: number; width: number; height: number }) => {
                 const color = COLORS[i % COLORS.length];
                 const { x, y, width, height } = props;
                 if (!height || height <= 0) return <g />;
