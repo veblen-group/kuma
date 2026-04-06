@@ -88,6 +88,9 @@ impl Kuma {
                 max_slippage_bps: cfg.max_slippage_bps,
                 congestion_risk_discount_bps: cfg.congestion_risk_discount_bps,
                 ignore_gas_costs_in_profit: cfg.ignore_gas_costs_in_profit.unwrap_or(false),
+                ignore_slippage_in_profit: cfg.ignore_slippage_in_profit.unwrap_or(false),
+                ignore_congestion_fee_in_profit: cfg.ignore_congestion_fee_in_profit.unwrap_or(false),
+                ignore_usdc_conversion_in_profit: cfg.ignore_usdc_conversion_in_profit.unwrap_or(false),
             }
             .build()
             .wrap_err("failed to build strategy")?;

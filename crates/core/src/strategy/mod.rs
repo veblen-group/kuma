@@ -140,6 +140,12 @@ pub struct CrossChainSingleHop {
     pub congestion_risk_discount_bps: u64,
     /// Whether to ignore gas costs when determining trade profitability
     pub ignore_gas_costs_in_profit: bool,
+    /// Whether to ignore slippage when determining trade profitability
+    pub ignore_slippage_in_profit: bool,
+    /// Whether to ignore the congestion fee discount when determining trade profitability
+    pub ignore_congestion_fee_in_profit: bool,
+    /// Whether to ignore USDC conversion when determining trade profitability
+    pub ignore_usdc_conversion_in_profit: bool,
 }
 
 impl CrossChainSingleHop {
@@ -631,6 +637,9 @@ impl CrossChainSingleHop {
             self.congestion_risk_discount_bps,
             fast_base_fee,
             self.ignore_gas_costs_in_profit,
+            self.ignore_slippage_in_profit,
+            self.ignore_congestion_fee_in_profit,
+            self.ignore_usdc_conversion_in_profit,
         )
         .map_err(|err| {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
@@ -1266,6 +1275,9 @@ mod tests {
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
             ignore_gas_costs_in_profit: false,
+            ignore_slippage_in_profit: false,
+            ignore_congestion_fee_in_profit: false,
+            ignore_usdc_conversion_in_profit: false,
         })
     }
 
@@ -1342,6 +1354,9 @@ mod tests {
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
             ignore_gas_costs_in_profit: true,
+            ignore_slippage_in_profit: false,
+            ignore_congestion_fee_in_profit: false,
+            ignore_usdc_conversion_in_profit: false,
         })
     }
 
@@ -1560,6 +1575,9 @@ mod tests {
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
                 false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1658,6 +1676,9 @@ mod tests {
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
                 false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1757,6 +1778,9 @@ mod tests {
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
                 false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1855,6 +1879,9 @@ mod tests {
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
                 false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )

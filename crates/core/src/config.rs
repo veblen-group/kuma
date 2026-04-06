@@ -45,6 +45,18 @@ pub struct Config {
     /// Whether to ignore gas costs when determining trade profitability
     /// Gas costs will still be calculated and tracked for reporting
     pub ignore_gas_costs_in_profit: Option<bool>,
+
+    /// Whether to ignore slippage when determining trade profitability
+    /// Slippage amounts will still be calculated and tracked for reporting
+    pub ignore_slippage_in_profit: Option<bool>,
+
+    /// Whether to ignore the congestion fee discount when determining trade profitability
+    /// Congestion discount will still be tracked for reporting
+    pub ignore_congestion_fee_in_profit: Option<bool>,
+
+    /// Whether to ignore USDC conversion when determining trade profitability
+    /// USDC prices will still be fetched and tracked for reporting
+    pub ignore_usdc_conversion_in_profit: Option<bool>,
 }
 
 pub type AddressForToken = HashMap<tycho_common::Bytes, Token>;
