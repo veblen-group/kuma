@@ -1376,9 +1376,10 @@ mod tests {
 
         // Assert
         // correct spot prices
+        // UniswapV2 spot price includes a 0.3% fee markup: raw_price / (1 - 0.003)
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), 0.001_f64 / (1.0 - 0.003))
         );
 
         // assert that only one pool is simulated
@@ -1437,9 +1438,10 @@ mod tests {
 
         // Assert
         // correct spot prices
+        // UniswapV2 spot price includes a 0.3% fee markup: raw_price / (1 - 0.003)
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), 0.001_f64 / (1.0 - 0.003))
         );
 
         // assert that only one pool is simulated
