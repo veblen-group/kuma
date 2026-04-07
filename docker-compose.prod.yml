@@ -1,0 +1,98 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - all
+      - webapp
+    container_name: kuma-caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  schema-migration:
+    image: postgres:15
+    profiles:
+      - init
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGUSER=api_user
+      - PGPASSWORD=Postgres1!
+      - PGDATABASE=api_db
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      sh -c "
+        psql -f /migrations/001_initial.sql
+      "
+    restart: "no"
+    networks:
+      - kuma-network
+
+  kumad:
+    image: ghcr.io/veblen-group/kumad:latest
+    profiles:
+      - kumad
+      - all
+    container_name: kumad
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
+      - ./tokens.base.json:/app/tokens.base.json:ro
+      - ./tokens.unichain.json:/app/tokens.unichain.json:ro
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  kuma-backend:
+    image: ghcr.io/veblen-group/backend:latest
+    profiles:
+      - kumad
+      - all
+    container_name: kuma-api
+    environment:
+      - RUST_LOG=info
+      - KUMA_DATABASE__HOST=10.44.192.3
+    volumes:
+      - ./kuma.yaml:/app/kuma.yaml:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  frontend:
+    image: ghcr.io/veblen-group/frontend:latest
+    profiles:
+      - webapp
+      - all
+    container_name: kuma-webapp
+    depends_on:
+      - kuma-backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8080
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+networks:
+  kuma-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
