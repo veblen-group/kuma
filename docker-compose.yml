@@ -97,7 +97,7 @@ services:
     profiles:
       - webapp
       - all
-    container_name: kuma-api
+    container_name: kuma-backend
     depends_on:
       postgres:
         condition: service_healthy
