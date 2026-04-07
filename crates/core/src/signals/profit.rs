@@ -183,6 +183,10 @@ impl ExpectedProfit {
         fast_base_fee: u64,
         max_slippage_bps: u64,
         congestion_risk_discount_bps: u64,
+        ignore_gas_costs_in_profit: bool,
+        ignore_slippage_in_profit: bool,
+        ignore_congestion_fee_in_profit: bool,
+        ignore_usdc_conversion_in_profit: bool,
     ) -> eyre::Result<Self> {
         // Extract (amount_in, amount_out) pairs for token A and token B from the swap simulations
         let (amounts_a, amounts_b) = Self::try_amounts_by_tokens_a_b(slow_sim, fast_sim)?;
@@ -192,24 +196,49 @@ impl ExpectedProfit {
         let surplus = try_surplus(amounts_a, amounts_b, &pair)?;
 
         // Step 2: Calculate maximum slippage amounts as a percentage of the outputs
+        // Always computed for reporting regardless of ignore flags
         let max_slippage_token_amounts =
             Self::try_max_slippage_amounts(amounts_a.1, amounts_b.1, max_slippage_bps)?;
 
-        // Step 3: Apply congestion risk discount to the surplus after accounting for slippage
-        // This represents the minimum guaranteed amount after discounting for congestion
-        let min_token_amounts = Self::apply_congestion_discount(
-            &surplus,
-            &max_slippage_token_amounts,
-            congestion_risk_discount_bps,
-        )?;
+        // Step 3: Apply congestion risk discount to the surplus after accounting for slippage.
+        // When ignore_slippage_in_profit is set, slippage is not subtracted from surplus.
+        // When ignore_congestion_fee_in_profit is set, congestion discount is not applied.
+        let effective_slippage = if ignore_slippage_in_profit {
+            (BigUint::from(0u64), BigUint::from(0u64))
+        } else {
+            max_slippage_token_amounts.clone()
+        };
+        let min_token_amounts = if ignore_congestion_fee_in_profit {
+            let a = surplus.0.checked_sub(&effective_slippage.0).wrap_err_with(|| {
+                format!(
+                    "surplus {} cannot be less than slippage {}",
+                    surplus.0, effective_slippage.0
+                )
+            })?;
+            let b = surplus.1.checked_sub(&effective_slippage.1).wrap_err_with(|| {
+                format!(
+                    "surplus {} cannot be less than slippage {}",
+                    surplus.1, effective_slippage.1
+                )
+            })?;
+            (a, b)
+        } else {
+            Self::apply_congestion_discount(&surplus, &effective_slippage, congestion_risk_discount_bps)?
+        };
 
-        // Step 4: Convert minimum token amounts to USDC
-        let (min_usdc_amounts, token_usdc_prices) = {
-            let (a_usdc, price_a_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
-            let (b_usdc, price_b_usdc) =
-                try_mul_amount_usdc_price(&min_token_amounts.1, prices_b_usdc)?;
-            ((a_usdc, b_usdc), (price_a_usdc, price_b_usdc))
+        // Step 4: Convert minimum token amounts to USDC.
+        // Always fetch real prices for reporting; when ignore_usdc_conversion_in_profit is set,
+        // raw token amounts are used directly instead of converting via USDC price.
+        let token_usdc_prices = (
+            prices_a_usdc.as_ref().map(|p| p.min_price).unwrap_or(1.0),
+            prices_b_usdc.as_ref().map(|p| p.min_price).unwrap_or(1.0),
+        );
+        let min_usdc_amounts = if ignore_usdc_conversion_in_profit {
+            (min_token_amounts.0.clone(), min_token_amounts.1.clone())
+        } else {
+            let (a_usdc, _) = try_mul_amount_usdc_price(&min_token_amounts.0, prices_a_usdc)?;
+            let (b_usdc, _) = try_mul_amount_usdc_price(&min_token_amounts.1, prices_b_usdc)?;
+            (a_usdc, b_usdc)
         };
 
         // Step 5: Calculate total amount of USDC after accounting for slippage and congestion risk
@@ -262,8 +291,8 @@ impl ExpectedProfit {
                 )
             })?;
 
-        // Step 8: Assert total gas cost < total profit
-        if total_gas_cost_usdc > min_total_amount_usdc {
+        // Step 8: Skip gas cost validation when ignore_gas_costs_in_profit is enabled
+        if !ignore_gas_costs_in_profit && total_gas_cost_usdc > min_total_amount_usdc {
             Err(eyre!(
                 "total_gas_cost_usdc {} - min_total_amount_usdc {} = {} ",
                 total_gas_cost_usdc.clone(),
