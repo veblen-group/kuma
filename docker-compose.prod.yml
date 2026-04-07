@@ -1,3 +1,19 @@
+# Production Docker Compose for GCP deployment.
+#
+# Prerequisites:
+#   - Docker images pushed to Artifact Registry (see `just prod-build-push`)
+#   - Cloud SQL instance created with database and user
+#   - VM service account has roles/cloudsql.client
+#   - Caddyfile updated with your real domain
+#   - kuma.yaml with production secrets on the VM
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d              # core services
+#   docker compose -f docker-compose.prod.yml --profile kumad up -d  # + kumad
+#
+# Set REGISTRY to your Artifact Registry path:
+#   export REGISTRY=us-east1-docker.pkg.dev/YOUR_GCP_PROJECT_ID/kuma
+
 services:
   caddy:
     image: caddy:2-alpine
