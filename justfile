@@ -3,6 +3,8 @@ default:
 
 set fallback := true
 
+registry := env("REGISTRY", "ghcr.io/veblen-group")
+
 # CLI commands
 
 # ##################
@@ -110,7 +112,34 @@ docker-build-all version="latest":
     just docker-build-backend backend {{ version }}
     just docker-build-webapp webapp {{ version }}
 
+prod-build version="latest":
+    docker build --platform linux/amd64 --build-arg BINARY=kumad -t {{ registry }}/kumad:{{ version }} .
+    docker build --platform linux/amd64 --build-arg BINARY=kuma-backend -t {{ registry }}/backend:{{ version }} .
+    cd webapp && docker build --platform linux/amd64 -t {{ registry }}/frontend:{{ version }} .
+
+# Push all production images to Artifact Registry
+prod-push version="latest":
+    docker push {{ registry }}/kumad:{{ version }}
+    docker push {{ registry }}/backend:{{ version }}
+    docker push {{ registry }}/frontend:{{ version }}
+
+# Build and push all production images
+prod-build-push version="latest":
+    just prod-build {{ version }}
+    just prod-push {{ version }}
+
+prod-pull version="latest":
+    docker pull {{ registry }}/kumad:{{ version }}
+    docker pull {{ registry }}/backend:{{ version }}
+    docker pull {{ registry }}/frontend:{{ version }}
+
 # Start all services including daemon, database, backend, and webapp
+docker-prod-run:
+    docker-compose -f docker-compose.prod.yml --profile all up -d
+
+docker-prod-stop:
+    docker-compose -f docker-compose.prod.yml --profile all down
+
 docker-run:
     docker compose --profile all up -d
 
