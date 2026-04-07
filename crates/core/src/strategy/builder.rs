@@ -16,6 +16,10 @@ pub struct Builder {
     pub binary_search_steps: usize,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
+    pub ignore_gas_costs_in_profit: bool,
+    pub ignore_slippage_in_profit: bool,
+    pub ignore_congestion_fee_in_profit: bool,
+    pub ignore_usdc_conversion_in_profit: bool,
 }
 
 impl Builder {
@@ -29,6 +33,10 @@ impl Builder {
             binary_search_steps,
             max_slippage_bps,
             congestion_risk_discount_bps,
+            ignore_gas_costs_in_profit,
+            ignore_slippage_in_profit,
+            ignore_congestion_fee_in_profit,
+            ignore_usdc_conversion_in_profit,
         } = self;
 
         //  get the pairs for the chains from strategy config
@@ -93,6 +101,10 @@ impl Builder {
             slow_token_b_usdc,
             fast_token_a_usdc,
             fast_token_b_usdc,
+            ignore_gas_costs_in_profit,
+            ignore_slippage_in_profit,
+            ignore_congestion_fee_in_profit,
+            ignore_usdc_conversion_in_profit,
         })
     }
 }

@@ -138,6 +138,14 @@ pub struct CrossChainSingleHop {
     pub max_slippage_bps: u64,
     // TODO: docstring
     pub congestion_risk_discount_bps: u64,
+    /// Whether to ignore gas costs when determining trade profitability
+    pub ignore_gas_costs_in_profit: bool,
+    /// Whether to ignore slippage when determining trade profitability
+    pub ignore_slippage_in_profit: bool,
+    /// Whether to ignore the congestion fee discount when determining trade profitability
+    pub ignore_congestion_fee_in_profit: bool,
+    /// Whether to ignore USDC conversion when determining trade profitability
+    pub ignore_usdc_conversion_in_profit: bool,
 }
 
 impl CrossChainSingleHop {
@@ -628,6 +636,10 @@ impl CrossChainSingleHop {
             self.max_slippage_bps,
             self.congestion_risk_discount_bps,
             fast_base_fee,
+            self.ignore_gas_costs_in_profit,
+            self.ignore_slippage_in_profit,
+            self.ignore_congestion_fee_in_profit,
+            self.ignore_usdc_conversion_in_profit,
         )
         .map_err(|err| {
             trace!(%slow_sim, %fast_sim, %err, "‼️ failed to make signal");
@@ -1262,6 +1274,10 @@ mod tests {
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
+            ignore_gas_costs_in_profit: false,
+            ignore_slippage_in_profit: false,
+            ignore_congestion_fee_in_profit: false,
+            ignore_usdc_conversion_in_profit: false,
         })
     }
 
@@ -1337,6 +1353,10 @@ mod tests {
             slow_token_b_usdc: Some(slow_token_b_usdc),
             fast_token_a_usdc: Some(fast_token_a_usdc),
             fast_token_b_usdc: Some(fast_token_b_usdc),
+            ignore_gas_costs_in_profit: true,
+            ignore_slippage_in_profit: false,
+            ignore_congestion_fee_in_profit: false,
+            ignore_usdc_conversion_in_profit: false,
         })
     }
 
@@ -1356,9 +1376,10 @@ mod tests {
 
         // Assert
         // correct spot prices
+        // UniswapV2 spot price includes a 0.3% fee markup: raw_price / (1 - 0.003)
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), 0.001_f64 / (1.0 - 0.003))
         );
 
         // assert that only one pool is simulated
@@ -1417,9 +1438,10 @@ mod tests {
 
         // Assert
         // correct spot prices
+        // UniswapV2 spot price includes a 0.3% fee markup: raw_price / (1 - 0.003)
         assert_eq!(
             precompute.sorted_prices_a_b[0],
-            (state::PoolId::from("slow_main"), "0.001".parse().unwrap())
+            (state::PoolId::from("slow_main"), 0.001_f64 / (1.0 - 0.003))
         );
 
         // assert that only one pool is simulated
@@ -1554,6 +1576,10 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1651,6 +1677,10 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1749,6 +1779,10 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
@@ -1846,6 +1880,10 @@ mod tests {
                 0u64, // TODO: non-zero base fee
                 strategy.max_slippage_bps,
                 strategy.congestion_risk_discount_bps,
+                false, // ignore_gas_costs_in_profit for tests
+                false, // ignore_slippage_in_profit for tests
+                false, // ignore_congestion_fee_in_profit for tests
+                false, // ignore_usdc_conversion_in_profit for tests
             )
             .unwrap()
         )
