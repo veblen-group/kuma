@@ -1,24 +1,33 @@
 services:
-  postgres:
-    image: postgres:15
+  cloud-sql-proxy:
     profiles:
-      - db
-      - kumad
       - all
-    container_name: kuma-db
-    environment:
-      POSTGRES_DB: api_db
-      POSTGRES_USER: api_user
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.0
+    # The --address=0.0.0.0 is CRITICAL for other containers to reach it
+    command: 
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "--private-ip"
+      - "veblen-490914:us-central1:kuma-project"
+    networks:
+      - kuma-network
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - all
+      - webapp
+    container_name: kuma-caddy
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U api_user -d api_db"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+    restart: unless-stopped
     networks:
       - kuma-network
 
@@ -26,14 +35,11 @@ services:
     image: postgres:15
     profiles:
       - init
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       - PGHOST=postgres
       - PGPORT=5432
       - PGUSER=api_user
-      - PGPASSWORD=password
+      - PGPASSWORD=REDACTED
       - PGDATABASE=api_db
     volumes:
       - ./migrations:/migrations
@@ -45,44 +51,14 @@ services:
     networks:
       - kuma-network
 
-  test-migrations:
-    image: postgres:15
-    profiles:
-      - test
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      - PGHOST=postgres
-      - PGPORT=5432
-      - PGUSER=api_user
-      - PGPASSWORD=password
-      - PGDATABASE=api_db
-    volumes:
-      - ./migrations:/migrations
-    command: >
-      sh -c "
-        for file in /migrations/*.sql; do
-          echo \"Running migration: $$file\"
-          psql -f \"$$file\"
-        done
-      "
-    restart: "no"
-    networks:
-      - kuma-network
-
   kumad:
-    image: kumad:latest
+    image: ghcr.io/veblen-group/kumad:latest
     profiles:
       - kumad
       - all
     container_name: kumad
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      - RUST_LOG=info
-      - KUMA_DATABASE_HOST=postgres
+      - RUST_LOG=trace
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
       - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
@@ -93,17 +69,18 @@ services:
       - kuma-network
 
   kuma-backend:
-    image: backend:latest
+    image: ghcr.io/veblen-group/backend:latest
     profiles:
-      - webapp
+      - kumad
       - all
     container_name: kuma-backend
     depends_on:
       postgres:
         condition: service_healthy
+>>>>>>> Stashed changes
     environment:
       - RUST_LOG=info
-      - KUMA_DATABASE__HOST=postgres
+      - KUMA_DATABASE__HOST=10.44.192.3
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
     restart: unless-stopped
@@ -111,7 +88,7 @@ services:
       - kuma-network
 
   frontend:
-    image: frontend:latest
+    image: ghcr.io/veblen-group/frontend:latest
     profiles:
       - webapp
       - all
@@ -132,3 +109,5 @@ networks:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

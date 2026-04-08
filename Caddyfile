@@ -1,0 +1,6 @@
+# Replace yourdomain.com with your actual domain before deploying.
+# Caddy automatically provisions and renews Let's Encrypt TLS certificates.
+# TODO: replace with kuma.veblen.group and add /api proxy for frontend
+:80 {
+    reverse_proxy frontend:3000
+}

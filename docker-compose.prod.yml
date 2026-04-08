@@ -5,7 +5,7 @@
 #   - Cloud SQL instance created with database and user
 #   - VM service account has roles/cloudsql.client
 #   - Caddyfile updated with your real domain
-#   - kuma.yaml with production secrets on the VM
+#   - kuma.prod.yaml with production secrets on the VM
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d              # core services
@@ -63,7 +63,7 @@ services:
     environment:
       - RUST_LOG=info
     volumes:
-      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./kuma.prod.yaml:/app/kuma.yaml:ro
       - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
       - ./tokens.base.json:/app/tokens.base.json:ro
       - ./tokens.unichain.json:/app/tokens.unichain.json:ro
@@ -82,8 +82,6 @@ services:
       - KUMA_DATABASE__HOST=10.44.192.3
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
-    ports:
-      - "8080:8080"
     restart: unless-stopped
     networks:
       - kuma-network
