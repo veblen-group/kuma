@@ -1,6 +1,15 @@
 # Replace yourdomain.com with your actual domain before deploying.
 # Caddy automatically provisions and renews Let's Encrypt TLS certificates.
-# TODO: replace with kuma.veblen.group and add /api proxy for frontend
-:80 {
-    reverse_proxy frontend:3000
+yourdomain.com {
+    # Browser API calls hit /api/* — strip the prefix and proxy to the backend.
+    # Server-side (SSR) Next.js fetches go directly to kuma-backend:8080 via
+    # Docker DNS without touching this route.
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy kuma-backend:8080
+    }
+
+    handle {
+        reverse_proxy kuma-webapp:3000
+    }
 }

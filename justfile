@@ -117,7 +117,7 @@ prod-build version="latest":
     docker build --platform linux/amd64 --build-arg BINARY=kuma-backend -t {{ registry }}/backend:{{ version }} .
     cd webapp && docker build --platform linux/amd64 -t {{ registry }}/frontend:{{ version }} .
 
-# Push all production images to Artifact Registry
+# Push all production images to GitHub Container Registry
 prod-push version="latest":
     docker push {{ registry }}/kumad:{{ version }}
     docker push {{ registry }}/backend:{{ version }}
@@ -133,19 +133,41 @@ prod-pull version="latest":
     docker pull {{ registry }}/backend:{{ version }}
     docker pull {{ registry }}/frontend:{{ version }}
 
-# Start all services including daemon, database, backend, and webapp
+# Copy .env.example to .env for local editing
+reset-env:
+    cp .env.example .env
+    @echo "Created .env — fill in CLOUD_SQL_CONNECTION_NAME and PGPASSWORD"
+
+# Push .env to the production VM
+push-env zone="us-east1-b":
+    gcloud compute scp .env kuma-vm:/home/$USER/kuma/.env --zone={{ zone }}
+
+# Copy kuma.prod.yaml.example to kuma.prod.yaml for local editing
+reset-prod-config:
+    cp kuma.prod.yaml.example kuma.prod.yaml
+    @echo "Created kuma.prod.yaml — fill in API keys, private keys, and DB password"
+
+# Push kuma.prod.yaml to the production VM
+push-prod-config zone="us-east1-b":
+    gcloud compute scp kuma.prod.yaml kuma-vm:/home/$USER/kuma/kuma.prod.yaml --zone={{ zone }}
+
+# Push Caddyfile to the production VM
+push-caddyfile zone="us-east1-b":
+    gcloud compute scp Caddyfile kuma-vm:/home/$USER/kuma/Caddyfile --zone={{ zone }}
+
+# Start all production services
 docker-prod-run:
-    docker-compose -f docker-compose.prod.yml --profile all up -d
+    docker compose -f docker-compose.prod.yml --profile all up -d
 
 docker-prod-stop:
-    docker-compose -f docker-compose.prod.yml --profile all down
+    docker compose -f docker-compose.prod.yml --profile all down
 
 docker-run:
     docker compose --profile all up -d
 
 # Stop all services
 docker-stop:
-    docker-compose --profile all down
+    docker compose --profile all down
 
 # Linting & formatting
 ##################

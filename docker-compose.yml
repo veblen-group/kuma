@@ -1,33 +1,24 @@
 services:
-  cloud-sql-proxy:
+  postgres:
+    image: postgres:15
     profiles:
       - all
-    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.0
-    # The --address=0.0.0.0 is CRITICAL for other containers to reach it
-    command: 
-      - "--address=0.0.0.0"
-      - "--port=5432"
-      - "--private-ip"
-      - "veblen-490914:us-central1:kuma-project"
-    networks:
-      - kuma-network
-
-  caddy:
-    image: caddy:2-alpine
-    profiles:
-      - all
-      - webapp
-    container_name: kuma-caddy
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - kumad
+      - db
+    container_name: kuma-db
+    environment:
+      POSTGRES_DB: api_db
+      POSTGRES_USER: api_user
+      POSTGRES_PASSWORD: password
     ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - frontend
-    restart: unless-stopped
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U api_user -d api_db" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - kuma-network
 
@@ -35,11 +26,14 @@ services:
     image: postgres:15
     profiles:
       - init
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       - PGHOST=postgres
       - PGPORT=5432
       - PGUSER=api_user
-      - PGPASSWORD=REDACTED
+      - PGPASSWORD=password
       - PGDATABASE=api_db
     volumes:
       - ./migrations:/migrations
@@ -54,8 +48,8 @@ services:
   kumad:
     image: ghcr.io/veblen-group/kumad:latest
     profiles:
-      - kumad
       - all
+      - kumad
     container_name: kumad
     environment:
       - RUST_LOG=trace
@@ -71,16 +65,16 @@ services:
   kuma-backend:
     image: ghcr.io/veblen-group/backend:latest
     profiles:
-      - kumad
       - all
+      - frontend
+      - kumad
     container_name: kuma-backend
     depends_on:
       postgres:
         condition: service_healthy
->>>>>>> Stashed changes
     environment:
       - RUST_LOG=info
-      - KUMA_DATABASE__HOST=10.44.192.3
+      - KUMA_DATABASE__HOST=postgres
     volumes:
       - ./kuma.yaml:/app/kuma.yaml:ro
     restart: unless-stopped
@@ -90,15 +84,34 @@ services:
   frontend:
     image: ghcr.io/veblen-group/frontend:latest
     profiles:
-      - webapp
       - all
+      - frontend
     container_name: kuma-webapp
     depends_on:
       - kuma-backend
     environment:
-      - BACKEND_URL=http://kuma-api:8080
+      - BACKEND_URL=http://kuma-backend:8080
     ports:
       - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - all
+      - frontend
+    container_name: kuma-caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
     restart: unless-stopped
     networks:
       - kuma-network

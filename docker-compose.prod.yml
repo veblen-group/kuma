@@ -1,35 +1,31 @@
 # Production Docker Compose for GCP deployment.
 #
 # Prerequisites:
-#   - Docker images pushed to Artifact Registry (see `just prod-build-push`)
+#   - Docker images published to ghcr.io/veblen-group/
 #   - Cloud SQL instance created with database and user
 #   - VM service account has roles/cloudsql.client
 #   - Caddyfile updated with your real domain
 #   - kuma.prod.yaml with production secrets on the VM
+#   - .env file with CLOUD_SQL_CONNECTION_NAME and PGPASSWORD (see docs/DEPLOYMENT.md)
 #
 # Usage:
-#   docker compose -f docker-compose.prod.yml up -d              # core services
-#   docker compose -f docker-compose.prod.yml --profile kumad up -d  # + kumad
-#
-# Set REGISTRY to your Artifact Registry path:
-#   export REGISTRY=us-east1-docker.pkg.dev/YOUR_GCP_PROJECT_ID/kuma
+#   docker compose -f docker-compose.prod.yml --profile frontend up -d   # caddy + frontend + backend
+#   docker compose -f docker-compose.prod.yml --profile kumad up -d    # + kumad
+#   docker compose -f docker-compose.prod.yml --profile init up schema-migration  # run migrations
 
 services:
-  caddy:
-    image: caddy:2-alpine
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.0
     profiles:
       - all
-      - webapp
-    container_name: kuma-caddy
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
       - frontend
+      - kumad
+    container_name: kuma-cloud-sql-proxy
+    command:
+      # --address=0.0.0.0 is required for other containers to reach the proxy
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "${CLOUD_SQL_CONNECTION_NAME}"
     restart: unless-stopped
     networks:
       - kuma-network
@@ -39,10 +35,10 @@ services:
     profiles:
       - init
     environment:
-      - PGHOST=postgres
+      - PGHOST=cloud-sql-proxy
       - PGPORT=5432
       - PGUSER=api_user
-      - PGPASSWORD=REDACTED
+      - PGPASSWORD=${PGPASSWORD}
       - PGDATABASE=api_db
     volumes:
       - ./migrations:/migrations
@@ -74,14 +70,15 @@ services:
   kuma-backend:
     image: ghcr.io/veblen-group/backend:latest
     profiles:
+      - frontend
       - kumad
       - all
-    container_name: kuma-api
+    container_name: kuma-backend
     environment:
       - RUST_LOG=info
-      - KUMA_DATABASE__HOST=10.44.192.3
+      - KUMA_DATABASE__HOST=cloud-sql-proxy
     volumes:
-      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./kuma.prod.yaml:/app/kuma.yaml:ro
     restart: unless-stopped
     networks:
       - kuma-network
@@ -89,15 +86,32 @@ services:
   frontend:
     image: ghcr.io/veblen-group/frontend:latest
     profiles:
-      - webapp
+      - frontend
       - all
     container_name: kuma-webapp
     depends_on:
       - kuma-backend
-    environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8080
     ports:
       - "3000:3000"
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
+  caddy:
+    image: caddy:2-alpine
+    profiles:
+      - all
+      - frontend
+    container_name: kuma-caddy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
     restart: unless-stopped
     networks:
       - kuma-network
@@ -107,6 +121,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   caddy_data:
   caddy_config:
