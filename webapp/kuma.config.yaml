@@ -1,6 +1,6 @@
 # Arbitrage paths to create strategies for
 strategies:
-  - token_a: UNI
+  - token_a: USDC
     token_b: WETH
     slow_chain: ethereum
     fast_chain: unichain

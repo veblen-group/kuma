@@ -1,15 +1,15 @@
 # Arbitrage paths to create strategies for
 strategies:
-  - token_a: UNI
+  - token_a: USDC
     token_b: WETH
     slow_chain: ethereum
     fast_chain: unichain
 
-binary_search_steps: 8192
-
+binary_search_steps: 16384
+ignore_gas_costs_in_profit: true
 # Risk and trading parameters
 congestion_risk_discount_bps: 0
-max_slippage_bps: 25
+max_slippage_bps: 0
 
 # Token configurations with addresses on multiple chains
 tokens:
@@ -24,9 +24,9 @@ tokens:
       - 1000
     quality: 100
     inventory:
-      ethereum: "500000000000000000000"
-      base: "5000000000000000000000"
-      unichain: "500000000000000000000"
+      ethereum: "100000000000000000000"
+      base: "1000000000000000000000"
+      unichain: "100000000000000000000"
 
   USDC:
     addresses:
@@ -54,9 +54,9 @@ tokens:
       - 1000
     quality: 100
     inventory:
-      ethereum: "10000000000000000"
-      base: "10000000000000000"
-      unichain: "10000000000000000"
+      ethereum: "2000000000000000000"
+      base: "2000000000000000000"
+      unichain: "2000000000000000000"
 
   WBTC:
     addresses:
@@ -73,60 +73,44 @@ tokens:
       base: "10000000000000000"
       unichain: "10000000000000000"
 
-  wstETH:
-    addresses:
-      ethereum: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0"
-      base: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452"
-      unichain: "0xc02fE7317D4eb8753a02c35fe019786854A92001"
-    decimals: 18
-    tax: 0
-    gas:
-      - 29669
-    quality: 100
-    inventory:
-      ethereum: "1000000000000000000"
-      base: "1000000000000000000"
-      unichain: "1000000000000000000"
-
-
 # Chain configurations
 chains:
   - name: ethereum
-    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/"
-    rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/"
+    rpc_url: "https://eth-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
+    rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
     # Tycho simulation stream filter
     add_tvl_threshold: 5.0
-    remove_tvl_threshold: 1.0
+    remove_tvl_threshold: 3.0
 
   - name: base
-    rpc_url: "https://base-mainnet.g.alchemy.com/v2/"
-    rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/"
+    rpc_url: "https://base-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
+    rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
     # Tycho simulation stream filter
     add_tvl_threshold: 5.0
-    remove_tvl_threshold: 1.0
+    remove_tvl_threshold: 3.0
 
   - name: unichain
-    rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/"
-    rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/"
+    rpc_url: "https://unichain-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
+    rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
     private_key: ""
     # Tycho simulation stream filter
-    add_tvl_threshold: 0.1
-    remove_tvl_threshold: 0.1
+    add_tvl_threshold: 5.0
+    remove_tvl_threshold: 3.0
 
 # tycho simulation
 tycho_api_key: ""
 
 # Database configuration
 database:
-  user: "api_user"
+  user: "backend_user"
   password: "password"
   host: "localhost"
   port: 5432
