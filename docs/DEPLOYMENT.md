@@ -11,7 +11,7 @@ Internet
   | HTTPS (443)
   v
 +--------------------------------------------------+
-|  GCP e2-small VM (us-east1)                      |
+|  GCP e2-small VM (us-central1)                      |
 |                                                  |
 |  +----------+                                    |
 |  |  Caddy    | :443 /api/* -> kuma-backend:8080  |
@@ -78,23 +78,23 @@ gcloud services enable \
 ### 2. Create Cloud SQL instance
 
 ```bash
-gcloud sql instances create kuma-db \
+gcloud sql instances create kuma-project \
   --database-version=POSTGRES_15 \
   --tier=db-f1-micro \
-  --region=us-east1 \
+  --region=us-central1 \
   --storage-size=10GB \
   --storage-type=SSD \
   --backup-start-time=04:00 \
   --availability-type=zonal
 ```
 
-Create the database and user:
+Create the database and set the default `postgres` user password:
 
 ```bash
-gcloud sql databases create api_db --instance=kuma-db
+gcloud sql databases create api_db --instance=kuma-project
 
-gcloud sql users create api_user \
-  --instance=kuma-db \
+gcloud sql users set-password postgres \
+  --instance=kuma-project \
   --password=YOUR_DB_PASSWORD
 ```
 
@@ -102,14 +102,14 @@ Note the **instance connection name** (format: `YOUR_PROJECT:REGION:INSTANCE`) �
 you'll need it for the `.env` file:
 
 ```bash
-gcloud sql instances describe kuma-db --format="value(connectionName)"
+gcloud sql instances describe kuma-project --format="value(connectionName)"
 ```
 
 ### 3. Create the VM
 
 ```bash
-gcloud compute instances create kuma-vm \
-  --zone=us-east1-b \
+gcloud compute instances create kuma \
+  --zone=us-central1-c \
   --machine-type=e2-small \
   --image-family=debian-12 \
   --image-project=debian-cloud \
@@ -128,8 +128,8 @@ The Cloud SQL Auth Proxy uses the VM's service account to authenticate. Grant
 it the required role:
 
 ```bash
-SA=$(gcloud compute instances describe kuma-vm \
-  --zone=us-east1-b \
+SA=$(gcloud compute instances describe kuma \
+  --zone=us-central1-c \
   --format="value(serviceAccounts[0].email)")
 
 gcloud projects add-iam-policy-binding YOUR_GCP_PROJECT_ID \
@@ -140,20 +140,20 @@ gcloud projects add-iam-policy-binding YOUR_GCP_PROJECT_ID \
 ### 5. Reserve a static IP and assign to the VM
 
 ```bash
-gcloud compute addresses create kuma-ip --region=us-east1
+gcloud compute addresses create kuma-ip --region=us-central1
 
 # Get the static IP
 STATIC_IP=$(gcloud compute addresses describe kuma-ip \
-  --region=us-east1 --format="value(address)")
+  --region=us-central1 --format="value(address)")
 echo "Static IP: ${STATIC_IP}"
 
 # Remove the ephemeral IP and assign the static one
-gcloud compute instances delete-access-config kuma-vm \
-  --zone=us-east1-b \
+gcloud compute instances delete-access-config kuma \
+  --zone=us-central1-c \
   --access-config-name="external-nat"
 
-gcloud compute instances add-access-config kuma-vm \
-  --zone=us-east1-b \
+gcloud compute instances add-access-config kuma \
+  --zone=us-central1-c \
   --address="${STATIC_IP}"
 ```
 
@@ -171,13 +171,19 @@ gcloud compute firewall-rules create allow-https \
   --description="Allow HTTPS traffic"
 ```
 
-### 7. DNS
+### 7. DNS (Cloudflare)
 
-Add an **A record** for your domain pointing to the static IP:
+In the Cloudflare dashboard for `veblen.group`, add an **A record**:
 
-```
-yourdomain.com  A  <STATIC_IP>
-```
+- **Type:** `A`
+- **Name:** `kuma`
+- **IPv4 address:** the VM's static IP
+- **Proxy status:** **DNS only** (grey cloud — not proxied)
+
+> **Important:** Keep Cloudflare proxy OFF (grey cloud). Caddy provisions its
+> own TLS certificate via Let's Encrypt. If the orange-cloud proxy is enabled,
+> Cloudflare intercepts the ACME HTTP-01 challenge on port 80 and Caddy cannot
+> obtain its certificate.
 
 Wait for DNS propagation before proceeding (Caddy needs to reach your domain
 to provision the TLS certificate).
@@ -187,7 +193,7 @@ to provision the TLS certificate).
 SSH into the VM:
 
 ```bash
-gcloud compute ssh kuma-vm --zone=us-east1-b
+gcloud compute ssh kuma --zone=us-central1-c
 ```
 
 ### Install Docker
@@ -199,7 +205,7 @@ sudo usermod -aG docker $USER
 
 # Log out and back in for group change to take effect
 exit
-gcloud compute ssh kuma-vm --zone=us-east1-b
+gcloud compute ssh kuma --zone=us-central1-c
 
 # Verify
 docker --version
@@ -212,7 +218,7 @@ From your **local machine**:
 
 ```bash
 # Create the app directory on the VM
-gcloud compute ssh kuma-vm --zone=us-east1-b -- "mkdir -p /home/$USER/kuma"
+gcloud compute ssh kuma --zone=us-central1-c -- "mkdir -p /home/$USER/kuma"
 
 # Copy compose file, Caddyfile, and token lists
 gcloud compute scp \
@@ -221,14 +227,14 @@ gcloud compute scp \
   tokens.ethereum.json \
   tokens.base.json \
   tokens.unichain.json \
-  kuma-vm:/home/$USER/kuma/ \
-  --zone=us-east1-b
+  kuma:/home/$USER/kuma/ \
+  --zone=us-central1-c
 
 # Copy migrations directory
 gcloud compute scp --recurse \
   migrations/ \
-  kuma-vm:/home/$USER/kuma/migrations/ \
-  --zone=us-east1-b
+  kuma:/home/$USER/kuma/migrations/ \
+  --zone=us-central1-c
 ```
 
 ### Configure secrets
@@ -248,16 +254,15 @@ just push-prod-config    # pushes to the VM
 ```bash
 just reset-env           # creates .env from the example template
 # edit .env with your values:
-#   CLOUD_SQL_CONNECTION_NAME — get with: gcloud sql instances describe kuma-db --format="value(connectionName)"
-#   PGPASSWORD — the password you set for api_user
+#   CLOUD_SQL_CONNECTION_NAME — get with: gcloud sql instances describe kuma-project --format="value(connectionName)"
+#   PGPASSWORD — the password you set for postgres
 just push-env            # pushes to the VM
 ```
 
-**`Caddyfile`** — replace `yourdomain.com` with your actual domain, then push:
+**`Caddyfile`** — already configured for `kuma.veblen.group`. Push to the VM:
 
 ```bash
-# edit Caddyfile
-just push-caddyfile      # or: gcloud compute scp Caddyfile kuma-vm:/home/$USER/kuma/ --zone=us-east1-b
+just push-caddyfile      # or: gcloud compute scp Caddyfile kuma:/home/$USER/kuma/ --zone=us-central1-c
 ```
 
 ## First deploy
@@ -265,7 +270,7 @@ just push-caddyfile      # or: gcloud compute scp Caddyfile kuma-vm:/home/$USER/
 SSH into the VM:
 
 ```bash
-gcloud compute ssh kuma-vm --zone=us-east1-b
+gcloud compute ssh kuma --zone=us-central1-c
 cd ~/kuma
 ```
 
@@ -295,7 +300,7 @@ docker compose -f docker-compose.prod.yml --profile kumad up -d
 
 ### Verify
 
-Visit `https://yourdomain.com` -- you should see the kuma dashboard.
+Visit `https://kuma.veblen.group` -- you should see the kuma dashboard.
 
 Check service health:
 
@@ -310,7 +315,7 @@ When you fix a bug or add a feature:
 
 ```bash
 # 1. SSH into the VM
-gcloud compute ssh kuma-vm --zone=us-east1-b
+gcloud compute ssh kuma --zone=us-central1-c
 cd ~/kuma
 
 # 2. Pull and restart core services
@@ -345,7 +350,7 @@ Set up a free GCP uptime check:
 1. Go to **Cloud Monitoring > Uptime Checks** in the GCP Console
 2. Create a new check:
    - Protocol: **HTTPS**
-   - Hostname: **yourdomain.com**
+   - Hostname: **kuma.veblen.group**
    - Path: **/**
    - Check frequency: **5 minutes**
 3. Add a notification channel (email) to alert on downtime
@@ -354,13 +359,13 @@ Set up a free GCP uptime check:
 
 ### Caddy fails to get TLS certificate
 
-- Verify DNS A record points to the VM's static IP: `dig yourdomain.com`
+- Verify DNS A record points to the VM's static IP: `dig kuma.veblen.group`
 - Verify ports 80 and 443 are open: `gcloud compute firewall-rules list`
 - Check Caddy logs: `docker compose -f docker-compose.prod.yml logs caddy`
 
 ### Cloud SQL Proxy fails to connect
 
-- Verify `CLOUD_SQL_CONNECTION_NAME` in `.env` is correct: `gcloud sql instances describe kuma-db --format="value(connectionName)"`
+- Verify `CLOUD_SQL_CONNECTION_NAME` in `.env` is correct: `gcloud sql instances describe kuma-project --format="value(connectionName)"`
 - Verify the VM service account has `roles/cloudsql.client`: `gcloud projects get-iam-policy YOUR_GCP_PROJECT_ID --flatten="bindings[].members" --filter="bindings.role=roles/cloudsql.client"`
 - Check proxy logs: `docker compose -f docker-compose.prod.yml logs cloud-sql-proxy`
 

@@ -40,7 +40,7 @@ services:
     environment:
       - PGHOST=cloud-sql-proxy
       - PGPORT=5432
-      - PGUSER=api_user
+      - PGUSER=postgres
       - PGPASSWORD=${PGPASSWORD}
       - PGDATABASE=api_db
     volumes:

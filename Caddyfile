@@ -1,7 +1,7 @@
 # IMPORTANT: Replace yourdomain.com with your actual domain before deploying.
 # Use `just push-caddyfile` to copy the updated file to the VM.
 # Caddy automatically provisions and renews Let's Encrypt TLS certificates.
-yourdomain.com {
+kuma.veblen.group {
     # Browser API calls hit /api/* — strip the prefix and proxy to the backend.
     # Server-side (SSR) Next.js fetches go directly to kuma-backend:8080 via
     # Docker DNS without touching this route.
