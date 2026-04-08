@@ -14,32 +14,32 @@ Internet
 |  GCP e2-small VM (us-east1)                      |
 |                                                  |
 |  +----------+                                    |
-|  |  Caddy    | :443 -> :3000 (reverse proxy +    |
-|  |           |         auto Let's Encrypt TLS)   |
+|  |  Caddy    | :443 /api/* -> kuma-backend:8080  |
+|  |           |       /*    -> kuma-webapp:3000   |
 |  +-----+----+                                    |
 |        |                                         |
-|  +-----v------+  BACKEND_URL  +--------------+   |
-|  |  frontend   |------------->| kuma-backend  |  |
-|  |  :3000      | (Docker DNS) | :8080         |  |
-|  +-------------+              +-------+-------+  |
+|  +-----v------+              +--------------+    |
+|  | kuma-webapp |             | kuma-backend |    |
+|  |  :3000      |             | :8080        |    |
+|  +-------------+             +-------+------+    |
+|                                       |           |
+|  +-------------+              +-------v-------+  |
+|  |   kumad      |------------>| cloud-sql-    |  |
+|  |  (optional)  | (Docker DNS)|   proxy :5432 |  |
+|  +--------------+             +-------+-------+  |
 |                                       |          |
-|  +-------------+              private IP         |
-|  |   kumad      |------------>| Cloud SQL    |   |
-|  |  (optional)  |             | :5432        |   |
-|  +--------------+             +--------------+   |
-|                                        |         |
-+----------------------------------------|---------+
-                                         |
-                                         v
-                                  +--------------+
-                                  |  Cloud SQL   |
-                                  |  PostgreSQL  |
-                                  |  (managed)   |
-                                  +--------------+
++---------------------------------------|----------+
+                                        | (IAM auth via service account)
+                                        v
+                                 +--------------+
+                                 |  Cloud SQL   |
+                                 |  PostgreSQL  |
+                                 |  (managed)   |
+                                 +--------------+
 ```
 
 **Public:** Only Caddy (ports 80/443) is exposed to the internet.
-Backend, kumad, and the database are internal-only.
+Backend, kumad, Cloud SQL Proxy, and the database are internal-only.
 
 ## Cost
 
@@ -98,11 +98,11 @@ gcloud sql users create api_user \
   --password=YOUR_DB_PASSWORD
 ```
 
-Enable the private IP for Cloud SQL and note the **private IP address** — this
-is what `KUMA_DATABASE__HOST` must be set to in `docker-compose.prod.yml`:
+Note the **instance connection name** (format: `YOUR_PROJECT:REGION:INSTANCE`) —
+you'll need it for the `.env` file:
 
 ```bash
-gcloud sql instances describe kuma-db --format="value(ipAddresses)"
+gcloud sql instances describe kuma-db --format="value(connectionName)"
 ```
 
 ### 3. Create the VM
@@ -119,7 +119,25 @@ gcloud compute instances create kuma-vm \
   --scopes=cloud-platform
 ```
 
-### 4. Reserve a static IP and assign to the VM
+The `--scopes=cloud-platform` flag gives the VM's service account access to
+GCP APIs, including Cloud SQL Auth Proxy authentication.
+
+### 4. Grant Cloud SQL client role to the VM's service account
+
+The Cloud SQL Auth Proxy uses the VM's service account to authenticate. Grant
+it the required role:
+
+```bash
+SA=$(gcloud compute instances describe kuma-vm \
+  --zone=us-east1-b \
+  --format="value(serviceAccounts[0].email)")
+
+gcloud projects add-iam-policy-binding YOUR_GCP_PROJECT_ID \
+  --member="serviceAccount:${SA}" \
+  --role="roles/cloudsql.client"
+```
+
+### 5. Reserve a static IP and assign to the VM
 
 ```bash
 gcloud compute addresses create kuma-ip --region=us-east1
@@ -139,7 +157,7 @@ gcloud compute instances add-access-config kuma-vm \
   --address="${STATIC_IP}"
 ```
 
-### 5. Firewall rules
+### 6. Firewall rules
 
 ```bash
 gcloud compute firewall-rules create allow-http \
@@ -153,7 +171,7 @@ gcloud compute firewall-rules create allow-https \
   --description="Allow HTTPS traffic"
 ```
 
-### 6. DNS
+### 7. DNS
 
 Add an **A record** for your domain pointing to the static IP:
 
@@ -190,17 +208,16 @@ docker compose version
 
 ### Create app directory and copy config files
 
-From your **local machine**, copy the required files to the VM:
+From your **local machine**:
 
 ```bash
 # Create the app directory on the VM
 gcloud compute ssh kuma-vm --zone=us-east1-b -- "mkdir -p /home/$USER/kuma"
 
-# Copy files (from the repo root)
+# Copy compose file, Caddyfile, and token lists
 gcloud compute scp \
   docker-compose.prod.yml \
   Caddyfile \
-  kuma.yaml \
   tokens.ethereum.json \
   tokens.base.json \
   tokens.unichain.json \
@@ -214,29 +231,33 @@ gcloud compute scp --recurse \
   --zone=us-east1-b
 ```
 
-### Configure files on the VM
+### Configure secrets
 
-SSH in and edit the configuration:
+Still from your **local machine**, fill in the secret files and push them:
+
+**`kuma.prod.yaml`** — fill in RPC URLs, private keys, Tycho API key, and DB password:
 
 ```bash
-gcloud compute ssh kuma-vm --zone=us-east1-b
-cd ~/kuma
+just reset-prod-config   # creates kuma.prod.yaml from the example template
+# edit kuma.prod.yaml with your values
+just push-prod-config    # pushes to the VM
 ```
 
-1. **Edit `Caddyfile`** -- replace `yourdomain.com` with your actual domain.
-
-2. **Edit `kuma.yaml`** -- ensure database credentials match your Cloud SQL
-   user/password and that private keys and RPC URLs are set.
-
-3. **Edit `docker-compose.prod.yml`** -- set `KUMA_DATABASE__HOST` in the
-   `kuma-backend` service to the Cloud SQL private IP address.
-
-4. **Create `.env`** with the required environment variables:
+**`.env`** — fill in Cloud SQL connection name and DB password:
 
 ```bash
-cat > .env << 'EOF'
-PGPASSWORD=YOUR_DB_PASSWORD
-EOF
+just reset-env           # creates .env from the example template
+# edit .env with your values:
+#   CLOUD_SQL_CONNECTION_NAME — get with: gcloud sql instances describe kuma-db --format="value(connectionName)"
+#   PGPASSWORD — the password you set for api_user
+just push-env            # pushes to the VM
+```
+
+**`Caddyfile`** — replace `yourdomain.com` with your actual domain, then push:
+
+```bash
+# edit Caddyfile
+just push-caddyfile      # or: gcloud compute scp Caddyfile kuma-vm:/home/$USER/kuma/ --zone=us-east1-b
 ```
 
 ## First deploy
@@ -254,10 +275,10 @@ Images are hosted on GitHub Container Registry (`ghcr.io/veblen-group/`).
 
 ```bash
 # Pull images
-docker compose -f docker-compose.prod.yml --profile webapp pull
+docker compose -f docker-compose.prod.yml --profile frontend pull
 
 # Start core services (caddy, frontend, backend)
-docker compose -f docker-compose.prod.yml --profile webapp up -d
+docker compose -f docker-compose.prod.yml --profile frontend up -d
 ```
 
 ### Run schema migration
@@ -279,8 +300,8 @@ Visit `https://yourdomain.com` -- you should see the kuma dashboard.
 Check service health:
 
 ```bash
-docker compose -f docker-compose.prod.yml --profile webapp ps
-docker compose -f docker-compose.prod.yml --profile webapp logs --tail=20
+docker compose -f docker-compose.prod.yml --profile frontend ps
+docker compose -f docker-compose.prod.yml --profile frontend logs --tail=20
 ```
 
 ## Ongoing deploys
@@ -293,8 +314,8 @@ gcloud compute ssh kuma-vm --zone=us-east1-b
 cd ~/kuma
 
 # 2. Pull and restart core services
-docker compose -f docker-compose.prod.yml --profile webapp pull
-docker compose -f docker-compose.prod.yml --profile webapp up -d
+docker compose -f docker-compose.prod.yml --profile frontend pull
+docker compose -f docker-compose.prod.yml --profile frontend up -d
 
 # If kumad is also running:
 docker compose -f docker-compose.prod.yml --profile all pull
@@ -337,11 +358,17 @@ Set up a free GCP uptime check:
 - Verify ports 80 and 443 are open: `gcloud compute firewall-rules list`
 - Check Caddy logs: `docker compose -f docker-compose.prod.yml logs caddy`
 
+### Cloud SQL Proxy fails to connect
+
+- Verify `CLOUD_SQL_CONNECTION_NAME` in `.env` is correct: `gcloud sql instances describe kuma-db --format="value(connectionName)"`
+- Verify the VM service account has `roles/cloudsql.client`: `gcloud projects get-iam-policy YOUR_GCP_PROJECT_ID --flatten="bindings[].members" --filter="bindings.role=roles/cloudsql.client"`
+- Check proxy logs: `docker compose -f docker-compose.prod.yml logs cloud-sql-proxy`
+
 ### Backend can't reach the database
 
-- Verify `KUMA_DATABASE__HOST` in `docker-compose.prod.yml` matches the Cloud SQL private IP
-- Verify Cloud SQL private IP connectivity from the VM: `nc -zv <CLOUD_SQL_PRIVATE_IP> 5432`
-- Verify database credentials in `kuma.yaml` match the Cloud SQL user
+- Verify Cloud SQL Proxy is running: `docker compose -f docker-compose.prod.yml ps cloud-sql-proxy`
+- Verify database credentials in `kuma.prod.yaml` match the Cloud SQL user
+- Test connectivity: `docker compose -f docker-compose.prod.yml exec kuma-backend sh -c 'nc -z cloud-sql-proxy 5432'`
 
 ### Images fail to pull
 
@@ -356,5 +383,5 @@ Set up a free GCP uptime check:
   safety, schedule `pg_dump` exports to a Cloud Storage bucket.
 - **Log aggregation**: Forward container logs to Cloud Logging via the
   `gcplogs` Docker log driver.
-- **Secrets management**: Move secrets from `kuma.yaml` to GCP Secret Manager
+- **Secrets management**: Move secrets from `kuma.prod.yaml` to GCP Secret Manager
   and inject them as environment variables.
