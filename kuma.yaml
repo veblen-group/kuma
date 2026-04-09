@@ -13,6 +13,21 @@ max_slippage_bps: 0
 
 # Token configurations with addresses on multiple chains
 tokens:
+  ETH:
+    addresses:
+      ethereum: "0x0000000000000000000000000000000000000000"
+      base: "0x0000000000000000000000000000000000000000"
+      unichain: "0x0000000000000000000000000000000000000000"
+    decimals: 18
+    tax: 0
+    gas:
+      - 21000
+    quality: 100
+    inventory:
+      ethereum: "100000000000000000"
+      base: "100000000000000000"
+      unichain: "100000000000000000"
+
   UNI:
     addresses:
       ethereum: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984"
