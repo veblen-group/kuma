@@ -1,6 +1,6 @@
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::{Address, U256},
+    primitives::Address,
     providers::Provider,
     rpc::types::{Filter, Log},
     sol,
@@ -37,9 +37,15 @@ impl<P: Provider + Clone> IERC20Contract<P> {
     }
 
     pub async fn balance_of(&self, address: Address) -> eyre::Result<BigUint> {
-        let start: U256 = self.contract.balanceOf(address).call().await?;
-        let current_balance = BigUint::from_bytes_be(&start.to_be_bytes::<32usize>());
-        Ok(current_balance)
+        if self.address == Address::ZERO {
+            // Native ETH balance
+            let balance = self.contract.provider().get_balance(address).await?;
+            Ok(BigUint::from_bytes_be(&balance.to_be_bytes::<32>()))
+        } else {
+            // Existing ERC20 logic
+            let balance = self.contract.balanceOf(address).call().await?;
+            Ok(BigUint::from_bytes_be(&balance.to_be_bytes::<32>()))
+        }
     }
 }
 
