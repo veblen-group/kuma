@@ -1,24 +1,32 @@
+# Production Docker Compose for GCP deployment.
+#
+# Prerequisites:
+#   - Docker images published to ghcr.io/veblen-group/
+#   - Cloud SQL instance created with database and user
+#   - VM service account has roles/cloudsql.client
+#   - Caddyfile updated with your real domain
+#   - kuma.prod.yaml with production secrets on the VM
+#   - .env file with CLOUD_SQL_CONNECTION_NAME and PGPASSWORD (see docs/DEPLOYMENT.md)
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --profile frontend up -d   # caddy + frontend + backend
+#   docker compose -f docker-compose.prod.yml --profile kumad up -d    # + kumad
+#   docker compose -f docker-compose.prod.yml --profile init up schema-migration  # run migrations
+
 services:
-  postgres:
-    image: postgres:15
+  cloud-sql-proxy:
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.11.0
     profiles:
       - all
+      - frontend
       - kumad
-      - db
-    container_name: kuma-db
-    environment:
-      POSTGRES_DB: api_db
-      POSTGRES_USER: api_user
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U api_user -d api_db" ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+    container_name: kuma-cloud-sql-proxy
+    command:
+      # --address=0.0.0.0 is required for other containers to reach the proxy
+      - "--address=0.0.0.0"
+      - "--port=5432"
+      - "${CLOUD_SQL_CONNECTION_NAME}"
+    restart: unless-stopped
     networks:
       - kuma-network
 
@@ -27,13 +35,13 @@ services:
     profiles:
       - init
     depends_on:
-      postgres:
-        condition: service_healthy
+      cloud-sql-proxy:
+        condition: service_started
     environment:
-      - PGHOST=postgres
+      - PGHOST=cloud-sql-proxy
       - PGPORT=5432
-      - PGUSER=api_user
-      - PGPASSWORD=password
+      - PGUSER=postgres
+      - PGPASSWORD=${PGPASSWORD}
       - PGDATABASE=api_db
     volumes:
       - ./migrations:/migrations
@@ -48,14 +56,13 @@ services:
   kumad:
     image: ghcr.io/veblen-group/kumad:latest
     profiles:
-      - all
       - kumad
+      - all
     container_name: kumad
     environment:
-      # Use info to avoid logging sensitive config values (keys, URLs). Override locally if needed.
       - RUST_LOG=info
     volumes:
-      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./kuma.prod.yaml:/app/kuma.yaml:ro
       - ./tokens.ethereum.json:/app/tokens.ethereum.json:ro
       - ./tokens.base.json:/app/tokens.base.json:ro
       - ./tokens.unichain.json:/app/tokens.unichain.json:ro
@@ -66,18 +73,18 @@ services:
   kuma-backend:
     image: ghcr.io/veblen-group/backend:latest
     profiles:
-      - all
       - frontend
       - kumad
+      - all
     container_name: kuma-backend
     depends_on:
-      postgres:
-        condition: service_healthy
+      cloud-sql-proxy:
+        condition: service_started
     environment:
       - RUST_LOG=info
-      - KUMA_DATABASE__HOST=postgres
+      - KUMA_DATABASE__HOST=cloud-sql-proxy
     volumes:
-      - ./kuma.yaml:/app/kuma.yaml:ro
+      - ./kuma.prod.yaml:/app/kuma.yaml:ro
     restart: unless-stopped
     networks:
       - kuma-network
@@ -85,15 +92,13 @@ services:
   frontend:
     image: ghcr.io/veblen-group/frontend:latest
     profiles:
-      - all
       - frontend
+      - all
     container_name: kuma-webapp
     depends_on:
       - kuma-backend
     environment:
       - BACKEND_URL=http://kuma-backend:8080
-    ports:
-      - "3000:3000"
     restart: unless-stopped
     networks:
       - kuma-network
@@ -122,6 +127,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   caddy_data:
   caddy_config:

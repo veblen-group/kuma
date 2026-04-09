@@ -3,6 +3,9 @@ default:
 
 set fallback := true
 
+registry := env("REGISTRY", "ghcr.io/veblen-group")
+remote_user := env("REMOTE_USER", "whoami")
+
 # CLI commands
 
 # ##################
@@ -71,7 +74,7 @@ db-stop:
 db-reset:
     #!/usr/bin/env bash
     docker exec kuma-db psql -U api_user -d api_db -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations" --target-version "001"
+    sqlx migrate run --database-url "${DATABASE_URL:-postgres://api_user:password@localhost:5432/api_db}" --source "migrations"
 
 # Run database migrations + test seed data
 db-migrate-test:
@@ -110,13 +113,66 @@ docker-build-all version="latest":
     just docker-build-backend backend {{ version }}
     just docker-build-webapp webapp {{ version }}
 
-# Start all services including daemon, database, backend, and webapp
+prod-build version="latest":
+    docker build --platform linux/amd64 --build-arg BINARY=kumad -t {{ registry }}/kumad:{{ version }} .
+    docker build --platform linux/amd64 --build-arg BINARY=kuma-backend -t {{ registry }}/backend:{{ version }} .
+    cd webapp && docker build --platform linux/amd64 -t {{ registry }}/frontend:{{ version }} .
+
+# Push all production images to GitHub Container Registry
+prod-push version="latest":
+    docker push {{ registry }}/kumad:{{ version }}
+    docker push {{ registry }}/backend:{{ version }}
+    docker push {{ registry }}/frontend:{{ version }}
+
+# Build and push all production images
+prod-build-push version="latest":
+    just prod-build {{ version }}
+    just prod-push {{ version }}
+
+prod-pull version="latest":
+    docker pull {{ registry }}/kumad:{{ version }}
+    docker pull {{ registry }}/backend:{{ version }}
+    docker pull {{ registry }}/frontend:{{ version }}
+
+# Copy .env.example to .env for local editing
+reset-env:
+    cp .env.example .env
+    @echo "Created .env — fill in CLOUD_SQL_CONNECTION_NAME and PGPASSWORD"
+
+# Push .env to the production VM
+push-env path="" zone="us-central1-c":
+    gcloud compute scp .env kuma:{{ if path == "" { "/home/" + remote_user + "/kuma" } else { path } }}/.env --zone={{ zone }}
+
+# Copy kuma.yaml to kuma.prod.yaml for local editing
+reset-prod-config:
+    cp kuma.yaml kuma.prod.yaml
+    @echo "Created kuma.prod.yaml — fill in API keys, private keys, and DB password"
+
+# Push kuma.prod.yaml to the production VM
+push-prod-config path="" zone="us-central1-c":
+    gcloud compute scp kuma.prod.yaml kuma:{{ if path == "" { "/home/" + remote_user + "/kuma" } else { path } }}/kuma.prod.yaml --zone={{ zone }}
+
+# Push Caddyfile to the production VM
+push-caddyfile path="" zone="us-central1-c":
+    gcloud compute scp Caddyfile kuma:{{ if path == "" { "/home/" + remote_user + "/kuma" } else { path } }}/Caddyfile --zone={{ zone }}
+
+# Start all production services
+docker-prod-run:
+    docker compose -f docker-compose.prod.yml --profile all up -d
+
+# Run production schema migrations (requires cloud-sql-proxy to be running)
+prod-init:
+    docker compose -f docker-compose.prod.yml --profile all --profile init up schema-migration
+
+docker-prod-stop:
+    docker compose -f docker-compose.prod.yml --profile all down
+
 docker-run:
     docker compose --profile all up -d
 
 # Stop all services
 docker-stop:
-    docker-compose --profile all down
+    docker compose --profile all down
 
 # Linting & formatting
 ##################
