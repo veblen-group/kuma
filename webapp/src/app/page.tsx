@@ -7,13 +7,17 @@ import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades
 import { StrategyCard } from "@/components/strategy-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
     <main className="container mx-auto px-4 py-8 space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold text-primary">Kuma</h1>
-        <p className="text-muted-foreground">Cross-Chain Signal Dashboard</p>
+      <header className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-primary">Kuma</h1>
+          <p className="text-muted-foreground">Cross-Chain Signal Dashboard</p>
+        </div>
+        <ThemeToggle />
       </header>
 
       <Separator />
