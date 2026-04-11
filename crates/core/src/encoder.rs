@@ -24,6 +24,7 @@ use tycho_common::Bytes;
 use tycho_execution::encoding::errors::EncodingError;
 use tycho_execution::encoding::evm::approvals::permit2::PermitSingle;
 use tycho_execution::encoding::evm::encoder_builders::TychoRouterEncoderBuilder;
+use tycho_execution::encoding::evm::swap_encoder::swap_encoder_registry::SwapEncoderRegistry;
 use tycho_execution::encoding::evm::utils::biguint_to_u256;
 use tycho_execution::encoding::models::{
     self, EncodedSolution, Solution, Swap as TychoSwap, Transaction as TychoTransaction,
@@ -246,10 +247,14 @@ pub(crate) fn encode_solution(solution: Solution, chain: &Chain) -> eyre::Result
         unsafe { std::env::set_var("RPC_URL", &chain.rpc_url) };
     }
 
+    let swap_encoder_registry = SwapEncoderRegistry::new(chain.name)
+        .add_default_encoders(None)
+        .expect("Failed to get default SwapEncoderRegistry");
     // Initialize the encoder
     let encoder = TychoRouterEncoderBuilder::new()
         .chain(chain.name) // Default for now
         .user_transfer_type(UserTransferType::TransferFromPermit2)
+        .swap_encoder_registry(swap_encoder_registry)
         .build()
         .expect("Failed to build encoder");
 
