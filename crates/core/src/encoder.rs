@@ -242,10 +242,12 @@ pub fn encode_input(selector: &str, mut encoded_args: Vec<u8>) -> Vec<u8> {
 }
 
 pub(crate) fn encode_solution(solution: Solution, chain: &Chain) -> eyre::Result<EncodedSolution> {
-    // Set RPC_URL environment variable if not already set
-    if std::env::var("RPC_URL").is_err() {
-        unsafe { std::env::set_var("RPC_URL", &chain.rpc_url) };
-    }
+    // Always set RPC_URL to this chain's RPC before calling the tycho_execution encoder.
+    // tycho_execution reads RPC_URL at encoding time (in Permit2::new) to fetch on-chain nonce/allowance.
+    // Without this, the first chain to encode (slow/Ethereum) would poison the env var and the fast
+    // chain encoder would query Ethereum's Permit2 state instead of its own chain's state.
+    // NOTE: this is a process-global mutation — do not encode slow/fast chain concurrently.
+    unsafe { std::env::set_var("RPC_URL", &chain.rpc_url) };
 
     let swap_encoder_registry = SwapEncoderRegistry::new(chain.name)
         .add_default_encoders(None)
