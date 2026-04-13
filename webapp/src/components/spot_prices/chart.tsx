@@ -129,7 +129,7 @@ function PriceTooltip({
 
 export function SpotPriceChart() {
   const { pair } = useStrategy()
-  const { data, isLoading, isError } = useSpotPricesChart();
+  const { data, isLoading, isError, refetch, isFetching } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
   if (isLoading) {

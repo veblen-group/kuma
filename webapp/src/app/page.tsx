@@ -1,6 +1,6 @@
 import { SignalTable } from "@/components/signals/table";
 import { SpotPriceTable } from "@/components/spot_prices/table";
-import { SpotPriceChart } from "@/components/spot_prices/chart";
+import { SpotPriceChartCard } from "@/components/spot_prices/chart-card";
 import { SuccessfulTradeResultTable } from "@/components/successful_trades/table";
 import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
 import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades/table";
@@ -34,16 +34,7 @@ export default function Home() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-7">
-          <Card>
-            <CardHeader className="py-3 px-4">
-              <CardTitle>Price Chart</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <div className="h-[480px]">
-                <SpotPriceChart />
-              </div>
-            </CardContent>
-          </Card>
+          <SpotPriceChartCard />
         </div>
 
         <div className="lg:col-span-5 flex flex-col gap-4">
