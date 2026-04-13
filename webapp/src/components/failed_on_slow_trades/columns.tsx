@@ -7,10 +7,6 @@ import { ChainBadge } from "@/components/ui/chain-badge"
 
 export const columns: ColumnDef<FailedOnSlowTrade>[] = [
   {
-    header: "Trade ID",
-    accessorKey: "id",
-  },
-  {
     header: "Signal ID",
     accessorFn: (row) => row.signal.id,
     cell: ({ getValue }) => (
@@ -20,24 +16,23 @@ export const columns: ColumnDef<FailedOnSlowTrade>[] = [
     ),
   },
   {
-    header: "Slow Chain",
-    id: "slow_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
+    header: "Slow Leg",
+    id: "slow",
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-1">
+        <ChainBadge chain={row.original.signal.slow.chain} />
+        {row.original.slow_tx_hash
+          ? <ExplorerLink chain={row.original.signal.slow.chain} type="tx" value={row.original.slow_tx_hash} />
+          : <span className="text-muted-foreground text-xs">—</span>
+        }
+      </div>
+    ),
   },
   {
-    header: "Fast Chain",
-    id: "fast_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
-  },
-  {
-    header: "Slow Tx",
-    id: "slow_tx",
-    cell: ({ row }) => {
-      const hash = row.original.slow_tx_hash
-      if (!hash) return <span className="text-muted-foreground">—</span>
-      return (
-        <ExplorerLink chain={row.original.signal.slow.chain} type="tx" value={hash} />
-      )
-    },
+    header: "Fast Leg",
+    id: "fast",
+    cell: ({ row }) => (
+      <ChainBadge chain={row.original.signal.fast.chain} />
+    ),
   },
 ]

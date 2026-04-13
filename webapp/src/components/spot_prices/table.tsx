@@ -1,158 +1,34 @@
 "use client"
 
 import * as React from "react"
-import {
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
+import { DataTable } from "@/components/ui/data-table"
 import { columns } from "./columns"
 import { useSpotPrices } from "@/lib/api-client"
-import { useStablePageCount } from "@/lib/use-stable-page-count"
 import { useStrategy } from "@/components/strategy-provider"
 
 export function SpotPriceTable() {
   const { pair } = useStrategy()
+  const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 5 })
 
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 5,
-  })
-
-  const {
-    data, isLoading, isError, error, refetch
-  } = useSpotPrices(
-    {
-      page: pagination.pageIndex + 1,
-      pageSize: pagination.pageSize
-    },
-    {
-      placeholderData: previousData => previousData,
-      staleTime: 30_000,
-      refetchInterval: 30_000,
-    }
-  );
-
-  const pageCount = useStablePageCount(data)
-
-  const table = useReactTable({
-    data: data?.data || [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    manualPagination: true,
-    pageCount,
-    onPaginationChange: setPagination,
-    state: {
-      pagination,
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-24">Loading spot prices...</div>
-    )
-  };
-
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center h-24 text-red-500">
-        <div>
-          <p>Error: {error instanceof Error ? error.message : 'Unknown error'}</p>
-          <Button onClick={() => refetch()} variant="outline" className="mt-2">
-            Retry
-          </Button>
-        </div>
-      </div>
-    )
-  };
-
+  const { data, isLoading, isError, error, refetch } = useSpotPrices(
+    { page: pagination.pageIndex + 1, pageSize: pagination.pageSize },
+    { placeholderData: (prev) => prev, staleTime: 30_000, refetchInterval: 30_000 },
+  )
 
   return (
-    <div>
-      <div className="rounded-md border">
-        <Table containerClassName="overflow-visible" className="[&_th]:h-8 [&_th]:px-2 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-xs">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No spot prices for {pair}.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex items-center justify-end space-x-2 py-2">
-        <div className="flex-1 text-xs text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {pageCount}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!data?.pagination.has_previous}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!data?.pagination.has_next}
-        >
-          Next
-        </Button>
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      data={data}
+      isLoading={isLoading}
+      isError={isError}
+      error={error instanceof Error ? error : null}
+      refetch={refetch}
+      pagination={pagination}
+      onPaginationChange={setPagination}
+      emptyMessage={`No spot prices for ${pair}.`}
+      loadingMessage="Loading spot prices..."
+      containerClassName="overflow-visible"
+      tableClassName="[&_th]:h-8 [&_th]:px-2 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-xs"
+    />
   )
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b,\n                min_token_amount_a, min_token_amount_b,\n                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,\n                max_slippage_token_amount_a, max_slippage_token_amount_b,\n                token_usdc_price_a, token_usdc_price_b,\n                gas_cost_eth_slow, gas_cost_eth_fast, total_gas_cost_eth,\n                eth_usdc_price,\n                gas_cost_usdc_slow, gas_cost_usdc_fast, total_gas_cost_usdc,\n                slow_base_fee, fast_base_fee,\n                slow_prices_a_b_id, slow_prices_a_usdc_id,\n                slow_prices_b_usdc_id, slow_prices_eth_usdc_id,\n                max_slippage_bps, congestion_risk_discount_bps\n            FROM signals\n            WHERE (\n                (slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)\n                OR (slow_swap_token_in_symbol = $2 AND slow_swap_token_out_symbol = $1)\n            )\n            ORDER BY created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "query": "\n            SELECT\n                id,\n                slow_chain, slow_height, slow_pool_id,\n                fast_chain, fast_height, fast_pool_id,\n                slow_swap_token_in_symbol, slow_swap_token_out_symbol,\n                slow_swap_amount_in, slow_swap_amount_out, slow_swap_gas_cost,\n                fast_swap_token_in_symbol, fast_swap_token_out_symbol,\n                fast_swap_amount_in, fast_swap_amount_out, fast_swap_gas_cost,\n                surplus_a, surplus_b,\n                min_token_amount_a, min_token_amount_b,\n                min_usdc_amount_a, min_usdc_amount_b, min_total_amount_usdc,\n                max_slippage_token_amount_a, max_slippage_token_amount_b,\n                token_usdc_price_a, token_usdc_price_b,\n                gas_cost_eth_slow, gas_cost_eth_fast, total_gas_cost_eth,\n                eth_usdc_price,\n                gas_cost_usdc_slow, gas_cost_usdc_fast, total_gas_cost_usdc,\n                slow_base_fee, fast_base_fee,\n                slow_prices_a_b_id, slow_prices_a_usdc_id,\n                slow_prices_b_usdc_id, slow_prices_eth_usdc_id,\n                max_slippage_bps, congestion_risk_discount_bps,\n                (SELECT sp.created_at FROM spot_prices sp\n                 WHERE sp.chain = fast_chain\n                   AND sp.block_height = fast_height\n                   AND ((sp.token_a_symbol = slow_swap_token_in_symbol AND sp.token_b_symbol = slow_swap_token_out_symbol)\n                     OR (sp.token_a_symbol = slow_swap_token_out_symbol AND sp.token_b_symbol = slow_swap_token_in_symbol))\n                 LIMIT 1) AS \"fast_prices_a_b_created_at: _\"\n            FROM signals\n            WHERE id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -217,13 +217,15 @@
         "ordinal": 42,
         "name": "congestion_risk_discount_bps",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 43,
+        "name": "fast_prices_a_b_created_at: _",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Int8",
         "Int8"
       ]
     },
@@ -270,8 +272,9 @@
       true,
       true,
       false,
-      false
+      false,
+      null
     ]
   },
-  "hash": "fc6bbd5962c236a6dd2475797dd05bac3feb35910e37e3ad21e7e13c1a836369"
+  "hash": "6e1ad325ab4075446a6553633cbd988f6dd8363c8aef6d7f888056e0c675e57a"
 }

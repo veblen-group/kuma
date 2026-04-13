@@ -15,7 +15,17 @@ export default function Home() {
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-primary">Kuma</h1>
-          <p className="text-muted-foreground">Cross-Chain Signal Dashboard</p>
+          <p className="text-muted-foreground text-sm">
+            Cross-chain arbitrage bot for Tycho Community Extensions{" "}
+            <a
+              href="https://github.com/propeller-heads/tycho-x/blob/main/TAP-6.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-primary"
+            >
+              TAP-6
+            </a>
+          </p>
         </div>
         <ThemeToggle />
       </header>
@@ -70,25 +80,27 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Failed Trades</CardTitle>
-          <CardDescription>Trades where execution failed on the slow chain before the fast leg was attempted.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FailedOnSlowTradeResultTable />
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Failed Trades</CardTitle>
+            <CardDescription>Trades where execution failed on the slow chain before the fast leg was attempted.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FailedOnSlowTradeResultTable />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Stuck Trades</CardTitle>
-          <CardDescription>Trades where the slow transaction confirmed but the fast chain transaction failed to execute.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FailedOnFastTradeResultTable />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Stuck Trades</CardTitle>
+            <CardDescription>Trades where the slow transaction confirmed but the fast chain transaction failed to execute.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FailedOnFastTradeResultTable />
+          </CardContent>
+        </Card>
+      </div>
     </main>
   );
 }

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "kuma",
-  description: "Cross-chain arbitrage bot for Tycho Community Extensions TAP-6",
+  description: "Cross-chain arbitrage bot for Tycho Community Extensions TAP-6. https://github.com/propeller-heads/tycho-x/blob/main/TAP-6.md",
 };
 
 

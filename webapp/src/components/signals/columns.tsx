@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Signal } from "@/lib/types"
+import { Signal, Swap } from "@/lib/types"
 import { ExplorerLink } from "@/components/ui/explorer-link"
 import { BlockCell } from "@/components/ui/block-cell"
 import { TokenBadge } from "@/components/ui/token-badge"
@@ -19,6 +19,24 @@ function TokenPair({ tokenIn, tokenOut }: { tokenIn: string; tokenOut: string })
   )
 }
 
+function LegCell({ swap, timestamp }: { swap: Swap; timestamp?: string | null }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <ChainBadge chain={swap.chain} />
+      <BlockCell chain={swap.chain} height={swap.height} timestamp={timestamp ?? undefined} />
+    </div>
+  )
+}
+
+function PairCell({ swap }: { swap: Swap }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <TokenPair tokenIn={swap.token_in} tokenOut={swap.token_out} />
+      <ExplorerLink chain={swap.chain} type="address" value={swap.pool_id} />
+    </div>
+  )
+}
+
 export const columns: ColumnDef<Signal>[] = [
   {
     header: "Signal ID",
@@ -31,79 +49,27 @@ export const columns: ColumnDef<Signal>[] = [
   },
   {
     header: "Slow Chain",
-    id: "slow_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.slow.chain} />,
-  },
-  {
-    header: "Slow Block",
-    id: "slow_block",
+    id: "slow_leg",
     cell: ({ row }) => (
-      <BlockCell
-        chain={row.original.slow.chain}
-        height={row.original.slow.height}
-        timestamp={row.original.slow_prices_a_b?.created_at}
-      />
+      <LegCell swap={row.original.slow} timestamp={row.original.slow_prices_a_b?.created_at} />
     ),
   },
   {
     header: "Slow Pair",
     id: "slow_pair",
-    cell: ({ row }) => (
-      <TokenPair tokenIn={row.original.slow.token_in} tokenOut={row.original.slow.token_out} />
-    ),
-  },
-  {
-    header: "Slow Pool",
-    id: "slow_pool",
-    cell: ({ row }) => (
-      <ExplorerLink chain={row.original.slow.chain} type="address" value={row.original.slow.pool_id} />
-    ),
+    cell: ({ row }) => <PairCell swap={row.original.slow} />,
   },
   {
     header: "Fast Chain",
-    id: "fast_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.fast.chain} />,
-  },
-  {
-    header: "Fast Block",
-    id: "fast_block",
+    id: "fast_leg",
     cell: ({ row }) => (
-      <BlockCell chain={row.original.fast.chain} height={row.original.fast.height} />
+      <LegCell swap={row.original.fast} timestamp={row.original.fast_prices_a_b_created_at} />
     ),
   },
   {
     header: "Fast Pair",
     id: "fast_pair",
-    cell: ({ row }) => (
-      <TokenPair tokenIn={row.original.fast.token_in} tokenOut={row.original.fast.token_out} />
-    ),
-  },
-  {
-    header: "Fast Pool",
-    id: "fast_pool",
-    cell: ({ row }) => (
-      <ExplorerLink chain={row.original.fast.chain} type="address" value={row.original.fast.pool_id} />
-    ),
-  },
-  {
-    header: "Surplus A",
-    id: "surplus_a",
-    cell: ({ row }) => (
-      <TokenAmount
-        amount={row.original.expected_profit.surplus_a}
-        symbol={row.original.expected_profit.token_a}
-      />
-    ),
-  },
-  {
-    header: "Surplus B",
-    id: "surplus_b",
-    cell: ({ row }) => (
-      <TokenAmount
-        amount={row.original.expected_profit.surplus_b}
-        symbol={row.original.expected_profit.token_b}
-      />
-    ),
+    cell: ({ row }) => <PairCell swap={row.original.fast} />,
   },
   {
     header: "Min Profit",

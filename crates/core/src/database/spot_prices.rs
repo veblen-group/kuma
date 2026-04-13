@@ -91,7 +91,7 @@ impl SpotPriceRepository {
     /// Fetch multiple spot price rows by their IDs in a single query.
     /// Returns a map of `id → SpotPrices` for efficient lookup when
     /// reconstructing signals from `SignalRow` spot price FK IDs.
-    pub async fn get_by_ids(&self, ids: &[i64]) -> eyre::Result<HashMap<i64, SpotPrices>> {
+    pub async fn get_by_ids(&self, ids: &[i64]) -> eyre::Result<HashMap<i64, (DateTime<Utc>, SpotPrices)>> {
         if ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -116,8 +116,9 @@ impl SpotPriceRepository {
         rows.into_iter()
             .map(|r| {
                 let id = r.id;
+                let created_at = r.created_at;
                 r.try_into_spot_prices(&self.token_configs)
-                    .map(|sp| (id, sp))
+                    .map(|sp| (id, (created_at, sp)))
             })
             .collect()
     }

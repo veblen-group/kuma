@@ -61,6 +61,7 @@ export interface Signal {
   expected_profit: ExpectedProfit;
   max_slippage_bps: number;
   congestion_risk_discount_bps: number;
+  fast_prices_a_b_created_at: string | null;
 }
 
 // Matches SuccessfulTradeResponse

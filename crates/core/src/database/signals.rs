@@ -2,7 +2,7 @@ use std::{collections::HashMap, collections::HashSet, str::FromStr, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
 use num_bigint::BigUint;
-use sqlx::PgPool;
+use sqlx::{PgPool, types::chrono::{DateTime, Utc}};
 use tracing::instrument;
 
 use crate::{
@@ -15,6 +15,7 @@ use crate::{
 };
 
 use super::{SpotPriceRepository, try_chain_from_str, try_token_from_chain_symbol};
+
 
 struct SignalRow {
     id: i64,
@@ -68,14 +69,17 @@ struct SignalRow {
     // Base fees
     slow_base_fee: i64,
     fast_base_fee: i64,
+    // Fast chain spot price timestamp — looked up by (chain, pair, block_height) subquery
+    fast_prices_a_b_created_at: Option<DateTime<Utc>>,
 }
 
 impl SignalRow {
+    #[allow(clippy::type_complexity)]
     fn try_into_cross_chain_single_hop(
         self,
         token_configs: &TokenAddressesForChain,
-        spot_prices: &HashMap<i64, SpotPrices>,
-    ) -> eyre::Result<(i64, signals::CrossChainSingleHop)> {
+        spot_prices: &HashMap<i64, (DateTime<Utc>, SpotPrices)>,
+    ) -> eyre::Result<(i64, signals::CrossChainSingleHop, Option<DateTime<Utc>>, Option<DateTime<Utc>>)> {
         let id = self.id;
         let slow_chain = try_chain_from_str(&self.slow_chain, token_configs)
             .wrap_err("failed to parse slow chain from db")?;
@@ -161,12 +165,13 @@ impl SignalRow {
         };
 
         // Spot prices looked up from the pre-fetched map by FK id
-        let slow_prices_a_b = self
+        let (slow_prices_a_b_created_at, slow_prices_a_b) = self
             .slow_prices_a_b_id
             .and_then(|id| spot_prices.get(&id).cloned())
+            .map(|(ts, sp)| (Some(ts), sp))
             .unwrap_or_else(|| {
-                // Fallback for legacy self written before spot price FK was added
-                SpotPrices {
+                // Fallback for legacy rows written before spot price FK was added
+                (None, SpotPrices {
                     pair: slow_pair.clone(),
                     block_height: self.slow_height as u64,
                     min_price: 0.0,
@@ -174,17 +179,17 @@ impl SignalRow {
                     min_pool_id: PoolId::from(self.slow_pool_id.as_str()),
                     max_pool_id: PoolId::from(self.slow_pool_id.as_str()),
                     chain: slow_chain.clone(),
-                }
+                })
             });
         let slow_prices_a_usdc = self
             .slow_prices_a_usdc_id
-            .and_then(|id| spot_prices.get(&id).cloned());
+            .and_then(|id| spot_prices.get(&id).map(|(_, sp)| sp.clone()));
         let slow_prices_b_usdc = self
             .slow_prices_b_usdc_id
-            .and_then(|id| spot_prices.get(&id).cloned());
+            .and_then(|id| spot_prices.get(&id).map(|(_, sp)| sp.clone()));
         let slow_prices_eth_usdc = self
             .slow_prices_eth_usdc_id
-            .and_then(|id| spot_prices.get(&id).cloned());
+            .and_then(|id| spot_prices.get(&id).map(|(_, sp)| sp.clone()));
 
         Ok((id, signals::CrossChainSingleHop {
             slow_chain,
@@ -208,7 +213,7 @@ impl SignalRow {
             congestion_risk_discount_bps: self.congestion_risk_discount_bps as u64,
             slow_base_fee: self.slow_base_fee as u64,
             fast_base_fee: self.fast_base_fee as u64,
-        }))
+        }, slow_prices_a_b_created_at, self.fast_prices_a_b_created_at))
     }
 }
 
@@ -217,7 +222,7 @@ impl SignalRow {
 async fn fetch_spot_prices_for_rows(
     rows: &[SignalRow],
     repo: &SpotPriceRepository,
-) -> eyre::Result<HashMap<i64, SpotPrices>> {
+) -> eyre::Result<HashMap<i64, (DateTime<Utc>, SpotPrices)>> {
     let ids: Vec<i64> = rows
         .iter()
         .flat_map(|r| {
@@ -419,6 +424,7 @@ impl SignalRepository {
         Ok(count as u64)
     }
 
+    #[allow(clippy::type_complexity)]
     pub async fn get_by_symbols(
         &self,
         token_a_symbol: &str,
@@ -426,7 +432,7 @@ impl SignalRepository {
         limit: u32,
         offset: u32,
         spot_price_repo: &SpotPriceRepository,
-    ) -> eyre::Result<Vec<(i64, signals::CrossChainSingleHop)>> {
+    ) -> eyre::Result<Vec<(i64, signals::CrossChainSingleHop, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>> {
         let rows: Vec<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
@@ -449,7 +455,13 @@ impl SignalRepository {
                 slow_base_fee, fast_base_fee,
                 slow_prices_a_b_id, slow_prices_a_usdc_id,
                 slow_prices_b_usdc_id, slow_prices_eth_usdc_id,
-                max_slippage_bps, congestion_risk_discount_bps
+                max_slippage_bps, congestion_risk_discount_bps,
+                (SELECT sp.created_at FROM spot_prices sp
+                 WHERE sp.chain = fast_chain
+                   AND sp.block_height = fast_height
+                   AND ((sp.token_a_symbol = slow_swap_token_in_symbol AND sp.token_b_symbol = slow_swap_token_out_symbol)
+                     OR (sp.token_a_symbol = slow_swap_token_out_symbol AND sp.token_b_symbol = slow_swap_token_in_symbol))
+                 LIMIT 1) AS "fast_prices_a_b_created_at: _"
             FROM signals
             WHERE (
                 (slow_swap_token_in_symbol = $1 AND slow_swap_token_out_symbol = $2)
@@ -473,11 +485,12 @@ impl SignalRepository {
             .collect()
     }
 
+    #[allow(clippy::type_complexity)]
     pub async fn get_by_id(
         &self,
         signal_id: i64,
         spot_price_repo: &SpotPriceRepository,
-    ) -> eyre::Result<Option<signals::CrossChainSingleHop>> {
+    ) -> eyre::Result<Option<(signals::CrossChainSingleHop, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>> {
         let row: Option<SignalRow> = sqlx::query_as!(
             SignalRow,
             r#"
@@ -500,7 +513,13 @@ impl SignalRepository {
                 slow_base_fee, fast_base_fee,
                 slow_prices_a_b_id, slow_prices_a_usdc_id,
                 slow_prices_b_usdc_id, slow_prices_eth_usdc_id,
-                max_slippage_bps, congestion_risk_discount_bps
+                max_slippage_bps, congestion_risk_discount_bps,
+                (SELECT sp.created_at FROM spot_prices sp
+                 WHERE sp.chain = fast_chain
+                   AND sp.block_height = fast_height
+                   AND ((sp.token_a_symbol = slow_swap_token_in_symbol AND sp.token_b_symbol = slow_swap_token_out_symbol)
+                     OR (sp.token_a_symbol = slow_swap_token_out_symbol AND sp.token_b_symbol = slow_swap_token_in_symbol))
+                 LIMIT 1) AS "fast_prices_a_b_created_at: _"
             FROM signals
             WHERE id = $1
             "#,
@@ -513,7 +532,7 @@ impl SignalRepository {
             Some(r) => {
                 let rows = std::slice::from_ref(&r);
                 let spot_prices = fetch_spot_prices_for_rows(rows, spot_price_repo).await?;
-                Some(r.try_into_cross_chain_single_hop(&self.tokens_config, &spot_prices).map(|(_, s)| s))
+                Some(r.try_into_cross_chain_single_hop(&self.tokens_config, &spot_prices).map(|(_, s, slow_ts, fast_ts)| (s, slow_ts, fast_ts)))
                     .transpose()
             }
             None => Ok(None),
