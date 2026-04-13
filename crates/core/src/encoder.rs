@@ -7,7 +7,7 @@ use std::str::FromStr as _;
 
 use alloy::consensus::EthereumTxEnvelope;
 use alloy::network::EthereumWallet;
-use alloy::primitives::{Address as alloyAddress, Bytes as AlloyBytes, Keccak256, U256};
+use alloy::primitives::{Address as alloyAddress, Keccak256, U256};
 use alloy::providers::Provider as _;
 use alloy::providers::ext::AnvilApi;
 use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest};
@@ -50,13 +50,15 @@ impl UnsignedTransaction {
         let native_address = Bytes::from(chain.name.native_token().address.as_ref());
         let (contranct_interaction, value) = encode_tycho_router_call(
             chain.chain_id(),
-            encoded_solution,
+            encoded_solution.clone(),
             solution,
             native_address,
             chain.signer().clone(),
         )?;
         let tx_request = TransactionRequest::default()
-            .to(alloyAddress::from_slice(solution.receiver()))
+            .to(alloyAddress::from_slice(
+                encoded_solution.interacting_with(),
+            ))
             .input(TransactionInput {
                 input: Some(contranct_interaction.into()),
                 data: None,
