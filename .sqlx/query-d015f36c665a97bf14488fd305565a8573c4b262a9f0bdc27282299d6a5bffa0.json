@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH last AS (\n                SELECT min_price, max_price, min_pool_id, max_pool_id\n                FROM spot_prices\n                WHERE chain = $7\n                  AND token_a_symbol = $1\n                  AND token_b_symbol = $2\n                ORDER BY block_height DESC\n                LIMIT 1\n            )\n            INSERT INTO spot_prices (\n                token_a_symbol, token_b_symbol,\n                min_price, max_price,\n                min_pool_id, max_pool_id,\n                chain, block_height\n            )\n            SELECT $1, $2, $3::float8, $4::float8, $5::text, $6::text, $7, $8\n            WHERE NOT EXISTS (\n                SELECT 1 FROM last\n                WHERE last.min_price = $3::float8\n                  AND last.max_price = $4::float8\n                  AND last.min_pool_id = $5::text\n                  AND last.max_pool_id = $6::text\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Float8",
+        "Float8",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d015f36c665a97bf14488fd305565a8573c4b262a9f0bdc27282299d6a5bffa0"
+}

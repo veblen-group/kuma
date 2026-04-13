@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument};
 
 use kuma_core::{
-    database::{self, SignalRepository, SpotPriceRepository},
+    database::{self, SignalRepository},
     signals,
     spot_prices::{SpotPrices, try_make_sorted_spot_prices},
     state::block::BlockStateStream,
@@ -85,61 +85,6 @@ struct Worker {
     db: database::Handle,
 }
 
-// ---------------------------------------------------------------------------
-// Static DB write functions — no &self borrow, all deps passed explicitly.
-// This avoids borrow conflicts with the select loop's &mut self arms.
-// ---------------------------------------------------------------------------
-
-/// Insert slow-chain spot prices into the database — fire and forget.
-/// Spot price FK linkage is resolved at signal insert time via a SQL CTE.
-async fn write_slow_spot_prices(
-    repo: SpotPriceRepository,
-    prices_a_b: SpotPrices,
-    prices_a_usdc: Option<SpotPrices>,
-    prices_b_usdc: Option<SpotPrices>,
-    prices_eth_usdc: Option<SpotPrices>,
-) -> eyre::Result<()> {
-    let pair = prices_a_b.pair.clone();
-    repo.insert(prices_a_b)
-        .await
-        .wrap_err_with(|| format!("failed to write spot prices to db for {pair}"))?;
-
-    if let Some(prices) = prices_a_usdc {
-        let pair = prices.pair.clone();
-        repo.insert(prices)
-            .await
-            .wrap_err_with(|| eyre!("failed to write spot prices to db for {pair}"))?;
-    }
-
-    if let Some(prices) = prices_b_usdc {
-        let pair = prices.pair.clone();
-        repo.insert(prices)
-            .await
-            .wrap_err_with(|| eyre!("failed to write spot prices to db for {pair}"))?;
-    }
-
-    if let Some(prices) = prices_eth_usdc {
-        let pair = prices.pair.clone();
-        repo.insert(prices)
-            .await
-            .wrap_err_with(|| eyre!("failed to write ETH-USDC spot prices to db for {pair}"))?;
-    }
-
-    Ok(())
-}
-
-/// Insert fast-chain A/B spot prices — fire and forget.
-async fn write_fast_spot_prices(
-    repo: SpotPriceRepository,
-    prices_a_b: SpotPrices,
-) -> eyre::Result<()> {
-    let pair = prices_a_b.pair.clone();
-    repo.insert(prices_a_b)
-        .await
-        .wrap_err_with(|| format!("failed to write spot prices to db for {pair}"))?;
-    Ok(())
-}
-
 /// Insert a signal. Spot price FKs are resolved inside the INSERT via a CTE
 /// that looks up `spot_prices` rows by (chain, pair, block_height) — no
 /// cross-future coordination needed.
@@ -171,7 +116,12 @@ impl Worker {
         let mut submission_deadline = None;
 
         let mut precompute: Option<Precomputes> = None;
+        // Signal queued for emission at the next submission deadline.
         let mut curr_signal: Option<signals::CrossChainSingleHop> = None;
+        // Last accepted signal, used to dedup: a new signal whose expected profit
+        // has the same outcome as prev_signal is dropped (no DB write, no emission).
+        // Updated both at acceptance time and at emission time.
+        let mut prev_signal: Option<signals::CrossChainSingleHop> = None;
 
         let mut db_writes: FuturesUnordered<
             Pin<Box<dyn Future<Output = eyre::Result<()>> + Send>>,
@@ -194,10 +144,16 @@ impl Worker {
                         futures::future::pending().await
                     }
                 }, if curr_signal.is_some() => {
+                    // take curr signal
                     let signal = curr_signal.take().expect("Signal checked to be Some");
                     debug!(%signal, "📡 Emitting signal");
-                    self.signal_tx.send(signal).await
+
+                    // send to execution
+                    self.signal_tx.send(signal.clone()).await
                         .wrap_err("failed to send signal to emitter")?;
+
+                    // set signal as prev_signal
+                    prev_signal = Some(signal);
                 }
 
                 // Handle slow chain updates
@@ -216,13 +172,17 @@ impl Worker {
 
                     // Persist spot prices for the slow chain — fire and forget.
                     // Spot price FKs on the signal are resolved at insert time via a SQL CTE.
-                    db_writes.push(write_slow_spot_prices(
-                        self.db.spot_price_repository(),
-                        new_precompute.prices_a_b.clone(),
-                        new_precompute.prices_a_usdc.clone(),
-                        new_precompute.prices_b_usdc.clone(),
-                        new_precompute.prices_eth_usdc.clone(),
-                    ).boxed());
+                    db_writes.push({
+                        let repo = self.db.spot_price_repository();
+                        let prices_a_b = new_precompute.prices_a_b.clone();
+                        let prices_a_usdc = new_precompute.prices_a_usdc.clone();
+                        let prices_b_usdc = new_precompute.prices_b_usdc.clone();
+                        let prices_eth_usdc = new_precompute.prices_eth_usdc.clone();
+                        async move {
+                            repo.write_slow_spot_prices(prices_a_b, prices_a_usdc, prices_b_usdc, prices_eth_usdc).await
+                        }
+                        .boxed()
+                    });
 
                     info!(prices = %new_precompute.log_spot_prices());
 
@@ -245,15 +205,23 @@ impl Worker {
 
                         match self.strategy.generate_signal(precompute, fast_state.pair_state, sorted_prices_a_b, fast_state.base_fee) {
                             Ok(signal) => {
+                                // Persist fast chain spot prices — fire and forget.
+                                db_writes.push({
+                                    let repo = self.db.spot_price_repository();
+                                    async move { repo.write_fast_spot_prices(prices_a_b).await }.boxed()
+                                });
+
+                                if prev_signal.as_ref().is_some_and(|prev| prev.expected_profit.same_outcome(&signal.expected_profit)) {
+                                    debug!(%signal, "Expected profit unchanged, skipping signal emission and db write");
+                                    continue;
+                                }
+
                                 info!(%signal, "📡 Generated cross-chain signal");
 
-                                // Persist fast chain spot prices — fire and forget.
-                                db_writes.push(write_fast_spot_prices(
-                                    self.db.spot_price_repository(),
-                                    prices_a_b,
-                                ).boxed());
-
-                                // Save signal to db
+                                // Update prev_signal at acceptance time so the next fast block
+                                // with the same profit is caught immediately, even before the
+                                // deadline fires and emits.
+                                prev_signal = Some(signal.clone());
                                 curr_signal = Some(signal.clone());
 
                                 db_writes.push(write_signal(
@@ -270,10 +238,10 @@ impl Worker {
                                 );
 
                                 // No signal generated — still persist fast spot prices.
-                                db_writes.push(write_fast_spot_prices(
-                                    self.db.spot_price_repository(),
-                                    prices_a_b,
-                                ).boxed());
+                                db_writes.push({
+                                    let repo = self.db.spot_price_repository();
+                                    async move { repo.write_fast_spot_prices(prices_a_b).await }.boxed()
+                                });
                             }
                         }
                     } else {
@@ -283,10 +251,10 @@ impl Worker {
                         );
 
                         // Still persist fast spot prices even without a signal. (do it in the conditional to avoid a clone)
-                        db_writes.push(write_fast_spot_prices(
-                            self.db.spot_price_repository(),
-                            prices_a_b,
-                        ).boxed());
+                        db_writes.push({
+                            let repo = self.db.spot_price_repository();
+                            async move { repo.write_fast_spot_prices(prices_a_b).await }.boxed()
+                        });
                     }
                 }
 

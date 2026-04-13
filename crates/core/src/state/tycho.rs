@@ -1,16 +1,19 @@
 //! DEX protocol state snapshot and update management.
 //!
-//! `BlockSim` represents a snapshot of all DEX pool states at a specific block height,
-//! tracking modified and unmodified pools. Supports incremental updates from Tycho's
-//! protocol stream and pair-specific state extraction.
+//! `BlockSim` represents a snapshot of all DEX pool states at a specific block height.
+//! Supports incremental updates from Tycho's protocol stream and pair-specific state extraction.
+//!
+//! Tycho provides a full pool-state snapshot on every block (`Update.states`), so
+//! `apply_update` replaces the state map wholesale and only patches `metadata` for
+//! added/removed pools.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::Arc,
 };
 
 use color_eyre::eyre::{self, OptionExt};
-use tracing::{debug, instrument, trace};
+use tracing::{instrument, trace};
 use tycho_simulation::{
     protocol::models::{ProtocolComponent, Update},
     tycho_core::simulation::protocol_sim::ProtocolSim,
@@ -19,16 +22,10 @@ use tycho_simulation::{
 use super::pair::{Pair, PairState};
 use crate::state;
 
-// TODO: rename to something better
 #[derive(Clone, Debug)]
 pub struct BlockSim {
     pub height: u64,
-    /// The current states
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
-    /// The pools that have been modified in the latest block update
-    pub modified_pools: Arc<HashSet<state::PoolId>>,
-    /// The pools that have not been modified in the latest block update
-    pub unmodified_pools: Arc<HashSet<state::PoolId>>,
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
 
@@ -54,117 +51,55 @@ impl BlockSim {
         Self {
             height: block_number_or_timestamp,
             states,
-            modified_pools: Arc::new(metadata.keys().cloned().collect()),
-            unmodified_pools: Arc::new(HashSet::new()),
             metadata,
         }
     }
 
     /// Consume this `BlockSim` and return a new snapshot with `block_update` applied.
     ///
-    /// - Evicts `removed_pairs` from `states`, `metadata`, `modified_pools` and `unmodified_pools`
-    /// - Inserts `new_pairs` to `states`, `metadata`, and `modified_pools`.
-    /// - Replaces states for `updated_states`, moves their IDs into `modified_pools`.
-    ///   - Note: Metadata (i.e. `ProtocolComponent`) are immutable data so they are not modified.
+    /// - `Update.states` replaces the entire state map (Tycho sends a full snapshot each block).
+    /// - `new_pairs` are inserted into `metadata`.
+    /// - `removed_pairs` are evicted from `metadata`.
+    /// - Pool metadata is treated as immutable unless a pool is removed and re-added.
     ///
-    /// The returned `BlockSim` has `block_number = block_update.block_number`.
-    ///
-    /// Any `PairState` derived from the old `BlockSim` keeps its own `Arc` handles:
-    /// - `modified_pools` and `unmodified_pools` are cloned, leaving old snapshots unchanged
-    /// - old snapshots keep their shared references to states and metadata, so those aren't dropped.
-    ///
-    /// New `PairState`s built after this call will reflect the updated contents.
-    ///
-    /// # Panics
-    /// - if `removed_pairs` contains an ID not present in the original maps
-    /// - if `new_pairs` refers to a state missing from `updated_states`
+    /// Any `PairState` derived from the old `BlockSim` keeps its own `Arc` handles, so
+    /// old snapshots are unaffected by this call.
     #[instrument(skip_all)]
     pub fn apply_update(self, block_update: Update) -> eyre::Result<Self> {
-        let Self {
-            modified_pools,
-            unmodified_pools,
-            mut states,
-            mut metadata,
-            ..
-        } = self;
+        let Self { mut metadata, .. } = self;
 
         let Update {
             block_number_or_timestamp: height,
-            states: mut updated_states,
-            new_pairs,
-            removed_pairs,
-            .. // TODO
+            states,
+            new_pairs: new_pools,
+            removed_pairs: removed_pools,
+            ..
         } = block_update;
 
-        let mut modified_pools = modified_pools.as_ref().clone();
-        let mut unmodified_pools = unmodified_pools.as_ref().clone();
-
-        // remove pools that are no longer active
-        for (id, _) in removed_pairs {
-            // update block state map
-            let id = state::PoolId(id);
-            let _removed_state = states
-                .remove(&id)
-                .ok_or_eyre("BlockUpdate.removed_pairs should only contain existing pairs")?;
-
-            // update metadata map
-            let _removed_metadata = metadata
-                .remove(&id)
-                .ok_or_eyre("BlockUpdate.removed_pairs should only contain existing pairs")?;
-
-            // update modified/unmodified maps
-            if modified_pools.remove(&id) {
-                trace!(block.number = %height, pair.id = %id, "Removed pair from modified pairs");
-            } else if unmodified_pools.remove(&id) {
-                trace!(block.number = %height, pair.id = %id, "Removed pair from unmodified pairs");
-            } else {
-                eyre::bail!("BlockUpdate.removed_pairs should only contain existing pairs");
-            }
-
-            debug!(block.number = %height, pair.id = %id, "Removed pair");
+        // Remove metadata for pools that are no longer active.
+        for (id, _) in removed_pools {
+            metadata
+                .remove(&state::PoolId(id))
+                .ok_or_eyre("BlockUpdate.removed_pools should only contain existing pairs")?;
         }
 
-        // add new pools
-        for (id, new_pair) in new_pairs {
-            // update block state map
-            let pair_state = updated_states
-                .remove(&id)
-                .expect("BlockUpdate.state should contain every new pool's state");
-            let pair_id = state::PoolId(id);
-            states.insert(pair_id.clone(), Arc::from(pair_state));
-
-            // update metadata map
-            if let Some(metadata) = metadata.insert(pair_id.clone(), Arc::new(new_pair)) {
-                debug!(block.number = %height, pair.id = %metadata.id, "Updated metadata for pair");
+        // Add metadata for new pools.
+        for (id, new_pair) in new_pools {
+            if let Some(prev) = metadata.insert(state::PoolId(id), Arc::new(new_pair)) {
+                trace!(block.number = %height, pair.id = %prev.id, "Updated metadata for pair");
             }
-
-            // Update modified pairs
-            modified_pools.insert(pair_id.clone());
-
-            debug!(block.number = %height, pair.id = %pair_id, "Added pair to ");
         }
 
-        // update existing pools
-        for (id, state) in updated_states {
-            // update block state map
-            let pair_id = state::PoolId::from(id);
-            states.insert(pair_id.clone(), Arc::from(state));
-
-            // add to modified pairs
-            modified_pools.insert(pair_id.clone());
-            if unmodified_pools.remove(&pair_id) {
-                trace!(block.number = %height, pair.id = %pair_id, "Updated unmodified pair");
-            }
-
-            trace!(block.number = %height, pair.id = %pair_id, "Updated pair state");
-        }
+        // Replace the full state map — Tycho sends a complete snapshot every block.
+        let new_states = states
+            .into_iter()
+            .map(|(id, state)| (state::PoolId(id), Arc::from(state)))
+            .collect();
 
         Ok(Self {
-            height: block_update.block_number_or_timestamp,
-            modified_pools: Arc::new(modified_pools),
-            unmodified_pools: Arc::new(unmodified_pools),
+            height,
+            states: new_states,
             metadata,
-            states,
         })
     }
 
@@ -185,8 +120,6 @@ impl BlockSim {
 
         PairState {
             block_height: self.height,
-            modified_pools: Arc::clone(&self.modified_pools),
-            unmodified_pools: Arc::clone(&self.unmodified_pools),
             states: pair_states,
             metadata: pair_metadata,
         }
