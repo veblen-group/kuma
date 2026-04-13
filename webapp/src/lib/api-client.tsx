@@ -1,7 +1,7 @@
 'use client';
 
 import { SpotPrice, Signal, SuccessfulTrade, FailedOnSlowTrade, FailedOnFastTrade, PaginatedResponse } from "@/lib/types";
-import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, useQuery, useQueryClient, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useStrategy } from "@/components/strategy-provider";
 import React, { useState } from "react";
@@ -110,16 +110,22 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
   });
 }
 
-// Dedicated hook for the price chart — fixed page 1 / size 50, isolated key
-// so table pagination never interferes with chart data. No auto-refresh;
-// use the returned `refetch` to trigger a manual refresh.
+// Dedicated hook for the price chart — uses ['spot_prices', pair, 'chart'] so
+// invalidateQueries({ queryKey: ['spot_prices', pair] }) refreshes both chart and table.
 export function useSpotPricesChart() {
   const { pair } = useStrategy();
   return useQuery<PaginatedResponse<SpotPrice>>({
-    queryKey: ['spot_prices_chart', pair],
+    queryKey: ['spot_prices', pair, 'chart'],
     queryFn: () => apiClient.getSpotPrices(pair, { page: 1, pageSize: 50 }),
     staleTime: Infinity,
   });
+}
+
+// Invalidates all spot price queries for the current pair (chart + all table pages).
+export function useRefreshSpotPrices() {
+  const queryClient = useQueryClient();
+  const { pair } = useStrategy();
+  return () => queryClient.invalidateQueries({ queryKey: ['spot_prices', pair] });
 }
 
 export function useSignal(id: number, options?: Partial<UseQueryOptions<Signal>>) {

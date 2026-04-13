@@ -1,13 +1,14 @@
 'use client'
 
-import { useSpotPricesChart } from "@/lib/api-client"
+import { useSpotPricesChart, useRefreshSpotPrices } from "@/lib/api-client"
 import { SpotPriceChart } from "./chart"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 
 export function SpotPriceChartCard() {
-  const { refetch, isFetching } = useSpotPricesChart()
+  const { isFetching } = useSpotPricesChart()
+  const refresh = useRefreshSpotPrices()
 
   return (
     <Card>
@@ -17,7 +18,7 @@ export function SpotPriceChartCard() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => refetch()}
+            onClick={() => refresh()}
             disabled={isFetching}
             className="h-7 w-7 p-0"
           >

@@ -1,5 +1,5 @@
 import { SignalTable } from "@/components/signals/table";
-import { SpotPriceTable } from "@/components/spot_prices/table";
+import { SpotPriceTableCard } from "@/components/spot_prices/table-card";
 import { SpotPriceChartCard } from "@/components/spot_prices/chart-card";
 import { SuccessfulTradeResultTable } from "@/components/successful_trades/table";
 import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
@@ -44,12 +44,7 @@ export default function Home() {
               <StrategyCard />
             </CardContent>
           </Card>
-          <Card className="flex-1">
-            <CardContent className="px-4 py-3">
-              <p className="text-sm font-semibold mb-2">Spot Prices</p>
-              <SpotPriceTable />
-            </CardContent>
-          </Card>
+          <SpotPriceTableCard />
         </div>
       </div>
 

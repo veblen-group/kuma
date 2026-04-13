@@ -25,13 +25,6 @@ type ChartPoint = {
   [key: string]: string | number | undefined;
 };
 
-// Round a timestamp to the nearest minute so rows from different chains
-// that were inserted within the same minute bucket get grouped together.
-function bucketKey(raw: string): string {
-  const ms = new Date(Number(raw) || raw).getTime();
-  return String(Math.round(ms / 60_000) * 60_000);
-}
-
 function buildChartData(prices: SpotPrice[]): {
   chains: string[];
   points: ChartPoint[];
@@ -40,23 +33,24 @@ function buildChartData(prices: SpotPrice[]): {
   const chainSet = new Set(prices.map(p => p.chain));
   const chains = Array.from(chainSet).sort();
 
-  const byBucket = new Map<string, Record<string, SpotPrice>>();
+  // Each row gets its own x-axis point keyed by exact ISO timestamp.
+  // Chains that don't have a reading at a given timestamp remain null (gap).
+  const byTs = new Map<string, Record<string, SpotPrice>>();
   for (const price of prices) {
     if (!price.created_at) continue;
-    const key = bucketKey(price.created_at);
-    const existing = byBucket.get(key) ?? {};
+    const existing = byTs.get(price.created_at) ?? {};
     existing[price.chain] = price;
-    byBucket.set(key, existing);
+    byTs.set(price.created_at, existing);
   }
 
-  const sorted = Array.from(byBucket.entries()).sort(
-    ([a], [b]) => Number(a) - Number(b)
+  const sorted = Array.from(byTs.entries()).sort(
+    ([a], [b]) => new Date(a).getTime() - new Date(b).getTime()
   );
 
-  const points: ChartPoint[] = sorted.map(([bucket, byChain]) => {
+  const points: ChartPoint[] = sorted.map(([ts, byChain]) => {
     const point: ChartPoint = {
-      label: new Date(Number(bucket)).toLocaleTimeString([], { hour12: false }),
-      ts: bucket,
+      label: new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      ts,
     };
     for (const chain of chains) {
       const sp = byChain[chain];
@@ -68,7 +62,7 @@ function buildChartData(prices: SpotPrice[]): {
     return point;
   });
 
-  return { chains, points, rawByBucket: byBucket };
+  return { chains, points, rawByBucket: byTs };
 }
 
 function PriceTooltip({
@@ -85,7 +79,7 @@ function PriceTooltip({
 
   const bucket = payload[0]?.payload?.ts;
   const timestamp = bucket
-    ? new Date(Number(bucket)).toLocaleString([], {
+    ? new Date(bucket).toLocaleString([], {
         month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
       })
@@ -129,7 +123,7 @@ function PriceTooltip({
 
 export function SpotPriceChart() {
   const { pair } = useStrategy()
-  const { data, isLoading, isError, refetch, isFetching } = useSpotPricesChart();
+  const { data, isLoading, isError } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
   if (isLoading) {
@@ -202,7 +196,7 @@ export function SpotPriceChart() {
                 name={`${chain} max`}
                 stroke={color}
                 strokeWidth={1.5}
-                dot={{ r: 2.5, fill: color, strokeWidth: 0 }}
+                dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
                 connectNulls={false}
               />,
@@ -214,7 +208,7 @@ export function SpotPriceChart() {
                 stroke={color}
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
-                dot={{ r: 2.5, fill: color, strokeWidth: 0 }}
+                dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
                 connectNulls={false}
               />,
