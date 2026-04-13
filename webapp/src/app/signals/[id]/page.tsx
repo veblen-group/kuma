@@ -2,7 +2,7 @@
 
 import { use } from "react"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, MoveRight } from "lucide-react"
 import { useSignal } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChainBadge } from "@/components/ui/chain-badge"
@@ -13,23 +13,35 @@ import { BlockCell } from "@/components/ui/block-cell"
 import { Button } from "@/components/ui/button"
 import { SpotPrice } from "@/lib/types"
 
-function LabeledRow({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between py-1.5 border-b last:border-0">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="text-sm">{children}</div>
+    <div className="flex items-center justify-between py-1 border-b last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="text-xs">{children}</div>
     </div>
   )
 }
 
-function SpotPriceRow({ label, price }: { label: string; price: SpotPrice | null }) {
+function TokenPairLabel({ tokenA, tokenB, logoSize = 16 }: { tokenA: string; tokenB: string; logoSize?: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <TokenBadge symbol={tokenA} size={logoSize} />
+      <MoveRight size={12} className="shrink-0 text-muted-foreground" />
+      <TokenBadge symbol={tokenB} size={logoSize} />
+    </div>
+  )
+}
+
+function SpotPriceRow({ tokenA, tokenB, price }: { tokenA: string; tokenB: string; price: SpotPrice | null }) {
   if (!price) return null
   return (
-    <LabeledRow label={label}>
-      <span className="tabular-nums font-mono text-xs">
-        {price.min_price.toFixed(6)} – {price.max_price.toFixed(6)}
-      </span>
-    </LabeledRow>
+    <div className="flex items-center justify-between py-1 border-b last:border-0">
+      <TokenPairLabel tokenA={tokenA} tokenB={tokenB} />
+      <div className="flex items-center gap-4 tabular-nums font-mono text-xs">
+        <span><span className="text-muted-foreground">min </span>{price.min_price.toFixed(6)}</span>
+        <span><span className="text-muted-foreground">max </span>{price.max_price.toFixed(6)}</span>
+      </div>
+    </div>
   )
 }
 
@@ -43,7 +55,7 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
 
   if (isLoading) {
     return (
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-center h-48 text-muted-foreground">
           Loading signal...
         </div>
@@ -53,7 +65,7 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
 
   if (isError || !signal) {
     return (
-      <main className="container mx-auto px-4 py-8 space-y-4">
+      <main className="container mx-auto px-4 py-6 space-y-4">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back
         </Link>
@@ -67,8 +79,10 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
     )
   }
 
+  const ep = signal.expected_profit
+
   return (
-    <main className="container mx-auto px-4 py-8 space-y-6">
+    <main className="container mx-auto px-4 py-6 space-y-4">
       <div className="space-y-1">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Back
@@ -76,126 +90,145 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
         <h1 className="text-2xl font-bold text-primary">Signal #{signalId}</h1>
       </div>
 
+      {/* Summary card */}
+      <Card className="py-5">
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-8">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Pair</span>
+              <TokenPairLabel tokenA={ep.token_a} tokenB={ep.token_b} logoSize={28} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Slow chain</span>
+              <div className="flex items-center gap-1.5">
+                <ChainBadge chain={signal.slow.chain} size={28} />
+                <BlockCell chain={signal.slow.chain} height={signal.slow.height} timestamp={signal.slow_prices_a_b?.created_at} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">Fast chain</span>
+              <div className="flex items-center gap-1.5">
+                <ChainBadge chain={signal.fast.chain} size={28} />
+                <BlockCell chain={signal.fast.chain} height={signal.fast.height} timestamp={signal.fast_prices_a_b_created_at} />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 ml-auto">
+              <span className="text-xs text-muted-foreground">Minimum Expected Profit</span>
+              <TokenAmount amount={ep.min_total_amount_usdc} symbol="USDC" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Swap legs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ChainBadge chain={signal.slow.chain} /> Slow Chain Swap
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <ChainBadge chain={signal.slow.chain} size={20} /> Simulation Results
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-0">
-            <LabeledRow label="Block">
+          <CardContent>
+            <Row label="Block">
               <BlockCell chain={signal.slow.chain} height={signal.slow.height} timestamp={signal.slow_prices_a_b?.created_at} />
-            </LabeledRow>
-            <LabeledRow label="Pool">
+            </Row>
+            <Row label="Pool">
               <ExplorerLink chain={signal.slow.chain} type="address" value={signal.slow.pool_id} />
-            </LabeledRow>
-            <LabeledRow label="Token In">
-              <TokenBadge symbol={signal.slow.token_in} />
-            </LabeledRow>
-            <LabeledRow label="Token Out">
-              <TokenBadge symbol={signal.slow.token_out} />
-            </LabeledRow>
-            <LabeledRow label="Amount In">
+            </Row>
+            <Row label="Amount In">
               <TokenAmount amount={signal.slow.amount_in} symbol={signal.slow.token_in} />
-            </LabeledRow>
-            <LabeledRow label="Amount Out">
+            </Row>
+            <Row label="Amount Out">
               <TokenAmount amount={signal.slow.amount_out} symbol={signal.slow.token_out} />
-            </LabeledRow>
-            <LabeledRow label="Gas Cost">
+            </Row>
+            <Row label="Gas Cost">
               <TokenAmount amount={signal.slow.gas_cost} symbol="ETH" />
-            </LabeledRow>
+            </Row>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ChainBadge chain={signal.fast.chain} /> Fast Chain Swap
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <ChainBadge chain={signal.fast.chain} size={20} /> Simulation Results
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-0">
-            <LabeledRow label="Block">
-              <BlockCell chain={signal.fast.chain} height={signal.fast.height} />
-            </LabeledRow>
-            <LabeledRow label="Pool">
+          <CardContent>
+            <Row label="Block">
+              <BlockCell chain={signal.fast.chain} height={signal.fast.height} timestamp={signal.fast_prices_a_b_created_at} />
+            </Row>
+            <Row label="Pool">
               <ExplorerLink chain={signal.fast.chain} type="address" value={signal.fast.pool_id} />
-            </LabeledRow>
-            <LabeledRow label="Token In">
-              <TokenBadge symbol={signal.fast.token_in} />
-            </LabeledRow>
-            <LabeledRow label="Token Out">
-              <TokenBadge symbol={signal.fast.token_out} />
-            </LabeledRow>
-            <LabeledRow label="Amount In">
+            </Row>
+            <Row label="Amount In">
               <TokenAmount amount={signal.fast.amount_in} symbol={signal.fast.token_in} />
-            </LabeledRow>
-            <LabeledRow label="Amount Out">
+            </Row>
+            <Row label="Amount Out">
               <TokenAmount amount={signal.fast.amount_out} symbol={signal.fast.token_out} />
-            </LabeledRow>
-            <LabeledRow label="Gas Cost">
+            </Row>
+            <Row label="Gas Cost">
               <TokenAmount amount={signal.fast.gas_cost} symbol="ETH" />
-            </LabeledRow>
+            </Row>
           </CardContent>
         </Card>
       </div>
 
-      {/* Expected Profit */}
+      {/* Profit & Gas — 3-column layout */}
       <Card>
-        <CardHeader>
-          <CardTitle>Expected Profit</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle>Profit &amp; Gas</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-0">
-          <LabeledRow label="Surplus A">
-            <TokenAmount amount={signal.expected_profit.surplus_a} symbol={signal.expected_profit.token_a} />
-          </LabeledRow>
-          <LabeledRow label="Surplus B">
-            <TokenAmount amount={signal.expected_profit.surplus_b} symbol={signal.expected_profit.token_b} />
-          </LabeledRow>
-          <LabeledRow label="Gas Cost (Slow)">
-            <TokenAmount amount={signal.expected_profit.gas_cost_usdc_slow} symbol="USDC" />
-          </LabeledRow>
-          <LabeledRow label="Gas Cost (Fast)">
-            <TokenAmount amount={signal.expected_profit.gas_cost_usdc_fast} symbol="USDC" />
-          </LabeledRow>
-          <LabeledRow label="Total Gas Cost">
-            <TokenAmount amount={signal.expected_profit.total_gas_cost_usdc} symbol="USDC" />
-          </LabeledRow>
-          <LabeledRow label="Min Profit">
-            <TokenAmount amount={signal.expected_profit.min_total_amount_usdc} symbol="USDC" />
-          </LabeledRow>
-          <LabeledRow label="Max Slippage">
-            <span className="tabular-nums font-mono text-xs">{signal.max_slippage_bps} bps</span>
-          </LabeledRow>
-          <LabeledRow label="Congestion Discount">
-            <span className="tabular-nums font-mono text-xs">{signal.congestion_risk_discount_bps} bps</span>
-          </LabeledRow>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-x-8">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium mb-1">Surplus</p>
+              <Row label="Surplus A">
+                <TokenAmount amount={ep.surplus_a} symbol={ep.token_a} />
+              </Row>
+              <Row label="Surplus B">
+                <TokenAmount amount={ep.surplus_b} symbol={ep.token_b} />
+              </Row>
+              <Row label="Min Expected Profit">
+                <TokenAmount amount={ep.min_total_amount_usdc} symbol="USDC" />
+              </Row>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium mb-1">Gas</p>
+              <Row label="Slow">
+                <TokenAmount amount={ep.gas_cost_usdc_slow} symbol="USDC" />
+              </Row>
+              <Row label="Fast">
+                <TokenAmount amount={ep.gas_cost_usdc_fast} symbol="USDC" />
+              </Row>
+              <Row label="Total">
+                <TokenAmount amount={ep.total_gas_cost_usdc} symbol="USDC" />
+              </Row>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium mb-1">Config</p>
+              <Row label="Max Slippage">
+                <span className="tabular-nums font-mono">{signal.max_slippage_bps} bps</span>
+              </Row>
+              <Row label="Congestion Discount">
+                <span className="tabular-nums font-mono">{signal.congestion_risk_discount_bps} bps</span>
+              </Row>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Spot Prices */}
       <Card>
-        <CardHeader>
-          <CardTitle>Spot Prices at Signal Time</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            Spot Prices at Signal Time <ChainBadge chain={signal.slow.chain} />
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-0">
-          <SpotPriceRow
-            label={`${signal.expected_profit.token_a}/${signal.expected_profit.token_b}`}
-            price={signal.slow_prices_a_b}
-          />
-          <SpotPriceRow
-            label={`${signal.expected_profit.token_a}/USDC`}
-            price={signal.slow_prices_a_usdc}
-          />
-          <SpotPriceRow
-            label={`${signal.expected_profit.token_b}/USDC`}
-            price={signal.slow_prices_b_usdc}
-          />
-          <SpotPriceRow
-            label="ETH/USDC"
-            price={signal.slow_prices_eth_usdc}
-          />
+        <CardContent>
+          <SpotPriceRow tokenA={ep.token_a} tokenB={ep.token_b} price={signal.slow_prices_a_b} />
+          <SpotPriceRow tokenA={ep.token_a} tokenB="USDC" price={signal.slow_prices_a_usdc} />
+          <SpotPriceRow tokenA={ep.token_b} tokenB="USDC" price={signal.slow_prices_b_usdc} />
+          <SpotPriceRow tokenA="ETH" tokenB="USDC" price={signal.slow_prices_eth_usdc} />
         </CardContent>
       </Card>
     </main>

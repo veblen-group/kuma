@@ -7,9 +7,10 @@ import { useTokenList } from '@/lib/use-token-list'
 interface TokenBadgeProps {
   symbol: string
   showName?: boolean
+  size?: number
 }
 
-export function TokenBadge({ symbol, showName = true }: TokenBadgeProps) {
+export function TokenBadge({ symbol, showName = true, size = 16 }: TokenBadgeProps) {
   const tokenList = useTokenList()
   const info = TOKEN_INFO[symbol]
   const logoUrl = info?.ethereumAddress ? tokenList.get(info.ethereumAddress) : undefined
@@ -22,13 +23,16 @@ export function TokenBadge({ symbol, showName = true }: TokenBadgeProps) {
         <img
           src={logoUrl}
           alt={symbol}
-          width={16}
-          height={16}
+          width={size}
+          height={size}
           className="rounded-full shrink-0"
           onError={() => setImgError(true)}
         />
       ) : (
-        <span className="w-4 h-4 rounded-full bg-muted flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0">
+        <span
+          className="rounded-full bg-muted flex items-center justify-center font-bold text-muted-foreground shrink-0"
+          style={{ width: size, height: size, fontSize: Math.max(8, size * 0.5) }}
+        >
           {symbol.slice(0, 2).toUpperCase()}
         </span>
       )}

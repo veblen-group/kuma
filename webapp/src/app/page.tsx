@@ -80,9 +80,9 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Card>
-          <CardHeader>
+          <CardHeader className="min-h-[3.5rem]">
             <CardTitle>Failed Trades</CardTitle>
             <CardDescription>Trades where execution failed on the slow chain before the fast leg was attempted.</CardDescription>
           </CardHeader>
@@ -92,7 +92,7 @@ export default function Home() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="min-h-[3.5rem]">
             <CardTitle>Stuck Trades</CardTitle>
             <CardDescription>Trades where the slow transaction confirmed but the fast chain transaction failed to execute.</CardDescription>
           </CardHeader>
