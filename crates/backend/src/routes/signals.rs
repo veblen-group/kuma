@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -214,8 +214,41 @@ pub async fn get_signals_by_pair(
     }
 }
 
+pub async fn get_signal_by_id(
+    Path(id): Path<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<CrossChainSingleHopResponse>, Response> {
+    let signal_repo = state.db.signal_repository();
+    let spot_price_repo = state.db.spot_price_repository();
+
+    match signal_repo.get_by_id(id, &spot_price_repo).await {
+        Ok(Some(signal)) => Ok(Json(CrossChainSingleHopResponse::new(id, signal))),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not found",
+                "message": format!("Signal {} not found", id)
+            })),
+        )
+            .into_response()),
+        Err(e) => {
+            tracing::error!("Failed to fetch signal {}: {}", id, e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Database error",
+                    "message": "Failed to fetch signal"
+                })),
+            )
+                .into_response())
+        }
+    }
+}
+
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/", get(get_signals_by_pair))
+    Router::new()
+        .route("/", get(get_signals_by_pair))
+        .route("/:id", get(get_signal_by_id))
 }
 
 #[cfg(test)]

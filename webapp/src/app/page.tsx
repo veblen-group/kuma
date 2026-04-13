@@ -5,7 +5,7 @@ import { SuccessfulTradeResultTable } from "@/components/successful_trades/table
 import { FailedOnSlowTradeResultTable } from "@/components/failed_on_slow_trades/table";
 import { FailedOnFastTradeResultTable } from "@/components/failed_on_fast_trades/table";
 import { StrategyCard } from "@/components/strategy-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -54,6 +54,7 @@ export default function Home() {
       <Card>
         <CardHeader>
           <CardTitle>Signals</CardTitle>
+          <CardDescription>Detected cross-chain arbitrage opportunities. Each signal identifies a price imbalance between the slow and fast chain pools.</CardDescription>
         </CardHeader>
         <CardContent>
           <SignalTable />
@@ -63,6 +64,7 @@ export default function Home() {
       <Card>
         <CardHeader>
           <CardTitle>Successful Trades</CardTitle>
+          <CardDescription>Trades where both the slow and fast chain transactions executed on-chain.</CardDescription>
         </CardHeader>
         <CardContent>
           <SuccessfulTradeResultTable />
@@ -72,6 +74,7 @@ export default function Home() {
       <Card>
         <CardHeader>
           <CardTitle>Failed Trades</CardTitle>
+          <CardDescription>Trades where execution failed on the slow chain before the fast leg was attempted.</CardDescription>
         </CardHeader>
         <CardContent>
           <FailedOnSlowTradeResultTable />
@@ -81,6 +84,7 @@ export default function Home() {
       <Card>
         <CardHeader>
           <CardTitle>Stuck Trades</CardTitle>
+          <CardDescription>Trades where the slow transaction confirmed but the fast chain transaction failed to execute.</CardDescription>
         </CardHeader>
         <CardContent>
           <FailedOnFastTradeResultTable />

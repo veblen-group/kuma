@@ -40,12 +40,27 @@ class ApiClient {
     return response.json();
   }
 
+  private async requestSingle<T>(endpoint: string): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async getSpotPrices(params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
     return this.request<SpotPrice>('/spot_prices', {
       pair: pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
+  }
+
+  async getSignal(id: number): Promise<Signal> {
+    return this.requestSingle<Signal>(`/signals/${id}`);
   }
 
   async getSignals(params: FetchParams): Promise<PaginatedResponse<Signal>> {
@@ -93,6 +108,14 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
       params.pageSize ?? 10
     ],
     queryFn: () => apiClient.getSpotPrices(params),
+  });
+}
+
+export function useSignal(id: number, options?: Partial<UseQueryOptions<Signal>>) {
+  return useQuery<Signal>({
+    ...options,
+    queryKey: ['signal', id],
+    queryFn: () => apiClient.getSignal(id),
   });
 }
 

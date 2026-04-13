@@ -14,7 +14,7 @@ export const columns: ColumnDef<FailedOnFastTrade>[] = [
     header: "Signal ID",
     accessorFn: (row) => row.signal.id,
     cell: ({ getValue }) => (
-      <a href={`#signal-${getValue()}`} className="font-mono text-xs underline hover:text-primary">
+      <a href={`/signals/${getValue()}`} className="font-mono text-xs underline hover:text-primary">
         {getValue() as number}
       </a>
     ),
