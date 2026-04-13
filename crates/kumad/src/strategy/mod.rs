@@ -116,7 +116,11 @@ impl Worker {
         let mut submission_deadline = None;
 
         let mut precompute: Option<Precomputes> = None;
+        // Signal queued for emission at the next submission deadline.
         let mut curr_signal: Option<signals::CrossChainSingleHop> = None;
+        // Last accepted signal, used to dedup: a new signal whose expected profit
+        // has the same outcome as prev_signal is dropped (no DB write, no emission).
+        // Updated both at acceptance time and at emission time.
         let mut prev_signal: Option<signals::CrossChainSingleHop> = None;
 
         let mut db_writes: FuturesUnordered<
@@ -207,14 +211,17 @@ impl Worker {
                                     async move { repo.write_fast_spot_prices(prices_a_b).await }.boxed()
                                 });
 
-                                if prev_signal.as_ref().is_some_and(|prev| prev.expected_profit.min_total_amount_usdc == signal.expected_profit.min_total_amount_usdc) {
-                                    debug!(%signal, "Min total profit in USDC is unchanged from prev signal, skipping signal emission and db write");
+                                if prev_signal.as_ref().is_some_and(|prev| prev.expected_profit.same_outcome(&signal.expected_profit)) {
+                                    debug!(%signal, "Expected profit unchanged, skipping signal emission and db write");
                                     continue;
                                 }
 
                                 info!(%signal, "📡 Generated cross-chain signal");
 
-                                // Save signal to db
+                                // Update prev_signal at acceptance time so the next fast block
+                                // with the same profit is caught immediately, even before the
+                                // deadline fires and emits.
+                                prev_signal = Some(signal.clone());
                                 curr_signal = Some(signal.clone());
 
                                 db_writes.push(write_signal(

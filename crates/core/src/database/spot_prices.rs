@@ -111,15 +111,31 @@ impl SpotPriceRepository {
     }
 
     pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
-        // TODO: only write if changed
-        let _ = sqlx::query!(
+        sqlx::query!(
             r#"
+            WITH last AS (
+                SELECT min_price, max_price, min_pool_id, max_pool_id
+                FROM spot_prices
+                WHERE chain = $7
+                  AND token_a_symbol = $1
+                  AND token_b_symbol = $2
+                ORDER BY block_height DESC
+                LIMIT 1
+            )
             INSERT INTO spot_prices (
                 token_a_symbol, token_b_symbol,
                 min_price, max_price,
                 min_pool_id, max_pool_id,
                 chain, block_height
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            )
+            SELECT $1, $2, $3::float8, $4::float8, $5::text, $6::text, $7, $8
+            WHERE NOT EXISTS (
+                SELECT 1 FROM last
+                WHERE last.min_price = $3::float8
+                  AND last.max_price = $4::float8
+                  AND last.min_pool_id = $5::text
+                  AND last.max_pool_id = $6::text
+            )
             "#,
             spot_prices.pair.token_a().symbol,
             spot_prices.pair.token_b().symbol,

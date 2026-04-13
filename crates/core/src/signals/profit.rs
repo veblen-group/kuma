@@ -155,6 +155,13 @@ pub struct ExpectedProfit {
 }
 
 impl ExpectedProfit {
+    /// Two profits are considered equivalent for signal dedup if they yield the same
+    /// minimum total USDC amount. Signals with the same outcome are redundant for
+    /// both execution and DB recording.
+    pub fn same_outcome(&self, other: &Self) -> bool {
+        self.min_total_amount_usdc == other.min_total_amount_usdc
+    }
+
     /// Calculate expected profit from slow and fast chain swap simulations.
     ///
     /// The profit calculation pipeline:

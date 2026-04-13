@@ -701,7 +701,7 @@ mod tests {
     };
     use sqlx::types::chrono::NaiveDateTime;
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         str::FromStr as _,
         sync::{Arc, OnceLock},
     };
