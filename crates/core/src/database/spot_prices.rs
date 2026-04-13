@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use color_eyre::eyre::{self, eyre};
+use color_eyre::eyre::{self, Context as _, eyre};
 use sqlx::{
     PgPool,
     types::chrono::{DateTime, Utc},
@@ -63,7 +63,55 @@ impl SpotPriceRepository {
         }
     }
 
+    /// Insert slow-chain spot prices into the database — fire and forget.
+    /// Spot price FK linkage is resolved at signal insert time via a SQL CTE.
+    pub async fn write_slow_spot_prices(
+        &self,
+        prices_a_b: SpotPrices,
+        prices_a_usdc: Option<SpotPrices>,
+        prices_b_usdc: Option<SpotPrices>,
+        prices_eth_usdc: Option<SpotPrices>,
+    ) -> eyre::Result<()> {
+        let pair = prices_a_b.pair.clone();
+        self.insert(prices_a_b)
+            .await
+            .wrap_err_with(|| format!("failed to write spot prices to db for {pair}"))?;
+
+        if let Some(prices) = prices_a_usdc {
+            let pair = prices.pair.clone();
+            self.insert(prices)
+                .await
+                .wrap_err_with(|| eyre!("failed to write spot prices to db for {pair}"))?;
+        }
+
+        if let Some(prices) = prices_b_usdc {
+            let pair = prices.pair.clone();
+            self.insert(prices)
+                .await
+                .wrap_err_with(|| eyre!("failed to write spot prices to db for {pair}"))?;
+        }
+
+        if let Some(prices) = prices_eth_usdc {
+            let pair = prices.pair.clone();
+            self.insert(prices)
+                .await
+                .wrap_err_with(|| eyre!("failed to write ETH-USDC spot prices to db for {pair}"))?;
+        }
+
+        Ok(())
+    }
+
+    /// Insert fast-chain A/B spot prices — fire and forget.
+    pub async fn write_fast_spot_prices(&self, prices: SpotPrices) -> eyre::Result<()> {
+        let pair = prices.pair.clone();
+        self.insert(prices)
+            .await
+            .wrap_err_with(|| format!("failed to write spot prices to db for {pair}"))?;
+        Ok(())
+    }
+
     pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
+        // TODO: only write if changed
         let _ = sqlx::query!(
             r#"
             INSERT INTO spot_prices (

@@ -26,8 +26,10 @@ pub struct BlockSim {
     /// The current states
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
     /// The pools that have been modified in the latest block update
+    // TODO: remove
     pub modified_pools: Arc<HashSet<state::PoolId>>,
     /// The pools that have not been modified in the latest block update
+    // TODO: remove
     pub unmodified_pools: Arc<HashSet<state::PoolId>>,
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }
@@ -90,13 +92,13 @@ impl BlockSim {
 
         let Update {
             block_number_or_timestamp: height,
-            states: mut updated_states,
+            states: mut new_states,
             new_pairs,
             removed_pairs,
             .. // TODO
         } = block_update;
 
-        let mut modified_pools = modified_pools.as_ref().clone();
+        let mut pool_ids = modified_pools.as_ref().clone();
         let mut unmodified_pools = unmodified_pools.as_ref().clone();
 
         // remove pools that are no longer active
@@ -113,7 +115,7 @@ impl BlockSim {
                 .ok_or_eyre("BlockUpdate.removed_pairs should only contain existing pairs")?;
 
             // update modified/unmodified maps
-            if modified_pools.remove(&id) {
+            if pool_ids.remove(&id) {
                 trace!(block.number = %height, pair.id = %id, "Removed pair from modified pairs");
             } else if unmodified_pools.remove(&id) {
                 trace!(block.number = %height, pair.id = %id, "Removed pair from unmodified pairs");
@@ -127,7 +129,7 @@ impl BlockSim {
         // add new pools
         for (id, new_pair) in new_pairs {
             // update block state map
-            let pair_state = updated_states
+            let pair_state = new_states
                 .remove(&id)
                 .expect("BlockUpdate.state should contain every new pool's state");
             let pair_id = state::PoolId(id);
@@ -139,29 +141,30 @@ impl BlockSim {
             }
 
             // Update modified pairs
-            modified_pools.insert(pair_id.clone());
+            pool_ids.insert(pair_id.clone());
 
             debug!(block.number = %height, pair.id = %pair_id, "Added pair to ");
         }
 
         // update existing pools
-        for (id, state) in updated_states {
+        for (id, state) in new_states {
             // update block state map
-            let pair_id = state::PoolId::from(id);
-            states.insert(pair_id.clone(), Arc::from(state));
+            let pool_id = state::PoolId::from(id);
+            states.insert(pool_id.clone(), Arc::from(state));
 
             // add to modified pairs
-            modified_pools.insert(pair_id.clone());
-            if unmodified_pools.remove(&pair_id) {
-                trace!(block.number = %height, pair.id = %pair_id, "Updated unmodified pair");
+            pool_ids.insert(pool_id.clone());
+            // TODO: remove
+            if unmodified_pools.remove(&pool_id) {
+                trace!(block.number = %height, pair.id = %pool_id, "Updated unmodified pair");
             }
 
-            trace!(block.number = %height, pair.id = %pair_id, "Updated pair state");
+            trace!(block.number = %height, pair.id = %pool_id, "Updated pair state");
         }
 
         Ok(Self {
             height: block_update.block_number_or_timestamp,
-            modified_pools: Arc::new(modified_pools),
+            modified_pools: Arc::new(pool_ids),
             unmodified_pools: Arc::new(unmodified_pools),
             metadata,
             states,

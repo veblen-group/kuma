@@ -155,49 +155,34 @@ impl CrossChainSingleHop {
         pair = %self.slow_pair,
         inventory = ?self.slow_inventory,
         chain = %self.slow_chain.name,
-        with_unmodified_precomputes = %unmodified_precomputes.is_some(),
+        with_previous_precompute = %previous_precompute.is_some(),
     ))]
     pub fn try_precompute(
         &self,
         state: BlockState,
-        unmodified_precomputes: Option<Precomputes>,
+        previous_precompute: Option<Precomputes>,
     ) -> eyre::Result<Precomputes> {
         let block_height = state.pair_state.block_height;
 
         let mut pool_sims = HashMap::new();
 
-        // reuse precomputes for unmodified pools
-        if let Some(mut precomputes) = unmodified_precomputes {
-            let unmodified_sims: HashMap<PoolId, simulation::PoolSteps> = state
-                .pair_state
-                .unmodified_pools
-                .iter()
-                .filter_map(|pool_id| {
-                    let pool_sims = precomputes.pool_sims.remove(pool_id)?;
-                    Some((pool_id.clone(), pool_sims))
-                })
-                .collect();
-
-            pool_sims.extend(unmodified_sims);
-        }
-
-        // add simulation results for modified pools
-        let precomputes = state
-                    .pair_state
-                    .modified_pools
-                    .as_ref()
-                    .iter()
-                    .filter_map(|pool_id| state.pair_state.states.get(pool_id).map(|pool| (pool_id, pool)))
-                    .filter_map(|(pool_id, state)| {
-                        match simulation::PoolSteps::from_protocol_sim(&self.slow_pair, self.binary_search_steps, &self.slow_inventory, state.as_ref()) {
-                            Ok(pool_sim) => Some((pool_id.clone(), pool_sim)),
-                            Err(e) => {
-                                error!(error = %e, pool.id = %pool_id, pair = %self.slow_pair, "precompute failed, skipping pool");
-                                None
-                            }
-                        }
-                    });
-        pool_sims.extend(precomputes);
+        // simulation results for modified pools
+        let curr_precomputes = state
+            .pair_state
+            .modified_pools
+            .as_ref()
+            .iter()
+            .filter_map(|pool_id| state.pair_state.states.get(pool_id).map(|pool| (pool_id, pool)))
+            .filter_map(|(pool_id, state)| {
+                match simulation::PoolSteps::from_protocol_sim(&self.slow_pair, self.binary_search_steps, &self.slow_inventory, state.as_ref()) {
+                    Ok(pool_sim) => Some((pool_id.clone(), pool_sim)),
+                    Err(e) => {
+                        error!(error = %e, pool.id = %pool_id, pair = %self.slow_pair, "precompute failed, skipping pool");
+                        None
+                    }
+                }
+            });
+        pool_sims.extend(curr_precomputes);
 
         // calculate a-b spot prices
         let sorted_prices_a_b = try_make_sorted_spot_prices(&state.pair_state, &self.slow_pair)
@@ -275,6 +260,8 @@ impl CrossChainSingleHop {
             trace!(pair = %self.slow_pair, "Skipping spot price simulation for ETH == USDC");
             None
         };
+
+        // TODO: merge with unmodified precomputes
 
         Ok(Precomputes {
             block_height,
