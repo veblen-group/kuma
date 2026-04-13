@@ -27,9 +27,7 @@ export const TOKEN_INFO: Record<string, TokenInfo> = Object.fromEntries(
   ),
 )
 
-export const STRATEGY = config.strategies[0]
-export const TOKEN_A = STRATEGY.token_a
-export const TOKEN_B = STRATEGY.token_b
+export const TOKEN_NAMES = Object.keys(config.tokens)
 
 export function formatWithDecimals(rawAmount: string, decimals: number): string {
   try {

@@ -80,7 +80,7 @@ chains:
     rpc_ws_url: "wss://eth-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-beta.propellerheads.xyz/"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
-    private_key: ""
+    private_key: "0x0000000000000000000000000000000000000000000000000000000000000001"
     # Tycho simulation stream filter
     add_tvl_threshold: 5.0
     remove_tvl_threshold: 3.0
@@ -90,7 +90,7 @@ chains:
     rpc_ws_url: "wss://base-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-base-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
-    private_key: ""
+    private_key: "0x0000000000000000000000000000000000000000000000000000000000000001"
     # Tycho simulation stream filter
     add_tvl_threshold: 5.0
     remove_tvl_threshold: 3.0
@@ -100,7 +100,7 @@ chains:
     rpc_ws_url: "wss://unichain-mainnet.g.alchemy.com/v2/<ENTER API KEY HERE>"
     tycho_url: "tycho-unichain-beta.propellerheads.xyz"
     permit2_address: "0x000000000022d473030f116ddee9f6b43ac78ba3" # Uniswap Permit2 address
-    private_key: ""
+    private_key: "0x0000000000000000000000000000000000000000000000000000000000000001"
     # Tycho simulation stream filter
     add_tvl_threshold: 5.0
     remove_tvl_threshold: 3.0
@@ -110,7 +110,7 @@ tycho_api_key: ""
 
 # Database configuration
 database:
-  user: "backend_user"
+  user: "api_user"
   password: "password"
   host: "localhost"
   port: 5432

@@ -22,9 +22,11 @@ import { columns } from "./columns"
 import { Signal } from "@/lib/types"
 import { apiClient, useSignals } from "@/lib/api-client"
 import { useStablePageCount } from "@/lib/use-stable-page-count"
+import { useStrategy } from "@/components/strategy-provider"
 
 
 export function SignalTable() {
+  const { pair } = useStrategy()
 
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
@@ -126,7 +128,7 @@ export function SignalTable() {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  No signals found for {pair}.
                 </TableCell>
               </TableRow>
             )}

@@ -20,8 +20,11 @@ import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
 import { useFailedOnSlowTradeResults } from "@/lib/api-client"
 import { useStablePageCount } from "@/lib/use-stable-page-count"
+import { useStrategy } from "@/components/strategy-provider"
 
 export function FailedOnSlowTradeResultTable() {
+  const { pair } = useStrategy()
+
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -119,7 +122,7 @@ export function FailedOnSlowTradeResultTable() {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No trade results found.
+                  No failed trades for {pair}.
                 </TableCell>
               </TableRow>
             )}

@@ -20,8 +20,11 @@ import { Button } from "@/components/ui/button"
 import { columns } from "./columns"
 import { useSpotPrices } from "@/lib/api-client"
 import { useStablePageCount } from "@/lib/use-stable-page-count"
+import { useStrategy } from "@/components/strategy-provider"
 
 export function SpotPriceTable() {
+  const { pair } = useStrategy()
+
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
     pageSize: 10,
@@ -121,7 +124,7 @@ export function SpotPriceTable() {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  No spot prices for {pair}.
                 </TableCell>
               </TableRow>
             )}

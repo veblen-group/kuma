@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ApiClientProvider from "@/lib/api-client";
 import { ThemeProvider } from "@/components/theme-provider";
+import { StrategyProvider } from "@/components/strategy-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,9 +35,11 @@ export default function RootLayout({
           defaultTheme="system"
           storageKey="kuma-ui-theme"
         >
-          <ApiClientProvider>
-            {children}
-          </ApiClientProvider>
+          <StrategyProvider>
+            <ApiClientProvider>
+              {children}
+            </ApiClientProvider>
+          </StrategyProvider>
         </ThemeProvider>
       </body>
     </html>

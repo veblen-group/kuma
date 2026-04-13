@@ -1,6 +1,7 @@
 'use client';
 
 import { useSpotPrices } from "@/lib/api-client";
+import { useStrategy } from "@/components/strategy-provider";
 import { SpotPrice } from "@/lib/types";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer
@@ -100,6 +101,7 @@ function CustomTooltip({
 }
 
 export function SpotPriceChart() {
+  const { pair } = useStrategy()
   const { data, isLoading, isError } = useSpotPrices(
     { page: 1, pageSize: 50 },
     { staleTime: 30_000, refetchInterval: 30_000 }
@@ -117,7 +119,7 @@ export function SpotPriceChart() {
   if (isError || !prices.length) {
     return (
       <div className="h-full min-h-72 flex items-center justify-center text-muted-foreground">
-        No data available
+        No price data for {pair}
       </div>
     );
   }
