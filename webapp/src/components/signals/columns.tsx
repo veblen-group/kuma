@@ -7,14 +7,15 @@ import { BlockCell } from "@/components/ui/block-cell"
 import { TokenBadge } from "@/components/ui/token-badge"
 import { TokenAmount } from "@/components/ui/token-amount"
 import { ChainBadge } from "@/components/ui/chain-badge"
+import { MoveRight } from "lucide-react"
 
 function TokenPair({ tokenIn, tokenOut }: { tokenIn: string; tokenOut: string }) {
   return (
-    <span className="inline-flex items-center gap-1">
+    <div className="flex items-center gap-1.5">
       <TokenBadge symbol={tokenIn} />
-      <span className="text-muted-foreground text-xs">→</span>
+      <MoveRight size={12} className="shrink-0 text-muted-foreground" />
       <TokenBadge symbol={tokenOut} />
-    </span>
+    </div>
   )
 }
 

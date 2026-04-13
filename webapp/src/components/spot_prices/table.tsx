@@ -27,7 +27,7 @@ export function SpotPriceTable() {
 
   const [pagination, setPagination] = React.useState({
     pageIndex: 0,
-    pageSize: 10,
+    pageSize: 5,
   })
 
   const {
@@ -82,7 +82,7 @@ export function SpotPriceTable() {
   return (
     <div>
       <div className="rounded-md border">
-        <Table containerClassName="overflow-visible">
+        <Table containerClassName="overflow-visible" className="[&_th]:h-8 [&_th]:px-2 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-xs">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -131,8 +131,8 @@ export function SpotPriceTable() {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex items-center justify-end space-x-2 py-2">
+        <div className="flex-1 text-xs text-muted-foreground">
           Page {table.getState().pagination.pageIndex + 1} of{" "}
           {pageCount}
         </div>

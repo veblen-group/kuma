@@ -11,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   return (
-    <main className="container mx-auto px-4 py-8 space-y-6">
+    <main className="container mx-auto px-4 py-6 space-y-4">
       <header className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-primary">Kuma</h1>
@@ -22,29 +22,28 @@ export default function Home() {
 
       <Separator />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 flex flex-col self-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-7 flex flex-col">
           <Card className="flex flex-col flex-1">
-            <CardHeader className="shrink-0">
+            <CardHeader className="py-3 px-4">
               <CardTitle>Price Chart</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0">
+            <CardContent className="flex-1 min-h-0 px-4 pb-4">
               <SpotPriceChart />
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-5 space-y-6">
+        <div className="lg:col-span-5 space-y-4">
           <Card>
-            <CardContent className="p-4">
+            <CardContent className="px-4 py-3">
+              <p className="text-sm font-semibold mb-3">Strategy</p>
               <StrategyCard />
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
-              <CardTitle>Spot Prices</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="px-4 py-3">
+              <p className="text-sm font-semibold mb-2">Spot Prices</p>
               <SpotPriceTable />
             </CardContent>
           </Card>
