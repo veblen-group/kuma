@@ -44,15 +44,29 @@ impl Swap {
         let token_in_addr = Address::from_slice(&swap.token_in.address);
         let token_out_addr = Address::from_slice(&swap.token_out.address);
 
+        // Handle native ETH input (doesn't emit Transfer events)
+        if token_in_addr == Address::ZERO {
+            // TODO: For ETH input, we should get the actual transaction value from receipt
+            // For now, use the expected amount from the swap simulation
+            amount_in = swap.amount_in.clone();
+        }
+
+        // Handle native ETH output (doesn't emit Transfer events)
+        if token_out_addr == Address::ZERO {
+            // For ETH output, we need to calculate from balance changes
+            // This is more complex - for now use the expected amount from swap
+            amount_out = swap.amount_out.clone();
+        }
+
         for log in receipt.logs() {
             let contract = log.address();
 
-            if contract == token_in_addr {
+            if contract == token_in_addr && token_in_addr != Address::ZERO {
                 let transfer = Transfer::try_from_log(&swap.token_in, log.clone())?;
                 amount_in = amount_in
                     .checked_add(&transfer.amount)
                     .ok_or_else(|| eyre::eyre!("overflow adding amount_in"))?;
-            } else if contract == token_out_addr {
+            } else if contract == token_out_addr && token_out_addr != Address::ZERO {
                 let transfer = Transfer::try_from_log(&swap.token_out, log.clone())?;
                 amount_out = amount_out
                     .checked_add(&transfer.amount)

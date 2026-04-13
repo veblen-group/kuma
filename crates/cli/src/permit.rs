@@ -40,6 +40,15 @@ impl Permit2 {
                 .connect_http(chain.rpc_url.parse().wrap_err("Failed to parse RPC URL")?);
 
             for (address_bytes, token) in tokens.iter() {
+                // Skip permit2 approval for native ETH (zero address)
+                if address_bytes == &tycho_common::Bytes::from([0u8; 20].to_vec()) {
+                    info!(
+                        "Skipping permit2 approval for native ETH on chain: {}",
+                        chain.name
+                    );
+                    continue;
+                }
+
                 let tx = TransactionRequest::default()
                     .with_to(
                         address_bytes
