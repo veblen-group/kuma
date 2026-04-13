@@ -7,14 +7,14 @@ use std::str::FromStr as _;
 
 use alloy::consensus::EthereumTxEnvelope;
 use alloy::network::EthereumWallet;
-use alloy::primitives::{Address as alloyAddress, Bytes as AlloyBytes, Keccak256};
+use alloy::primitives::{Address as alloyAddress, Bytes as AlloyBytes, Keccak256, U256};
 use alloy::providers::Provider as _;
 use alloy::providers::ext::AnvilApi;
 use alloy::rpc::types::{TransactionInput, TransactionReceipt, TransactionRequest};
 use alloy::signers::Signature;
 use alloy::signers::{SignerSync, local::PrivateKeySigner};
 use alloy::sol_types::{SolStruct, SolValue, eip712_domain};
-use color_eyre::eyre::{self, Context as _, ContextCompat, OptionExt};
+use color_eyre::eyre::{self, Context as _, OptionExt};
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -22,13 +22,12 @@ use tracing::trace;
 use tycho_common::Bytes;
 
 use tycho_execution::encoding::errors::EncodingError;
-use tycho_execution::encoding::evm::approvals::permit2::PermitSingle;
+use tycho_execution::encoding::evm::approvals::permit2::{Permit2, PermitSingle};
 use tycho_execution::encoding::evm::encoder_builders::TychoRouterEncoderBuilder;
 use tycho_execution::encoding::evm::swap_encoder::swap_encoder_registry::SwapEncoderRegistry;
 use tycho_execution::encoding::evm::utils::biguint_to_u256;
 use tycho_execution::encoding::models::{
-    self, EncodedSolution, Solution, Swap as TychoSwap, Transaction as TychoTransaction,
-    UserTransferType,
+    self, EncodedSolution, Solution, Swap as TychoSwap, UserTransferType,
 };
 use tycho_simulation::protocol::models::ProtocolComponent;
 
@@ -49,7 +48,7 @@ impl UnsignedTransaction {
     pub(crate) fn try_from_solution(solution: &Solution, chain: &Chain) -> eyre::Result<Self> {
         let encoded_solution = encode_solution(solution.clone(), chain)?;
         let native_address = Bytes::from(chain.name.native_token().address.as_ref());
-        let tx = encode_tycho_router_call(
+        let (contranct_interaction, value) = encode_tycho_router_call(
             chain.chain_id(),
             encoded_solution,
             solution,
@@ -57,12 +56,12 @@ impl UnsignedTransaction {
             chain.signer().clone(),
         )?;
         let tx_request = TransactionRequest::default()
-            .to(alloyAddress::from_slice(&tx.to))
+            .to(alloyAddress::from_slice(solution.receiver()))
             .input(TransactionInput {
-                input: Some(AlloyBytes::from(tx.data.clone())),
+                input: Some(contranct_interaction.into()),
                 data: None,
             })
-            .value(biguint_to_u256(&tx.value));
+            .value(biguint_to_u256(&value));
         Ok(UnsignedTransaction { tx: tx_request })
     }
 }
@@ -131,44 +130,60 @@ pub(crate) fn encode_tycho_router_call(
     solution: &Solution,
     native_address: Bytes,
     signer: PrivateKeySigner,
-) -> eyre::Result<TychoTransaction> {
-    let p = encoded_solution
-        .permit
-        .wrap_err("Permit object must be set")?;
-    let permit = PermitSingle::try_from(&p)
-        .map_err(|e| EncodingError::InvalidInput(format!("Invalid permit: {e}")))?;
-    trace!("Signing permit2 approval: {permit:?}");
-    let signature = sign_permit(chain_id, &p, signer)?;
-    let given_amount = biguint_to_u256(&solution.given_amount);
-    let min_amount_out = biguint_to_u256(&solution.checked_amount);
-    let given_token = alloyAddress::from_slice(&solution.given_token);
-    let checked_token = alloyAddress::from_slice(&solution.checked_token);
-    let receiver = alloyAddress::from_slice(&solution.receiver);
+) -> eyre::Result<(Vec<u8>, BigUint)> {
+    let is_native = *solution.token_in() == native_address;
 
-    let method_calldata = (
-        given_amount,
-        given_token,
-        checked_token,
-        min_amount_out,
-        false,
-        false,
-        receiver,
-        permit,
-        signature.as_bytes().to_vec(),
-        encoded_solution.swaps,
-    )
-        .abi_encode();
-    let contract_interaction = encode_input(&encoded_solution.function_signature, method_calldata);
-    let value = if solution.given_token == native_address {
-        solution.given_amount.clone()
+    let amount_in = biguint_to_u256(solution.amount_in());
+    let min_amount_out = biguint_to_u256(solution.min_amount_out());
+    let token_in = alloyAddress::from_slice(solution.token_in());
+    let token_out = alloyAddress::from_slice(solution.token_out());
+    let receiver = alloyAddress::from_slice(solution.receiver());
+    let client_fee_params: (u16, alloyAddress, U256, U256, Vec<u8>) =
+        (0, alloyAddress::ZERO, U256::ZERO, U256::ZERO, vec![]);
+
+    let method_calldata = if is_native {
+        (
+            amount_in,
+            token_in,
+            token_out,
+            min_amount_out,
+            receiver,
+            client_fee_params,
+            encoded_solution.swaps(),
+        )
+            .abi_encode()
+    } else {
+        let permit2 = Permit2::new()?;
+        let permit_single = permit2.get_permit(
+            encoded_solution.interacting_with(),
+            solution.sender(),
+            solution.token_in(),
+            solution.amount_in(),
+        )?;
+        let permit = PermitSingle::try_from(&permit_single)
+            .map_err(|_| EncodingError::InvalidInput("Invalid permit".to_string()))?;
+        let signature = sign_permit(chain_id, &permit_single, signer)?;
+        (
+            amount_in,
+            token_in,
+            token_out,
+            min_amount_out,
+            receiver,
+            client_fee_params,
+            permit,
+            signature.as_bytes().to_vec(),
+            encoded_solution.swaps(),
+        )
+            .abi_encode()
+    };
+
+    let contract_interaction = encode_input(encoded_solution.function_signature(), method_calldata);
+    let value = if is_native {
+        solution.amount_in().clone()
     } else {
         BigUint::ZERO
     };
-    Ok(TychoTransaction {
-        to: encoded_solution.interacting_with,
-        value,
-        data: contract_interaction,
-    })
+    Ok((contract_interaction, value))
 }
 
 fn sign_permit(
@@ -206,17 +221,18 @@ pub(crate) fn create_solution(
         swap.token_out.address.clone(),
     );
 
-    Ok(Solution {
-        sender: signer_address_bytes.clone(),
-        receiver: signer_address_bytes.clone(),
-        given_token: swap.token_in.address.clone(),
-        given_amount: swap.amount_in.clone(),
-        checked_token: swap.token_out.address.clone(),
-        exact_out: false, // it's an exact in solution
-        checked_amount: swap.amount_out.clone(),
-        swaps: vec![simple_swap],
-        native_action: None,
-    })
+    let sol = Solution::new(
+        signer_address_bytes.clone(),
+        signer_address_bytes.clone(),
+        swap.token_in.address.clone(),
+        swap.token_out.address.clone(),
+        swap.amount_in.clone(),
+        swap.amount_out.clone(),
+        vec![simple_swap],
+    )
+    .with_user_transfer_type(UserTransferType::TransferFromPermit2);
+
+    Ok(sol)
 }
 
 /// Encodes the input data for a function call to the given function selector.
@@ -255,7 +271,6 @@ pub(crate) fn encode_solution(solution: Solution, chain: &Chain) -> eyre::Result
     // Initialize the encoder
     let encoder = TychoRouterEncoderBuilder::new()
         .chain(chain.name) // Default for now
-        .user_transfer_type(UserTransferType::TransferFromPermit2)
         .swap_encoder_registry(swap_encoder_registry)
         .build()
         .expect("Failed to build encoder");
