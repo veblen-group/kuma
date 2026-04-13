@@ -10,6 +10,7 @@ import { TokenBadge } from "@/components/ui/token-badge"
 import { TokenAmount } from "@/components/ui/token-amount"
 import { ExplorerLink } from "@/components/ui/explorer-link"
 import { BlockCell } from "@/components/ui/block-cell"
+import { HoverPopover } from "@/components/ui/hover-popover"
 import { Button } from "@/components/ui/button"
 import { SpotPrice } from "@/lib/types"
 
@@ -195,13 +196,19 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
             <div>
               <p className="text-xs text-muted-foreground font-medium mb-1">Gas</p>
               <Row label="Slow">
-                <TokenAmount amount={ep.gas_cost_usdc_slow} symbol="USDC" />
+                <HoverPopover content={<span className="text-xs"><TokenAmount amount={ep.gas_cost_usdc_slow} symbol="USDC" /></span>}>
+                  <span className="tabular-nums font-mono">{ep.gas_cost_eth_slow} <span className="text-muted-foreground text-xs">wei</span></span>
+                </HoverPopover>
               </Row>
               <Row label="Fast">
-                <TokenAmount amount={ep.gas_cost_usdc_fast} symbol="USDC" />
+                <HoverPopover content={<span className="text-xs"><TokenAmount amount={ep.gas_cost_usdc_fast} symbol="USDC" /></span>}>
+                  <span className="tabular-nums font-mono">{ep.gas_cost_eth_fast} <span className="text-muted-foreground text-xs">wei</span></span>
+                </HoverPopover>
               </Row>
               <Row label="Total">
-                <TokenAmount amount={ep.total_gas_cost_usdc} symbol="USDC" />
+                <HoverPopover content={<span className="text-xs"><TokenAmount amount={ep.total_gas_cost_usdc} symbol="USDC" /></span>}>
+                  <span className="tabular-nums font-mono">{ep.total_gas_cost_eth} <span className="text-muted-foreground text-xs">wei</span></span>
+                </HoverPopover>
               </Row>
             </div>
             <div>

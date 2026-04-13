@@ -110,6 +110,18 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
   });
 }
 
+// Dedicated hook for the price chart — fixed page 1 / size 50, isolated key
+// so table pagination never interferes with chart data.
+export function useSpotPricesChart() {
+  const { pair } = useStrategy();
+  return useQuery<PaginatedResponse<SpotPrice>>({
+    queryKey: ['spot_prices_chart', pair],
+    queryFn: () => apiClient.getSpotPrices(pair, { page: 1, pageSize: 50 }),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}
+
 export function useSignal(id: number, options?: Partial<UseQueryOptions<Signal>>) {
   return useQuery<Signal>({
     ...options,

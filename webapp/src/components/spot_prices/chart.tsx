@@ -1,13 +1,23 @@
 'use client';
 
-import { useSpotPrices } from "@/lib/api-client";
+import { useSpotPricesChart } from "@/lib/api-client";
 import { useStrategy } from "@/components/strategy-provider";
+import { getChainName, getChainLogoUrl } from "@/lib/chains";
 import { SpotPrice } from "@/lib/types";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 
-const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
+const CHAIN_COLORS: Record<string, string> = {
+  ethereum: "#10b981", // green
+  base:     "#2563eb", // blue
+  unichain: "#e91e8c", // pink
+};
+const FALLBACK_COLORS = ["#6366f1", "#f59e0b", "#ef4444"];
+
+function getChainColor(chain: string, index: number): string {
+  return CHAIN_COLORS[chain] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
 
 type ChartPoint = {
   label: string;
@@ -101,7 +111,7 @@ function PriceTooltip({
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: entry.color }}
               />
-              <span className="font-semibold text-foreground">{chain}</span>
+              <span className="font-semibold text-foreground">{getChainName(chain)}</span>
               <span className="text-muted-foreground ml-auto">block {sp.block_height.toLocaleString()}</span>
             </div>
             <p className="text-muted-foreground pl-4">
@@ -119,15 +129,12 @@ function PriceTooltip({
 
 export function SpotPriceChart() {
   const { pair } = useStrategy()
-  const { data, isLoading, isError } = useSpotPrices(
-    { page: 1, pageSize: 50 },
-    { staleTime: 30_000, refetchInterval: 30_000 }
-  );
+  const { data, isLoading, isError } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
   if (isLoading) {
     return (
-      <div className="h-full min-h-48 flex items-center justify-center text-muted-foreground">
+      <div className="h-full flex items-center justify-center text-muted-foreground">
         Loading...
       </div>
     );
@@ -135,7 +142,7 @@ export function SpotPriceChart() {
 
   if (isError || !prices.length) {
     return (
-      <div className="h-full min-h-48 flex items-center justify-center text-muted-foreground">
+      <div className="h-full flex items-center justify-center text-muted-foreground">
         No price data for {pair}
       </div>
     );
@@ -149,7 +156,7 @@ export function SpotPriceChart() {
   const padding = (globalMax - globalMin) * 0.05 || globalMax * 0.0005;
 
   return (
-    <div className="h-full min-h-48">
+    <div className="h-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
           <XAxis dataKey="label" tick={{ fontSize: 10 }} tickCount={6} />
@@ -162,9 +169,31 @@ export function SpotPriceChart() {
             width={70}
           />
           <Tooltip content={<PriceTooltip rawByBucket={rawByBucket} />} />
-          <Legend iconType="circle" iconSize={8} />
+          <Legend
+            content={({ payload }) => (
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+                {chains.map((chain, i) => {
+                  const color = getChainColor(chain, i);
+                  const logoUrl = getChainLogoUrl(chain);
+                  return (
+                    <span key={chain} className="inline-flex items-center gap-1.5 text-xs">
+                      {logoUrl
+                        ? <img src={logoUrl} alt={chain} width={12} height={12} className="rounded-full shrink-0" />
+                        : <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      }
+                      <span style={{ color }}>{getChainName(chain)}</span>
+                      <span className="text-muted-foreground">max</span>
+                      <span className="inline-block w-6 border-b" style={{ borderColor: color }} />
+                      <span className="text-muted-foreground">min</span>
+                      <span className="inline-block w-6 border-b border-dashed" style={{ borderColor: color }} />
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          />
           {chains.map((chain, i) => {
-            const color = COLORS[i % COLORS.length];
+            const color = getChainColor(chain, i);
             return [
               <Line
                 key={`${chain}_max`}

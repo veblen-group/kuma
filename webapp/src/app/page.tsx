@@ -33,25 +33,27 @@ export default function Home() {
       <Separator />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7 flex flex-col">
-          <Card className="flex flex-col flex-1">
+        <div className="lg:col-span-7">
+          <Card>
             <CardHeader className="py-3 px-4">
               <CardTitle>Price Chart</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 min-h-0 px-4 pb-4">
-              <SpotPriceChart />
+            <CardContent className="px-4 pb-4">
+              <div className="h-[480px]">
+                <SpotPriceChart />
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-5 space-y-4">
+        <div className="lg:col-span-5 flex flex-col gap-4">
           <Card>
             <CardContent className="px-4 py-3">
               <p className="text-sm font-semibold mb-3">Strategy</p>
               <StrategyCard />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="flex-1">
             <CardContent className="px-4 py-3">
               <p className="text-sm font-semibold mb-2">Spot Prices</p>
               <SpotPriceTable />
