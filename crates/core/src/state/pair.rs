@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     sync::Arc,
 };
@@ -69,7 +69,5 @@ impl Display for Pair {
 pub struct PairState {
     pub block_height: u64,
     pub states: HashMap<state::PoolId, Arc<dyn ProtocolSim>>,
-    pub modified_pools: Arc<HashSet<state::PoolId>>,
-    pub unmodified_pools: Arc<HashSet<state::PoolId>>,
     pub metadata: HashMap<state::PoolId, Arc<ProtocolComponent>>,
 }

@@ -169,10 +169,8 @@ impl CrossChainSingleHop {
         // simulation results for modified pools
         let curr_precomputes = state
             .pair_state
-            .modified_pools
-            .as_ref()
+            .states
             .iter()
-            .filter_map(|pool_id| state.pair_state.states.get(pool_id).map(|pool| (pool_id, pool)))
             .filter_map(|(pool_id, state)| {
                 match simulation::PoolSteps::from_protocol_sim(&self.slow_pair, self.binary_search_steps, &self.slow_inventory, state.as_ref()) {
                     Ok(pool_sim) => Some((pool_id.clone(), pool_sim)),
@@ -861,8 +859,6 @@ mod tests {
                 make_univ2_protocol_sim(&reserve0, &reserve1),
             )]),
             block_height,
-            modified_pools: Arc::new(HashSet::from([state::PoolId::from(pool_id)])),
-            unmodified_pools: Arc::new(HashSet::new()),
             metadata: HashMap::from([(
                 state::PoolId::from(pool_id),
                 Arc::new(ProtocolComponent::new(
