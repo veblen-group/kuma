@@ -7,10 +7,7 @@
 //! `apply_update` replaces the state map wholesale and only patches `metadata` for
 //! added/removed pools.
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, OptionExt};
 use tracing::{instrument, trace};
@@ -66,7 +63,11 @@ impl BlockSim {
     /// old snapshots are unaffected by this call.
     #[instrument(skip_all)]
     pub fn apply_update(self, block_update: Update) -> eyre::Result<Self> {
-        let Self { mut metadata, .. } = self;
+        let Self {
+            mut metadata,
+            states: old_states,
+            ..
+        } = self;
 
         let Update {
             block_number_or_timestamp: height,
@@ -90,11 +91,14 @@ impl BlockSim {
             }
         }
 
-        // Replace the full state map — Tycho sends a complete snapshot every block.
-        let new_states = states
-            .into_iter()
-            .map(|(id, state)| (state::PoolId(id), Arc::from(state)))
-            .collect();
+        // Build the new state map incrementally - Tycho sends incremental updates, not complete snapshots
+        let mut new_states = old_states; // Start with existing pools
+
+        // Add/update pools from the Tycho update
+        for (id, state) in states {
+            let pool_id = state::PoolId(id);
+            new_states.insert(pool_id, Arc::from(state));
+        }
 
         Ok(Self {
             height,
