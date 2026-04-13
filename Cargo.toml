@@ -37,7 +37,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "once_cell",
     "tracing",
 ] }
-tycho-execution = "0.165.1"
+tycho-execution = "0.174.0"
 tycho-simulation = { version = "0.250.0", features = ["evm"] }
 tycho-common = "0.152.1"
 uniswap-sdk-core = "5.1.0"
