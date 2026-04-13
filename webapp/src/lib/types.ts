@@ -88,6 +88,12 @@ export interface FailedOnFastTrade {
   fast_tx_hash: string | null;
 }
 
+// Matches TradeResultResponse tagged enum
+export type TradeResult =
+  | { trade_type: 'Successful'; trade_data: SuccessfulTrade }
+  | { trade_type: 'FailedOnSlow'; trade_data: FailedOnSlowTrade }
+  | { trade_type: 'FailedOnFast'; trade_data: FailedOnFastTrade }
+
 export interface PaginationInfo {
   page: number;
   page_size: number;

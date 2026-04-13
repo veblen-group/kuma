@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -447,9 +447,85 @@ pub async fn get_failed_on_fast_trade_results_by_pair(
     )))
 }
 
+pub async fn get_trades_for_signal(
+    Path(signal_id): Path<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<TradeResultResponse>>, Response> {
+    let trade_repo = state.db.trade_repository();
+    let signal_repo = state.db.signal_repository();
+    let spot_price_repo = state.db.spot_price_repository();
+
+    let (successful, failed_on_slow, failed_on_fast) = tokio::join!(
+        trade_repo.get_successful_by_signal_id(signal_id),
+        trade_repo.get_failed_on_slow_by_signal_id(signal_id),
+        trade_repo.get_failed_on_fast_by_signal_id(signal_id),
+    );
+
+    let mut responses: Vec<TradeResultResponse> = Vec::new();
+
+    match successful {
+        Ok(rows) => {
+            match enrich_rows(rows, signal_repo.clone(), spot_price_repo.clone(), |r| {
+                r.signal_id
+            })
+            .await
+            {
+                Ok(enriched) => responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
+                    TradeResultResponse::Successful(
+                        SuccessfulTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts),
+                    )
+                })),
+                Err(e) => {
+                    tracing::error!("Failed to enrich successful trades for signal {}: {}", signal_id, e);
+                }
+            }
+        }
+        Err(e) => tracing::error!("Failed to fetch successful trades for signal {}: {}", signal_id, e),
+    }
+
+    match failed_on_slow {
+        Ok(rows) => {
+            match enrich_rows(rows, signal_repo.clone(), spot_price_repo.clone(), |r| {
+                r.signal_id
+            })
+            .await
+            {
+                Ok(enriched) => responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
+                    TradeResultResponse::FailedOnSlow(
+                        FailedOnSlowTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts),
+                    )
+                })),
+                Err(e) => {
+                    tracing::error!("Failed to enrich failed-on-slow trades for signal {}: {}", signal_id, e);
+                }
+            }
+        }
+        Err(e) => tracing::error!("Failed to fetch failed-on-slow trades for signal {}: {}", signal_id, e),
+    }
+
+    match failed_on_fast {
+        Ok(rows) => {
+            match enrich_rows(rows, signal_repo, spot_price_repo, |r| r.signal_id).await {
+                Ok(enriched) => responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
+                    TradeResultResponse::FailedOnFast(
+                        FailedOnFastTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts),
+                    )
+                })),
+                Err(e) => {
+                    tracing::error!("Failed to enrich failed-on-fast trades for signal {}: {}", signal_id, e);
+                }
+            }
+        }
+        Err(e) => tracing::error!("Failed to fetch failed-on-fast trades for signal {}: {}", signal_id, e),
+    }
+
+    Ok(Json(responses))
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(get_all_trade_results_by_pair))
+        .route("/by-signal/:signal_id", get(get_trades_for_signal))
         .route("/successful", get(get_successful_trade_results_by_pair))
         .route(
             "/failed-on-slow",

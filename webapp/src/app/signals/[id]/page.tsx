@@ -3,7 +3,7 @@
 import { use } from "react"
 import Link from "next/link"
 import { ArrowLeft, MoveRight } from "lucide-react"
-import { useSignal } from "@/lib/api-client"
+import { useSignal, useTradesBySignal } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChainBadge } from "@/components/ui/chain-badge"
 import { TokenBadge } from "@/components/ui/token-badge"
@@ -12,7 +12,7 @@ import { ExplorerLink } from "@/components/ui/explorer-link"
 import { BlockCell } from "@/components/ui/block-cell"
 import { HoverPopover } from "@/components/ui/hover-popover"
 import { Button } from "@/components/ui/button"
-import { SpotPrice } from "@/lib/types"
+import { SpotPrice, TradeResult } from "@/lib/types"
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -43,6 +43,91 @@ function SpotPriceRow({ tokenA, tokenB, price }: { tokenA: string; tokenB: strin
         <span><span className="text-muted-foreground">max </span>{price.max_price.toFixed(6)}</span>
       </div>
     </div>
+  )
+}
+
+const TRADE_TYPE_LABELS: Record<TradeResult['trade_type'], string> = {
+  Successful: 'Successful',
+  FailedOnSlow: 'Failed',
+  FailedOnFast: 'Stuck',
+}
+
+const TRADE_TYPE_COLORS: Record<TradeResult['trade_type'], string> = {
+  Successful: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  FailedOnSlow: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  FailedOnFast: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+}
+
+function TradeTypeBadge({ type }: { type: TradeResult['trade_type'] }) {
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${TRADE_TYPE_COLORS[type]}`}>
+      {TRADE_TYPE_LABELS[type]}
+    </span>
+  )
+}
+
+function TradeResultRow({ trade }: { trade: TradeResult }) {
+  const { trade_type, trade_data } = trade
+  const slowChain = trade_data.signal.slow.chain
+  const fastChain = trade_data.signal.fast.chain
+
+  return (
+    <div className="flex flex-col gap-2 py-3 border-b last:border-0">
+      <div className="flex items-center gap-3">
+        <TradeTypeBadge type={trade_type} />
+        <span className="text-sm text-muted-foreground font-mono">#{trade_data.id}</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 pl-2">
+        <Row label="Slow Tx">
+          {trade_type === 'FailedOnSlow' && !trade_data.slow_tx_hash
+            ? <span className="text-muted-foreground">—</span>
+            : <ExplorerLink chain={slowChain} type="tx" value={trade_data.slow_tx_hash!} />
+          }
+        </Row>
+        <Row label="Fast Tx">
+          {trade_type === 'Successful'
+            ? <ExplorerLink chain={fastChain} type="tx" value={trade_data.fast_tx_hash} />
+            : trade_type === 'FailedOnFast' && trade_data.fast_tx_hash
+              ? <ExplorerLink chain={fastChain} type="tx" value={trade_data.fast_tx_hash} />
+              : <span className="text-muted-foreground">—</span>
+          }
+        </Row>
+        {trade_type === 'Successful' && (
+          <Row label="Realized Profit">
+            <span className="font-mono text-xs">{trade_data.realized_profit_str}</span>
+          </Row>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TradeResultsCard({ signalId }: { signalId: number }) {
+  const { data: trades, isLoading } = useTradesBySignal(signalId, {
+    staleTime: 1000 * 60 * 5,
+  })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Trade Results</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">Loading trades...</div>
+        ) : !trades || trades.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-4 text-center">
+            No trades have been executed for this signal.
+          </div>
+        ) : (
+          <div>
+            {trades.map((trade) => (
+              <TradeResultRow key={`${trade.trade_type}-${trade.trade_data.id}`} trade={trade} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -238,6 +323,9 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
           <SpotPriceRow tokenA="ETH" tokenB="USDC" price={signal.slow_prices_eth_usdc} />
         </CardContent>
       </Card>
+
+      {/* Trade Results */}
+      <TradeResultsCard signalId={signalId} />
     </main>
   )
 }
