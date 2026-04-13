@@ -1,11 +1,13 @@
 import { mainnet, base, unichain } from 'viem/chains'
 import type { Chain } from 'viem'
 
-const CHAIN_MAP: Record<string, Chain> = {
+export const CHAIN_MAP: Record<string, Chain> = {
   ethereum: mainnet,
   base,
   unichain,
 }
+
+export const CHAIN_NAMES = Object.keys(CHAIN_MAP)
 
 // DefiLlama chain icon CDN — reliable, no auth required
 const CHAIN_LOGO_URLS: Record<string, string> = {

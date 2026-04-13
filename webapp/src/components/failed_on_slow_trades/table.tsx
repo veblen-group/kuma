@@ -1,153 +1,32 @@
 "use client"
 
 import * as React from "react"
-import {
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
+import { DataTable } from "@/components/ui/data-table"
 import { columns } from "./columns"
 import { useFailedOnSlowTradeResults } from "@/lib/api-client"
-import { useStablePageCount } from "@/lib/use-stable-page-count"
+import { useStrategy } from "@/components/strategy-provider"
 
 export function FailedOnSlowTradeResultTable() {
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 10,
-  })
+  const { pair } = useStrategy()
+  const [pagination, setPagination] = React.useState({ pageIndex: 0, pageSize: 10 })
 
-  const {
-    data, isLoading, isError, error, refetch
-  } = useFailedOnSlowTradeResults(
-    {
-      page: pagination.pageIndex + 1,
-      pageSize: pagination.pageSize
-    },
-    {
-      placeholderData: previousData => previousData,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-    }
-  );
-
-  const pageCount = useStablePageCount(data)
-
-  const table = useReactTable({
-    data: data?.data || [],
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    manualPagination: true,
-    pageCount,
-    onPaginationChange: setPagination,
-    state: {
-      pagination,
-    },
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-24">Loading trade results...</div>
-    )
-  };
-
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center h-24 text-red-500">
-        <div>
-          <p>Error: {error instanceof Error ? error.message : 'Unknown error'}</p>
-          <Button onClick={() => refetch()} variant="outline" className="mt-2">
-            Retry
-          </Button>
-        </div>
-      </div>
-    )
-  };
+  const { data, isLoading, isError, error, refetch } = useFailedOnSlowTradeResults(
+    { page: pagination.pageIndex + 1, pageSize: pagination.pageSize },
+    { placeholderData: (prev) => prev, staleTime: 1000 * 60 * 5 },
+  )
 
   return (
-    <div>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No trade results found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {pageCount}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!data?.pagination.has_previous}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!data?.pagination.has_next}
-        >
-          Next
-        </Button>
-      </div>
-    </div>
+    <DataTable
+      columns={columns}
+      data={data}
+      isLoading={isLoading}
+      isError={isError}
+      error={error instanceof Error ? error : null}
+      refetch={refetch}
+      pagination={pagination}
+      onPaginationChange={setPagination}
+      emptyMessage={`No failed trades for ${pair}.`}
+      loadingMessage="Loading trade results..."
+    />
   )
 }

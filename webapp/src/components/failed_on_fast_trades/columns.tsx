@@ -7,48 +7,35 @@ import { ChainBadge } from "@/components/ui/chain-badge"
 
 export const columns: ColumnDef<FailedOnFastTrade>[] = [
   {
-    header: "Trade ID",
-    accessorKey: "id",
-  },
-  {
     header: "Signal ID",
     accessorFn: (row) => row.signal.id,
     cell: ({ getValue }) => (
-      <a href={`#signal-${getValue()}`} className="font-mono text-xs underline hover:text-primary">
+      <a href={`/signals/${getValue()}`} className="font-mono text-xs underline hover:text-primary">
         {getValue() as number}
       </a>
     ),
   },
   {
-    header: "Slow Chain",
-    id: "slow_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
-  },
-  {
-    header: "Fast Chain",
-    id: "fast_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
-  },
-  {
-    header: "Slow Tx",
-    accessorKey: "slow_tx_hash",
+    header: "Slow Leg",
+    id: "slow",
     cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.signal.slow.chain}
-        type="tx"
-        value={row.getValue("slow_tx_hash") as string}
-      />
+      <div className="flex flex-col gap-1">
+        <ChainBadge chain={row.original.signal.slow.chain} />
+        <ExplorerLink chain={row.original.signal.slow.chain} type="tx" value={row.original.slow_tx_hash} />
+      </div>
     ),
   },
   {
-    header: "Fast Tx",
-    id: "fast_tx",
-    cell: ({ row }) => {
-      const hash = row.original.fast_tx_hash
-      if (!hash) return <span className="text-muted-foreground">—</span>
-      return (
-        <ExplorerLink chain={row.original.signal.fast.chain} type="tx" value={hash} />
-      )
-    },
+    header: "Fast Leg",
+    id: "fast",
+    cell: ({ row }) => (
+      <div className="flex flex-col gap-1">
+        <ChainBadge chain={row.original.signal.fast.chain} />
+        {row.original.fast_tx_hash
+          ? <ExplorerLink chain={row.original.signal.fast.chain} type="tx" value={row.original.fast_tx_hash} />
+          : <span className="text-muted-foreground text-xs">—</span>
+        }
+      </div>
+    ),
   },
 ]

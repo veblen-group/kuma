@@ -27,9 +27,15 @@ export const TOKEN_INFO: Record<string, TokenInfo> = Object.fromEntries(
   ),
 )
 
-export const STRATEGY = config.strategies[0]
-export const TOKEN_A = STRATEGY.token_a
-export const TOKEN_B = STRATEGY.token_b
+// ETH is a native token not in the config — use WETH's address so the token
+// list logo lookup returns the same ETH diamond icon.
+TOKEN_INFO['ETH'] = {
+  symbol: 'ETH',
+  decimals: 18,
+  ethereumAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH on mainnet
+}
+
+export const TOKEN_NAMES = Object.keys(config.tokens)
 
 export function formatWithDecimals(rawAmount: string, decimals: number): string {
   try {

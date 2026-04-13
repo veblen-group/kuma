@@ -4,55 +4,43 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { SuccessfulTrade } from "@/lib/types"
 import { ExplorerLink } from "@/components/ui/explorer-link"
 import { ChainBadge } from "@/components/ui/chain-badge"
+import { TokenAmount } from "@/components/ui/token-amount"
 
 export const columns: ColumnDef<SuccessfulTrade>[] = [
-  {
-    header: "Trade ID",
-    accessorKey: "id",
-  },
   {
     header: "Signal ID",
     accessorFn: (row) => row.signal.id,
     cell: ({ getValue }) => (
-      <a href={`#signal-${getValue()}`} className="font-mono text-xs underline hover:text-primary">
+      <a href={`/signals/${getValue()}`} className="font-mono text-xs underline hover:text-primary">
         {getValue() as number}
       </a>
     ),
   },
   {
-    header: "Slow Chain",
-    id: "slow_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.slow.chain} />,
-  },
-  {
-    header: "Fast Chain",
-    id: "fast_chain",
-    cell: ({ row }) => <ChainBadge chain={row.original.signal.fast.chain} />,
-  },
-  {
-    header: "Slow Tx",
-    accessorKey: "slow_tx_hash",
+    header: "Slow Leg",
+    id: "slow",
     cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.signal.slow.chain}
-        type="tx"
-        value={row.getValue("slow_tx_hash") as string}
-      />
+      <div className="flex flex-col gap-1">
+        <ChainBadge chain={row.original.signal.slow.chain} />
+        <ExplorerLink chain={row.original.signal.slow.chain} type="tx" value={row.original.slow_tx_hash} />
+      </div>
     ),
   },
   {
-    header: "Fast Tx",
-    accessorKey: "fast_tx_hash",
+    header: "Fast Leg",
+    id: "fast",
     cell: ({ row }) => (
-      <ExplorerLink
-        chain={row.original.signal.fast.chain}
-        type="tx"
-        value={row.getValue("fast_tx_hash") as string}
-      />
+      <div className="flex flex-col gap-1">
+        <ChainBadge chain={row.original.signal.fast.chain} />
+        <ExplorerLink chain={row.original.signal.fast.chain} type="tx" value={row.original.fast_tx_hash} />
+      </div>
     ),
   },
   {
     header: "Realized Profit",
     accessorKey: "realized_profit_str",
+    cell: ({ row }) => (
+      <TokenAmount amount={row.original.realized_profit_str} symbol="USDC" />
+    ),
   },
 ]

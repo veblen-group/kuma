@@ -1,13 +1,11 @@
 'use client';
 
 import { SpotPrice, Signal, SuccessfulTrade, FailedOnSlowTrade, FailedOnFastTrade, PaginatedResponse } from "@/lib/types";
-import { QueryClient, useQuery, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, useQuery, useQueryClient, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import config from "@/generated/kuma.config.json";
+import { useStrategy } from "@/components/strategy-provider";
 import React, { useState } from "react";
 
-const firstStrategy = config.strategies[0];
-const pair = `${firstStrategy.token_a}-${firstStrategy.token_b}`;
 // In production the browser hits /api/* which Next.js SSR proxies to the
 // internal backend (BACKEND_URL). For local dev without the proxy, fall back
 // to the backend directly.
@@ -40,41 +38,56 @@ class ApiClient {
     return response.json();
   }
 
-  async getSpotPrices(params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
+  private async requestSingle<T>(endpoint: string): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getSpotPrices(pair: string, params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
     return this.request<SpotPrice>('/spot_prices', {
-      pair: pair,
+      pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getSignals(params: FetchParams): Promise<PaginatedResponse<Signal>> {
+  async getSignal(id: number): Promise<Signal> {
+    return this.requestSingle<Signal>(`/signals/${id}`);
+  }
+
+  async getSignals(pair: string, params: FetchParams): Promise<PaginatedResponse<Signal>> {
     return this.request<Signal>('/signals', {
-      pair: pair,
+      pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getSuccessfulTradeResults(params: FetchParams): Promise<PaginatedResponse<SuccessfulTrade>> {
+  async getSuccessfulTradeResults(pair: string, params: FetchParams): Promise<PaginatedResponse<SuccessfulTrade>> {
     return this.request<SuccessfulTrade>('/trades/successful', {
-      pair: pair,
+      pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getFailedOnSlowTradeResults(params: FetchParams): Promise<PaginatedResponse<FailedOnSlowTrade>> {
+  async getFailedOnSlowTradeResults(pair: string, params: FetchParams): Promise<PaginatedResponse<FailedOnSlowTrade>> {
     return this.request<FailedOnSlowTrade>('/trades/failed-on-slow', {
-      pair: pair,
+      pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
   }
 
-  async getFailedOnFastTradeResults(params: FetchParams): Promise<PaginatedResponse<FailedOnFastTrade>> {
+  async getFailedOnFastTradeResults(pair: string, params: FetchParams): Promise<PaginatedResponse<FailedOnFastTrade>> {
     return this.request<FailedOnFastTrade>('/trades/failed-on-fast', {
-      pair: pair,
+      pair,
       page: (params.page ?? 1).toString(),
       page_size: (params.pageSize ?? 10).toString()
     });
@@ -84,6 +97,7 @@ class ApiClient {
 export const apiClient = new ApiClient();
 
 export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<SpotPrice>>>) {
+  const { pair } = useStrategy();
   return useQuery<PaginatedResponse<SpotPrice>>({
     ...options,
     queryKey: [
@@ -92,11 +106,38 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
       params.page ?? 1,
       params.pageSize ?? 10
     ],
-    queryFn: () => apiClient.getSpotPrices(params),
+    queryFn: () => apiClient.getSpotPrices(pair, params),
+  });
+}
+
+// Dedicated hook for the price chart — uses ['spot_prices', pair, 'chart'] so
+// invalidateQueries({ queryKey: ['spot_prices', pair] }) refreshes both chart and table.
+export function useSpotPricesChart() {
+  const { pair } = useStrategy();
+  return useQuery<PaginatedResponse<SpotPrice>>({
+    queryKey: ['spot_prices', pair, 'chart'],
+    queryFn: () => apiClient.getSpotPrices(pair, { page: 1, pageSize: 50 }),
+    staleTime: Infinity,
+  });
+}
+
+// Invalidates all spot price queries for the current pair (chart + all table pages).
+export function useRefreshSpotPrices() {
+  const queryClient = useQueryClient();
+  const { pair } = useStrategy();
+  return () => queryClient.invalidateQueries({ queryKey: ['spot_prices', pair] });
+}
+
+export function useSignal(id: number, options?: Partial<UseQueryOptions<Signal>>) {
+  return useQuery<Signal>({
+    ...options,
+    queryKey: ['signal', id],
+    queryFn: () => apiClient.getSignal(id),
   });
 }
 
 export function useSignals(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<Signal>>>) {
+  const { pair } = useStrategy();
   return useQuery<PaginatedResponse<Signal>>({
     ...options,
     queryKey: [
@@ -105,11 +146,12 @@ export function useSignals(params: FetchParams, options?: Partial<UseQueryOption
       params.page ?? 1,
       params.pageSize ?? 10
     ],
-    queryFn: () => apiClient.getSignals(params),
+    queryFn: () => apiClient.getSignals(pair, params),
   });
 }
 
 export function useSuccessfulTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<SuccessfulTrade>>>) {
+  const { pair } = useStrategy();
   return useQuery<PaginatedResponse<SuccessfulTrade>>({
     ...options,
     queryKey: [
@@ -118,11 +160,12 @@ export function useSuccessfulTradeResults(params: FetchParams, options?: Partial
       params.page ?? 1,
       params.pageSize ?? 10
     ],
-    queryFn: () => apiClient.getSuccessfulTradeResults(params),
+    queryFn: () => apiClient.getSuccessfulTradeResults(pair, params),
   });
 }
 
 export function useFailedOnSlowTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<FailedOnSlowTrade>>>) {
+  const { pair } = useStrategy();
   return useQuery<PaginatedResponse<FailedOnSlowTrade>>({
     ...options,
     queryKey: [
@@ -131,11 +174,12 @@ export function useFailedOnSlowTradeResults(params: FetchParams, options?: Parti
       params.page ?? 1,
       params.pageSize ?? 10
     ],
-    queryFn: () => apiClient.getFailedOnSlowTradeResults(params),
+    queryFn: () => apiClient.getFailedOnSlowTradeResults(pair, params),
   });
 }
 
 export function useFailedOnFastTradeResults(params: FetchParams, options?: Partial<UseQueryOptions<PaginatedResponse<FailedOnFastTrade>>>) {
+  const { pair } = useStrategy();
   return useQuery<PaginatedResponse<FailedOnFastTrade>>({
     ...options,
     queryKey: [
@@ -144,7 +188,7 @@ export function useFailedOnFastTradeResults(params: FetchParams, options?: Parti
       params.page ?? 1,
       params.pageSize ?? 10
     ],
-    queryFn: () => apiClient.getFailedOnFastTradeResults(params),
+    queryFn: () => apiClient.getFailedOnFastTradeResults(pair, params),
   });
 }
 

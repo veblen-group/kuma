@@ -1,97 +1,119 @@
 'use client';
 
-import { useSpotPrices } from "@/lib/api-client";
+import { useSpotPricesChart } from "@/lib/api-client";
+import { useStrategy } from "@/components/strategy-provider";
+import { getChainName, getChainLogoUrl } from "@/lib/chains";
 import { SpotPrice } from "@/lib/types";
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer
+  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer
 } from "recharts";
 
-const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444"];
+const CHAIN_COLORS: Record<string, string> = {
+  ethereum: "#10b981", // green
+  base:     "#2563eb", // blue
+  unichain: "#e91e8c", // pink
+};
+const FALLBACK_COLORS = ["#6366f1", "#f59e0b", "#ef4444"];
 
-// Per-chain band values are [min, max] tuples — recharts Bar renders these
-// as a discrete range bar (wick) at each timestamp.
-// Per-chain timestamps are prefixed with "T" to prevent recharts numeric coercion.
+function getChainColor(chain: string, index: number): string {
+  return CHAIN_COLORS[chain] ?? FALLBACK_COLORS[index % FALLBACK_COLORS.length];
+}
+
 type ChartPoint = {
   label: string;
-  [key: string]: string | number | [number, number];
+  ts: string;
+  [key: string]: string | number | undefined;
 };
 
 function buildChartData(prices: SpotPrice[]): {
   chains: string[];
   points: ChartPoint[];
-  rawByTime: Map<string, Record<string, SpotPrice>>;
+  rawByBucket: Map<string, Record<string, SpotPrice>>;
 } {
   const chainSet = new Set(prices.map(p => p.chain));
   const chains = Array.from(chainSet).sort();
 
-  const byTime = new Map<string, Record<string, SpotPrice>>();
+  // Each row gets its own x-axis point keyed by exact ISO timestamp.
+  // Chains that don't have a reading at a given timestamp remain null (gap).
+  const byTs = new Map<string, Record<string, SpotPrice>>();
   for (const price of prices) {
     if (!price.created_at) continue;
-    const existing = byTime.get(price.created_at) ?? {};
+    const existing = byTs.get(price.created_at) ?? {};
     existing[price.chain] = price;
-    byTime.set(price.created_at, existing);
+    byTs.set(price.created_at, existing);
   }
 
-  const sorted = Array.from(byTime.entries()).sort(
-    ([a], [b]) => new Date(Number(a) || a).getTime() - new Date(Number(b) || b).getTime()
+  const sorted = Array.from(byTs.entries()).sort(
+    ([a], [b]) => new Date(a).getTime() - new Date(b).getTime()
   );
 
   const points: ChartPoint[] = sorted.map(([ts, byChain]) => {
     const point: ChartPoint = {
-      label: new Date(Number(ts) || ts).toLocaleTimeString([], { hour12: false }),
+      label: new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      ts,
     };
     for (const chain of chains) {
       const sp = byChain[chain];
       if (sp) {
-        point[`${chain}_band`] = [sp.min_price, sp.max_price];
+        point[`${chain}_min`] = sp.min_price;
         point[`${chain}_max`] = sp.max_price;
-        point[`${chain}_ts`] = 'T' + ts;
       }
     }
     return point;
   });
 
-  return { chains, points, rawByTime: byTime };
+  return { chains, points, rawByBucket: byTs };
 }
 
-function CustomTooltip({
+function PriceTooltip({
   active,
   payload,
-  label,
-  rawByTime,
+  rawByBucket,
 }: {
   active?: boolean;
-  payload?: Array<{ name: string; value: number; payload: ChartPoint }>;
+  payload?: Array<{ name: string; value: number; color: string; dataKey: string; payload: ChartPoint }>;
   label?: string;
-  rawByTime: Map<string, Record<string, SpotPrice>>;
+  rawByBucket: Map<string, Record<string, SpotPrice>>;
 }) {
   if (!active || !payload?.length) return null;
 
+  const bucket = payload[0]?.payload?.ts;
+  const timestamp = bucket
+    ? new Date(bucket).toLocaleString([], {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      })
+    : null;
   const seen = new Set<string>();
+
   return (
     <div className="bg-popover border border-border rounded-md p-3 text-xs shadow-md space-y-2">
-      <p className="font-medium text-foreground text-sm">{label}</p>
+      {timestamp && <p className="font-medium text-foreground text-sm">{timestamp}</p>}
       {payload.map(entry => {
-        // Only process invisible Line entries with clean chain names
-        if (entry.name.endsWith('_wick') || entry.name.endsWith('_band')) return null;
-        if (seen.has(entry.name)) return null;
-        seen.add(entry.name);
-        const chain = entry.name;
-        const chainTs = (entry.payload[`${chain}_ts`] as string | undefined)?.slice(1);
-        const sp = chainTs ? rawByTime.get(chainTs)?.[chain] : undefined;
+        // dataKey is "ethereum_max" / "ethereum_min" — strip the suffix to get the chain
+        const chain = entry.dataKey.replace(/_min$|_max$/, '');
+        if (seen.has(chain)) return null;
+        seen.add(chain);
+
+        const sp = bucket ? rawByBucket.get(bucket)?.[chain] : undefined;
         if (!sp) return null;
+
         return (
           <div key={chain} className="space-y-0.5">
-            <p className="font-semibold text-foreground">{chain}</p>
-            <p className="text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="font-semibold text-foreground">{getChainName(chain)}</span>
+              <span className="text-muted-foreground ml-auto">block {sp.block_height.toLocaleString()}</span>
+            </div>
+            <p className="text-muted-foreground pl-4">
               max <span className="text-foreground">{sp.max_price.toFixed(6)}</span>
-              {sp.max_pool_id && <span className="ml-1 opacity-60">({sp.max_pool_id})</span>}
             </p>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground pl-4">
               min <span className="text-foreground">{sp.min_price.toFixed(6)}</span>
-              {sp.min_pool_id && <span className="ml-1 opacity-60">({sp.min_pool_id})</span>}
             </p>
-            <p className="text-muted-foreground">block <span className="text-foreground">{sp.block_height}</span></p>
           </div>
         );
       })}
@@ -100,15 +122,13 @@ function CustomTooltip({
 }
 
 export function SpotPriceChart() {
-  const { data, isLoading, isError } = useSpotPrices(
-    { page: 1, pageSize: 50 },
-    { staleTime: 30_000, refetchInterval: 30_000 }
-  );
+  const { pair } = useStrategy()
+  const { data, isLoading, isError } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
   if (isLoading) {
     return (
-      <div className="h-full min-h-72 flex items-center justify-center text-muted-foreground">
+      <div className="h-full flex items-center justify-center text-muted-foreground">
         Loading...
       </div>
     );
@@ -116,77 +136,85 @@ export function SpotPriceChart() {
 
   if (isError || !prices.length) {
     return (
-      <div className="h-full min-h-72 flex items-center justify-center text-muted-foreground">
-        No data available
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        No price data for {pair}
       </div>
     );
   }
 
-  const { chains, points, rawByTime } = buildChartData(prices);
+  const { chains, points, rawByBucket } = buildChartData(prices);
 
-  const yMin = Math.min(...prices.map(p => p.min_price)) * 0.9995;
-  const yMax = Math.max(...prices.map(p => p.max_price)) * 1.0005;
+  const allPrices = prices.flatMap(p => [p.min_price, p.max_price]);
+  const globalMin = Math.min(...allPrices);
+  const globalMax = Math.max(...allPrices);
+  const padding = (globalMax - globalMin) * 0.05 || globalMax * 0.0005;
 
   return (
-    <div className="h-full min-h-72">
+    <div className="h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
-          <XAxis dataKey="label" tick={{ fontSize: 11 }} tickCount={6} />
+        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+          <XAxis dataKey="label" tick={{ fontSize: 10 }} tickCount={6} />
           <YAxis
             type="number"
-            tick={{ fontSize: 11 }}
-            domain={[yMin, yMax]}
+            tick={{ fontSize: 10 }}
+            domain={[globalMin - padding, globalMax + padding]}
             allowDataOverflow
             tickFormatter={(v: number) => v.toFixed(5)}
             width={70}
           />
-          <Tooltip content={<CustomTooltip rawByTime={rawByTime} />} />
-          <Legend />
-          {chains.map((chain, i) => ([
-            // Wick: custom shape draws the filled bar + H/L dots all at the
-            // same x-position (avoiding the offset that separate Line dots cause).
-            <Bar
-              key={`${chain}_wick`}
-              dataKey={`${chain}_band`}
-              name={`${chain}_wick`}
-              barSize={12}
-              legendType="none"
-              shape={(props: { x: number; y: number; width: number; height: number }) => {
-                const color = COLORS[i % COLORS.length];
-                const { x, y, width, height } = props;
-                if (!height || height <= 0) return <g />;
-                const cx = x + width / 2;
-                const barW = 12;        // bar width in px
-                const dotR = 3.5;         // dot radius in px
-                const fillOpacity = 0.2; // bar fill transparency (0–1)
-                const strokeWidth = 1;   // bar border thickness
-                return (
-                  <g>
-                    <rect
-                      x={cx - barW / 2} y={y} width={barW} height={height}
-                      fill={color} fillOpacity={fillOpacity}
-                      stroke={color} strokeWidth={strokeWidth} rx={1}
-                    />
-                    <circle cx={cx} cy={y} r={dotR} fill={color} />
-                    <circle cx={cx} cy={y + height} r={dotR} fill={color} />
-                  </g>
-                );
-              }}
-            />,
-            // Invisible line — provides tooltip payload entry under the chain name.
-            <Line
-              key={chain}
-              type="monotone"
-              dataKey={`${chain}_max`}
-              name={chain}
-              stroke="none"
-              dot={false}
-              activeDot={false}
-              legendType="circle"
-              connectNulls={false}
-            />,
-          ]))}
-        </ComposedChart>
+          <Tooltip content={<PriceTooltip rawByBucket={rawByBucket} />} />
+          <Legend
+            content={({ payload }) => (
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
+                {chains.map((chain, i) => {
+                  const color = getChainColor(chain, i);
+                  const logoUrl = getChainLogoUrl(chain);
+                  return (
+                    <span key={chain} className="inline-flex items-center gap-1.5 text-xs">
+                      {logoUrl
+                        ? <img src={logoUrl} alt={chain} width={12} height={12} className="rounded-full shrink-0" />
+                        : <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      }
+                      <span style={{ color }}>{getChainName(chain)}</span>
+                      <span className="text-muted-foreground">max</span>
+                      <span className="inline-block w-6 border-b" style={{ borderColor: color }} />
+                      <span className="text-muted-foreground">min</span>
+                      <span className="inline-block w-6 border-b border-dashed" style={{ borderColor: color }} />
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          />
+          {chains.map((chain, i) => {
+            const color = getChainColor(chain, i);
+            return [
+              <Line
+                key={`${chain}_max`}
+                type="linear"
+                dataKey={`${chain}_max`}
+                name={`${chain} max`}
+                stroke={color}
+                strokeWidth={1.5}
+                dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+                connectNulls={false}
+              />,
+              <Line
+                key={`${chain}_min`}
+                type="linear"
+                dataKey={`${chain}_min`}
+                name={`${chain} min`}
+                stroke={color}
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+                connectNulls={false}
+              />,
+            ];
+          })}
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );

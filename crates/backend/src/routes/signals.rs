@@ -1,11 +1,12 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
 use kuma_core::signals::{CrossChainSingleHop, ExpectedProfit};
+use sqlx::types::chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -101,10 +102,14 @@ pub struct CrossChainSingleHopResponse {
     pub expected_profit: ExpectedProfitResponse,
     pub max_slippage_bps: u64,
     pub congestion_risk_discount_bps: u64,
+    /// Timestamp of the fast chain spot price at signal generation time.
+    pub fast_prices_a_b_created_at: Option<String>,
 }
 
 impl CrossChainSingleHopResponse {
-    pub fn new(id: i64, s: CrossChainSingleHop) -> Self {
+    pub fn new(id: i64, s: CrossChainSingleHop, slow_prices_a_b_created_at: Option<DateTime<Utc>>, fast_prices_a_b_created_at: Option<DateTime<Utc>>) -> Self {
+        let mut slow_prices_a_b = SpotPriceResponse::from(s.slow_prices_a_b);
+        slow_prices_a_b.created_at = slow_prices_a_b_created_at.map(|dt| dt.to_rfc3339());
         Self {
             id,
             slow: SwapResponse {
@@ -129,13 +134,14 @@ impl CrossChainSingleHopResponse {
                 amount_out: s.fast_swap_sim.amount_out.to_string(),
                 gas_cost: s.fast_swap_sim.gas_cost.to_string(),
             },
-            slow_prices_a_b: SpotPriceResponse::from(s.slow_prices_a_b),
+            slow_prices_a_b,
             slow_prices_a_usdc: s.slow_prices_a_usdc.map(SpotPriceResponse::from),
             slow_prices_b_usdc: s.slow_prices_b_usdc.map(SpotPriceResponse::from),
             slow_prices_eth_usdc: s.slow_prices_eth_usdc.map(SpotPriceResponse::from),
             expected_profit: ExpectedProfitResponse::from(s.expected_profit),
             max_slippage_bps: s.max_slippage_bps,
             congestion_risk_discount_bps: s.congestion_risk_discount_bps,
+            fast_prices_a_b_created_at: fast_prices_a_b_created_at.map(|dt| dt.to_rfc3339()),
         }
     }
 }
@@ -194,7 +200,7 @@ pub async fn get_signals_by_pair(
         (Ok(total_count), Ok(signals)) => Ok(Json(PaginatedResponse::new(
             signals
                 .into_iter()
-                .map(|(id, signal)| CrossChainSingleHopResponse::new(id, signal))
+                .map(|(id, signal, slow_ts, fast_ts)| CrossChainSingleHopResponse::new(id, signal, slow_ts, fast_ts))
                 .collect(),
             page,
             page_size,
@@ -214,8 +220,41 @@ pub async fn get_signals_by_pair(
     }
 }
 
+pub async fn get_signal_by_id(
+    Path(id): Path<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<CrossChainSingleHopResponse>, Response> {
+    let signal_repo = state.db.signal_repository();
+    let spot_price_repo = state.db.spot_price_repository();
+
+    match signal_repo.get_by_id(id, &spot_price_repo).await {
+        Ok(Some((signal, slow_ts, fast_ts))) => Ok(Json(CrossChainSingleHopResponse::new(id, signal, slow_ts, fast_ts))),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": "Not found",
+                "message": format!("Signal {} not found", id)
+            })),
+        )
+            .into_response()),
+        Err(e) => {
+            tracing::error!("Failed to fetch signal {}: {}", id, e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": "Database error",
+                    "message": "Failed to fetch signal"
+                })),
+            )
+                .into_response())
+        }
+    }
+}
+
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/", get(get_signals_by_pair))
+    Router::new()
+        .route("/", get(get_signals_by_pair))
+        .route("/:id", get(get_signal_by_id))
 }
 
 #[cfg(test)]

@@ -14,6 +14,7 @@ use kuma_core::{
     signals::{self, CrossChainSingleHop},
 };
 use serde::{Deserialize, Serialize};
+use sqlx::types::chrono::{DateTime, Utc};
 use tracing::info;
 
 use crate::{
@@ -33,10 +34,10 @@ pub struct SuccessfulTradeResponse {
 }
 
 impl SuccessfulTradeResponse {
-    fn from_row_and_signal(row: TradeSuccessRow, signal: signals::CrossChainSingleHop) -> Self {
+    fn from_row_and_signal(row: TradeSuccessRow, signal: signals::CrossChainSingleHop, slow_ts: Option<DateTime<Utc>>, fast_ts: Option<DateTime<Utc>>) -> Self {
         Self {
             id: row.id,
-            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
             realized_profit_str: row.realized_profit_str,
@@ -55,10 +56,12 @@ impl FailedOnSlowTradeResponse {
     fn from_row_and_signal(
         row: TradeFailedOnSlowRow,
         signal: signals::CrossChainSingleHop,
+        slow_ts: Option<DateTime<Utc>>,
+        fast_ts: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             id: row.id,
-            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
         }
     }
@@ -76,10 +79,12 @@ impl FailedOnFastTradeResponse {
     fn from_row_and_signal(
         row: TradeFailedOnFastRow,
         signal: signals::CrossChainSingleHop,
+        slow_ts: Option<DateTime<Utc>>,
+        fast_ts: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             id: row.id,
-            signal: CrossChainSingleHopResponse::new(row.signal_id, signal),
+            signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
         }
@@ -121,7 +126,7 @@ async fn enrich_rows<Row>(
     signal_repo: SignalRepository,
     spot_price_repo: SpotPriceRepository,
     get_id: impl Fn(&Row) -> i64,
-) -> color_eyre::eyre::Result<Vec<(Row, CrossChainSingleHop)>>
+) -> color_eyre::eyre::Result<Vec<(Row, CrossChainSingleHop, Option<DateTime<Utc>>, Option<DateTime<Utc>>)>>
 where
     Row: Send + 'static,
 {
@@ -130,12 +135,12 @@ where
         let signal_repo = signal_repo.clone();
         let spot_price_repo = spot_price_repo.clone();
         async move {
-            let signal = signal_repo
+            let (signal, slow_ts, fast_ts) = signal_repo
                 .get_by_id(signal_id, &spot_price_repo)
                 .await
                 .wrap_err("failed to get signal from db for trade")?
                 .ok_or_eyre("no signal found in db for trade")?;
-            Ok((row, signal))
+            Ok((row, signal, slow_ts, fast_ts))
         }
     }))
     .await
@@ -185,9 +190,9 @@ pub async fn get_all_trade_results_by_pair(
         })
         .await
         {
-            responses.extend(enriched.into_iter().map(|(row, signal)| {
+            responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
                 TradeResultResponse::Successful(SuccessfulTradeResponse::from_row_and_signal(
-                    row, signal,
+                    row, signal, slow_ts, fast_ts,
                 ))
             }));
         }
@@ -198,9 +203,9 @@ pub async fn get_all_trade_results_by_pair(
         })
         .await
         {
-            responses.extend(enriched.into_iter().map(|(row, signal)| {
+            responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
                 TradeResultResponse::FailedOnSlow(FailedOnSlowTradeResponse::from_row_and_signal(
-                    row, signal,
+                    row, signal, slow_ts, fast_ts,
                 ))
             }));
         }
@@ -208,9 +213,9 @@ pub async fn get_all_trade_results_by_pair(
     if let Ok(rows) = failed_on_fast {
         if let Ok(enriched) = enrich_rows(rows, signal_repo, spot_price_repo, |r| r.signal_id).await
         {
-            responses.extend(enriched.into_iter().map(|(row, signal)| {
+            responses.extend(enriched.into_iter().map(|(row, signal, slow_ts, fast_ts)| {
                 TradeResultResponse::FailedOnFast(FailedOnFastTradeResponse::from_row_and_signal(
-                    row, signal,
+                    row, signal, slow_ts, fast_ts,
                 ))
             }));
         }
@@ -299,7 +304,7 @@ pub async fn get_successful_trade_results_by_pair(
             .into_response()
     })?
     .into_iter()
-    .map(|(row, signal)| SuccessfulTradeResponse::from_row_and_signal(row, signal))
+    .map(|(row, signal, slow_ts, fast_ts)| SuccessfulTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts))
     .collect::<Vec<_>>();
 
     Ok(Json(PaginatedResponse::new(
@@ -365,7 +370,7 @@ pub async fn get_failed_on_slow_trade_results_by_pair(
             .into_response()
     })?
     .into_iter()
-    .map(|(row, signal)| FailedOnSlowTradeResponse::from_row_and_signal(row, signal))
+    .map(|(row, signal, slow_ts, fast_ts)| FailedOnSlowTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts))
     .collect::<Vec<_>>();
 
     Ok(Json(PaginatedResponse::new(
@@ -431,7 +436,7 @@ pub async fn get_failed_on_fast_trade_results_by_pair(
             .into_response()
     })?
     .into_iter()
-    .map(|(row, signal)| FailedOnFastTradeResponse::from_row_and_signal(row, signal))
+    .map(|(row, signal, slow_ts, fast_ts)| FailedOnFastTradeResponse::from_row_and_signal(row, signal, slow_ts, fast_ts))
     .collect::<Vec<_>>();
 
     Ok(Json(PaginatedResponse::new(
