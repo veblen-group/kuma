@@ -54,15 +54,26 @@ impl Pair {
         &self.1
     }
 
+    /// Returns `(base, quote)` for use as arguments to `ProtocolSim::spot_price(base, quote)`,
+    /// which returns **quote per base**.
+    ///
+    /// USDC is always placed as the quote token so that prices are expressed in USDC terms
+    /// regardless of whether it is token_a or token_b in the strategy.
+    /// For non-USDC pairs, the strategy order is preserved (token_a = base, token_b = quote).
+    ///
+    /// Examples:
+    /// - USDC/WETH → base=WETH, quote=USDC → price ≈ 3000 (USDC per WETH)
+    /// - WETH/USDC → base=WETH, quote=USDC → price ≈ 3000 (USDC per WETH)
+    /// - WETH/WBTC → base=WETH, quote=WBTC → price ≈ 0.03 (WBTC per WETH)
     pub fn token_a_b_adjusted_for_usdc(&self) -> (&Token, &Token) {
         if self.token_a().symbol == "USDC" {
-            // if A = USDC, B->USDC
+            // A is USDC — swap so USDC becomes quote: (B, A) = (base, quote)
             (self.token_b(), self.token_a())
         } else if self.token_b().symbol == "USDC" {
-            // if B = USDC, A->USDC
+            // B is already USDC (quote): (A, B) = (base, quote)
             (self.token_a(), self.token_b())
         } else {
-            // else A->B
+            // No USDC — preserve strategy order: (A, B) = (base, quote)
             (self.token_a(), self.token_b())
         }
     }

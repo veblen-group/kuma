@@ -152,7 +152,7 @@ export function SpotPriceChart() {
   return (
     <div className="h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
           <XAxis dataKey="label" tick={{ fontSize: 10 }} tickCount={6} />
           <YAxis
             type="number"
@@ -198,7 +198,7 @@ export function SpotPriceChart() {
                 strokeWidth={1.5}
                 dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
-                connectNulls={false}
+                connectNulls={true}
               />,
               <Line
                 key={`${chain}_min`}
@@ -210,7 +210,7 @@ export function SpotPriceChart() {
                 strokeDasharray="4 3"
                 dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
-                connectNulls={false}
+                connectNulls={true}
               />,
             ];
           })}

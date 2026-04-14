@@ -33,7 +33,7 @@ export default function Home() {
       <Separator />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-7">
+        <div className="lg:col-span-7 h-full">
           <SpotPriceChartCard />
         </div>
 

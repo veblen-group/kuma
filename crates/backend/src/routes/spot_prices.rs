@@ -65,10 +65,18 @@ impl From<SpotPrices> for SpotPriceResponse {
 #[derive(Deserialize)]
 pub struct SpotPriceByPairQuery {
     pub pair: String,
+    /// Optional comma-separated chain filter, e.g. "ethereum,base"
+    pub chains: Option<String>,
     #[serde(flatten)]
     pub pagination: PaginationQuery,
 }
 
+/// `GET /spot_prices?pair=WETH-USDC&page=1&page_size=50&chains=ethereum,unichain`
+///
+/// Returns paginated spot prices for the given token pair. The optional `chains` parameter
+/// (comma-separated chain names) restricts results to those chains; without it all chains
+/// are included. Pairs are normalised to alphabetical symbol order in the database, so
+/// `WETH-USDC` and `USDC-WETH` return the same rows.
 pub async fn get_spot_prices_by_pair(
     State(state): State<AppState>,
     Query(params): Query<SpotPriceByPairQuery>,
@@ -102,9 +110,18 @@ pub async fn get_spot_prices_by_pair(
         }
     };
 
+    let chain_filter: Option<Vec<String>> = params.chains.as_deref().map(|s| {
+        s.split(',').map(|c| c.trim().to_lowercase()).collect()
+    });
+
     let (count_result, data_result) = tokio::join!(
         repo.count_by_symbols(&token_a_symbol, &token_b_symbol),
-        repo.get_by_symbols(&token_a_symbol, &token_b_symbol, capped_limit, offset)
+        async {
+            match &chain_filter {
+                Some(chains) => repo.get_by_symbols_and_chains(&token_a_symbol, &token_b_symbol, chains, capped_limit, offset).await,
+                None => repo.get_by_symbols(&token_a_symbol, &token_b_symbol, capped_limit, offset).await,
+            }
+        }
     );
 
     match (count_result, data_result) {

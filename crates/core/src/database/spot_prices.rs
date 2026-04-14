@@ -239,6 +239,89 @@ impl SpotPriceRepository {
         Ok(count as u64)
     }
 
+    /// Fetch paginated spot price rows for a token pair, filtered to a specific set of chains.
+    ///
+    /// Identical to [`get_by_symbols`] but adds a `chain = ANY(chains)` predicate so only
+    /// rows from the requested chains are returned. Uses runtime `sqlx::query_as` with a
+    /// local `FromRow` struct to avoid needing an offline query cache entry.
+    ///
+    /// Token symbols are normalised to alphabetical order before querying (same convention
+    /// as the rest of the repository) so callers may pass them in either order.
+    pub async fn get_by_symbols_and_chains(
+        &self,
+        token_a_symbol: &str,
+        token_b_symbol: &str,
+        chains: &[String],
+        limit: u32,
+        offset: u32,
+    ) -> eyre::Result<Vec<(i64, DateTime<Utc>, SpotPrices)>> {
+        let (token_a_symbol, token_b_symbol) = if token_a_symbol < token_b_symbol {
+            (token_a_symbol, token_b_symbol)
+        } else {
+            (token_b_symbol, token_a_symbol)
+        };
+
+        // Use a local FromRow struct so we don't need a cached query entry.
+        // created_at is nullable in the schema (DEFAULT NOW()), so Option here.
+        #[derive(sqlx::FromRow)]
+        struct Row {
+            id: i64,
+            created_at: Option<DateTime<Utc>>,
+            chain: String,
+            block_height: i64,
+            min_pool_id: String,
+            max_pool_id: String,
+            min_price: f64,
+            max_price: f64,
+            token_a_symbol: String,
+            token_b_symbol: String,
+        }
+
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+            SELECT
+                id, created_at,
+                token_a_symbol, token_b_symbol,
+                min_price, max_price,
+                min_pool_id, max_pool_id,
+                chain, block_height
+            FROM spot_prices
+            WHERE token_a_symbol = $1 AND token_b_symbol = $2
+              AND chain = ANY($3)
+            ORDER BY created_at DESC
+            LIMIT $4 OFFSET $5
+            "#,
+        )
+        .bind(token_a_symbol)
+        .bind(token_b_symbol)
+        .bind(chains)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        rows.into_iter()
+            .map(|r| {
+                let id = r.id;
+                let created_at = r.created_at.unwrap_or_default();
+                SpotPricesRow {
+                    id: r.id,
+                    created_at,
+                    chain: r.chain,
+                    block_height: r.block_height,
+                    min_pool_id: r.min_pool_id,
+                    max_pool_id: r.max_pool_id,
+                    min_price: r.min_price,
+                    max_price: r.max_price,
+                    token_a_symbol: r.token_a_symbol,
+                    token_b_symbol: r.token_b_symbol,
+                }
+                .try_into_spot_prices(&self.token_configs)
+                .map(|sp| (id, created_at, sp))
+            })
+            .collect()
+    }
+
     /// Fetch paginated spot prices for a pair ordered by `created_at DESC`.
     /// Token symbols are sorted alphabetically before querying so that
     /// `(USDC, WETH)` and `(WETH, USDC)` resolve to the same rows.
