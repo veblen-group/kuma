@@ -115,18 +115,27 @@ impl Display for SpotPrices {
 
 /// Extract and sort spot prices for a token pair from all pools in a pair state.
 ///
-/// Iterates through all pools in the pair state, calculates the spot price of token_a
-/// in terms of token_b for each pool, and returns them sorted in ascending order.
+/// Iterates through all pools in the pair state and calculates the spot price for each.
 /// Pools that fail to calculate a valid spot price are silently skipped with a warning logged.
 ///
 /// The spot prices are analogous to the mid-price across all available pools.
 ///
+/// ## Price direction
+///
+/// Prices are computed via `ProtocolSim::spot_price(base, quote)`, which returns **quote per base**
+/// (i.e. how many `quote` tokens you receive per unit of `base`).
+///
+/// The base/quote assignment is determined by `Pair::token_a_b_adjusted_for_usdc()`:
+/// USDC is always placed as the quote so prices are expressed in USDC terms
+/// (e.g. ~3000 USDC/WETH for a USDC-WETH pair). For non-USDC pairs the strategy
+/// order is preserved: token_a is base, token_b is quote.
+///
 /// # Arguments
 /// * `state` - The current state of the pair containing all pool states
-/// * `pair` - The token pair for which spot prices are calculated (price of token_a in terms of token_b)
+/// * `pair` - The token pair for which spot prices are calculated
 ///
 /// # Returns
-/// A vector of (PoolId, price) tuples sorted by price in ascending order
+/// A vector of `(PoolId, price)` tuples sorted by price ascending, where price is **quote per base**
 ///
 /// # Errors
 /// Returns an error if no valid spot prices can be extracted from any pool.
@@ -138,6 +147,8 @@ pub fn try_make_sorted_spot_prices(
         .states
         .iter()
         .filter_map(|(id, pool)| {
+            // base = non-USDC (or token_a); quote = USDC (or token_b).
+            // spot_price(base, quote) returns quote-per-base.
             let (token_a, token_b) = pair.token_a_b_adjusted_for_usdc();
             let spot_price = pool.spot_price(token_a, token_b);
             match spot_price {

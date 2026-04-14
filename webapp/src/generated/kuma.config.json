@@ -11,6 +11,24 @@
   "congestion_risk_discount_bps": 0,
   "max_slippage_bps": 0,
   "tokens": {
+    "ETH": {
+      "addresses": {
+        "ethereum": "0x0000000000000000000000000000000000000000",
+        "base": "0x0000000000000000000000000000000000000000",
+        "unichain": "0x0000000000000000000000000000000000000000"
+      },
+      "decimals": 18,
+      "tax": 0,
+      "gas": [
+        21000
+      ],
+      "quality": 100,
+      "inventory": {
+        "ethereum": "100000000000000000",
+        "base": "100000000000000000",
+        "unichain": "100000000000000000"
+      }
+    },
     "UNI": {
       "addresses": {
         "ethereum": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
@@ -42,9 +60,9 @@
       ],
       "quality": 100,
       "inventory": {
-        "ethereum": "500000000",
+        "ethereum": "1000000000",
         "base": "500000000",
-        "unichain": "500000000"
+        "unichain": "300000000"
       }
     },
     "WETH": {
@@ -60,9 +78,9 @@
       ],
       "quality": 100,
       "inventory": {
-        "ethereum": "100000000000000000",
-        "base": "100000000000000000",
-        "unichain": "100000000000000000"
+        "ethereum": "1500000000000000000",
+        "base": "2000000000000000000",
+        "unichain": "500000000000000000"
       }
     },
     "WBTC": {

@@ -8,6 +8,7 @@ import { StrategyCard } from "@/components/strategy-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
+import config from "@/generated/kuma.config.json";
 
 export default function Home() {
   return (
@@ -40,7 +41,13 @@ export default function Home() {
         <div className="lg:col-span-5 flex flex-col gap-4">
           <Card>
             <CardContent className="px-4 py-3">
-              <p className="text-sm font-semibold mb-3">Strategy</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold">Strategy</p>
+                <div className="flex gap-3 text-xs text-muted-foreground">
+                  <span>Slippage Tolerance <span className="text-foreground font-medium">{config.max_slippage_bps} bps</span></span>
+                  <span>Congestion discount <span className="text-foreground font-medium">{config.congestion_risk_discount_bps} bps</span></span>
+                </div>
+              </div>
               <StrategyCard />
             </CardContent>
           </Card>

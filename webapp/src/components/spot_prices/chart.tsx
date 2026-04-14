@@ -122,7 +122,12 @@ function PriceTooltip({
 }
 
 export function SpotPriceChart() {
-  const { pair } = useStrategy()
+  const { strategy, pair } = useStrategy()
+  // Mirrors Rust's token_a_b_adjusted_for_usdc() + ProtocolSim::spot_price(base, quote):
+  // USDC is always the quote (price unit), so prices are expressed as "USDC per non-USDC".
+  // e.g. USDC/WETH strategy → base=WETH, quote=USDC → price ≈ 3000 (not ~0.000333).
+  const priceFrom = strategy.tokenA === 'USDC' ? strategy.tokenB : strategy.tokenA
+  const priceTo   = strategy.tokenA === 'USDC' ? strategy.tokenA : strategy.tokenB
   const { data, isLoading, isError } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
@@ -152,7 +157,7 @@ export function SpotPriceChart() {
   return (
     <div className="h-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 8 }}>
+        <LineChart data={points} margin={{ top: 4, right: 8, bottom: 4, left: 16 }}>
           <XAxis dataKey="label" tick={{ fontSize: 10 }} tickCount={6} />
           <YAxis
             type="number"
@@ -161,6 +166,13 @@ export function SpotPriceChart() {
             allowDataOverflow
             tickFormatter={(v: number) => v.toFixed(5)}
             width={70}
+            label={{
+              value: `${priceTo} / ${priceFrom}`,
+              angle: -90,
+              position: 'insideLeft',
+              offset: 14,
+              style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' },
+            }}
           />
           <Tooltip content={<PriceTooltip rawByBucket={rawByBucket} />} />
           <Legend
@@ -198,7 +210,7 @@ export function SpotPriceChart() {
                 strokeWidth={1.5}
                 dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
-                connectNulls={false}
+                connectNulls={true}
               />,
               <Line
                 key={`${chain}_min`}
@@ -210,7 +222,7 @@ export function SpotPriceChart() {
                 strokeDasharray="4 3"
                 dot={{ r: 1.5, fill: color, strokeWidth: 0 }}
                 activeDot={{ r: 4, strokeWidth: 0 }}
-                connectNulls={false}
+                connectNulls={true}
               />,
             ];
           })}

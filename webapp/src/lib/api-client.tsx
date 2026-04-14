@@ -49,11 +49,12 @@ class ApiClient {
     return response.json();
   }
 
-  async getSpotPrices(pair: string, params: FetchParams): Promise<PaginatedResponse<SpotPrice>> {
+  async getSpotPrices(pair: string, params: FetchParams, chains?: string[]): Promise<PaginatedResponse<SpotPrice>> {
     return this.request<SpotPrice>('/spot_prices', {
       pair,
       page: (params.page ?? 1).toString(),
-      page_size: (params.pageSize ?? 10).toString()
+      page_size: (params.pageSize ?? 10).toString(),
+      ...(chains?.length ? { chains: chains.join(',') } : {}),
     });
   }
 
@@ -110,13 +111,15 @@ export function useSpotPrices(params: FetchParams, options?: Partial<UseQueryOpt
   });
 }
 
-// Dedicated hook for the price chart — uses ['spot_prices', pair, 'chart'] so
-// invalidateQueries({ queryKey: ['spot_prices', pair] }) refreshes both chart and table.
+// Dedicated hook for the price chart — fetches only the strategy's two chains.
+// Uses ['spot_prices', pair, 'chart', chains] so the cache re-fetches when chains change,
+// and invalidateQueries({ queryKey: ['spot_prices', pair] }) still refreshes both.
 export function useSpotPricesChart() {
-  const { pair } = useStrategy();
+  const { strategy, pair } = useStrategy();
+  const chains = [strategy.slowChain, strategy.fastChain];
   return useQuery<PaginatedResponse<SpotPrice>>({
-    queryKey: ['spot_prices', pair, 'chart'],
-    queryFn: () => apiClient.getSpotPrices(pair, { page: 1, pageSize: 50 }),
+    queryKey: ['spot_prices', pair, 'chart', chains],
+    queryFn: () => apiClient.getSpotPrices(pair, { page: 1, pageSize: 50 }, chains),
     staleTime: Infinity,
   });
 }

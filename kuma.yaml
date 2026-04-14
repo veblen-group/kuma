@@ -54,9 +54,9 @@ tokens:
       - 1000
     quality: 100
     inventory:
-      ethereum: "500000000"
+      ethereum: "1000000000"
       base: "500000000"
-      unichain: "500000000"
+      unichain: "300000000"
 
   WETH:
     addresses:
@@ -69,9 +69,9 @@ tokens:
       - 1000
     quality: 100
     inventory:
-      ethereum: "2000000000000000000"
+      ethereum: "1500000000000000000"
       base: "2000000000000000000"
-      unichain: "2000000000000000000"
+      unichain: "500000000000000000"
 
   WBTC:
     addresses:
