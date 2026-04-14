@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, signal_id, slow_tx_hash, fast_tx_hash\n            FROM failed_on_fast_chain_trade\n            WHERE signal_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "signal_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_tx_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "fast_tx_hash",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "66f439db57bf0c7d083cca3f70ff6e7d70198e61283741ae9b3bd84e007687ba"
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { SpotPrice, Signal, SuccessfulTrade, FailedOnSlowTrade, FailedOnFastTrade, PaginatedResponse } from "@/lib/types";
+import { SpotPrice, Signal, SignalTradeResult, SuccessfulTrade, FailedOnSlowTrade, FailedOnFastTrade, PaginatedResponse } from "@/lib/types";
 import { QueryClient, useQuery, useQueryClient, UseQueryOptions, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useStrategy } from "@/components/strategy-provider";
@@ -60,6 +60,10 @@ class ApiClient {
 
   async getSignal(id: number): Promise<Signal> {
     return this.requestSingle<Signal>(`/signals/${id}`);
+  }
+
+  async getTradesBySignal(signalId: number): Promise<SignalTradeResult[]> {
+    return this.requestSingle<SignalTradeResult[]>(`/trades/by-signal/${signalId}`);
   }
 
   async getSignals(pair: string, params: FetchParams): Promise<PaginatedResponse<Signal>> {
@@ -136,6 +140,14 @@ export function useSignal(id: number, options?: Partial<UseQueryOptions<Signal>>
     ...options,
     queryKey: ['signal', id],
     queryFn: () => apiClient.getSignal(id),
+  });
+}
+
+export function useTradesBySignal(signalId: number, options?: Partial<UseQueryOptions<SignalTradeResult[]>>) {
+  return useQuery<SignalTradeResult[]>({
+    ...options,
+    queryKey: ['signal_trades', signalId],
+    queryFn: () => apiClient.getTradesBySignal(signalId),
   });
 }
 

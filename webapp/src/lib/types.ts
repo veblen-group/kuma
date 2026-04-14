@@ -88,6 +88,13 @@ export interface FailedOnFastTrade {
   fast_tx_hash: string | null;
 }
 
+// Matches SignalTradeResultResponse tagged enum — slim version without embedded signal,
+// used on the signal detail page where the signal is already loaded.
+export type SignalTradeResult =
+  | { trade_type: 'Successful'; id: number; slow_tx_hash: string; fast_tx_hash: string; realized_profit_str: string }
+  | { trade_type: 'FailedOnSlow'; id: number; slow_tx_hash: string | null }
+  | { trade_type: 'FailedOnFast'; id: number; slow_tx_hash: string; fast_tx_hash: string | null }
+
 export interface PaginationInfo {
   page: number;
   page_size: number;
