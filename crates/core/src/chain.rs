@@ -1,3 +1,24 @@
+//! Chain configuration and transaction signing.
+//!
+//! `Chain` is the central configuration object for a single blockchain. It holds:
+//! - RPC endpoints (HTTP and WebSocket) for transaction submission and block subscriptions
+//! - The Tycho Indexer URL for DEX pool state streaming
+//! - The Permit2 contract address (canonical across all EVM chains)
+//! - The private key used to sign transactions on this chain
+//! - TVL thresholds controlling which AMM pools are tracked
+//!
+//! ## Slow vs fast chain
+//!
+//! Each strategy designates one chain as "slow" (longer block time, e.g. Ethereum ~12 s)
+//! and one as "fast" (shorter block time, e.g. Base/Unichain ~2 s). The same `Chain`
+//! struct is used for both roles — the distinction is purely in how the strategy uses it.
+//! See [`crate::strategy`] and `docs/slow-fast-chain-model.md` for details.
+//!
+//! ## Supported chains
+//!
+//! Ethereum mainnet, Base, Unichain. Adding a new chain requires entries in the config,
+//! a TVL threshold, and registering the appropriate DEX protocols in the Tycho collector.
+
 use std::{
     fmt::{self, Display},
     hash::Hash,

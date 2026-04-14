@@ -1,3 +1,10 @@
+---
+title: "TAP 6: Cross-Chain Arbitrage Bot"
+description: Original design proposal — surplus calculation, risk discounting, and trade execution design.
+updated: 2026-01-01
+authors: [Itamar Reif, Vedartham Bharath, Ido Geffen]
+---
+
 # TAP 6 - Cross Chain Arbitrage Bot
 by Itamar Reif, Vedartham Bharath & Ido Geffen
 

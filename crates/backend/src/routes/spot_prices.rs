@@ -1,3 +1,16 @@
+//! HTTP handler for `GET /spot_prices`.
+//!
+//! Accepts a `?pair=TOKEN_A-TOKEN_B` query parameter with optional pagination
+//! (`?page=&page_size=`) and returns a [`PaginatedResponse<SpotPriceResponse>`].
+//!
+//! [`SpotPriceResponse`] is a safe, credential-free view of [`SpotPrices`] —
+//! only the chain *name* string is exposed, never the full `Chain` struct
+//! (which contains RPC URLs and API keys). `id` and `created_at` are `None`
+//! when the response is embedded inside a signal response.
+//!
+//! Page size is capped at 100; the total result window is capped at
+//! `page_size × 10` rows to prevent runaway queries.
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,

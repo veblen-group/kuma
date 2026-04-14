@@ -1,3 +1,26 @@
+//! PostgreSQL persistence layer.
+//!
+//! `Handle` is a cheap-to-clone wrapper around a `sqlx::PgPool`. It vends short-lived
+//! repository objects for each entity type:
+//!
+//! - [`SpotPriceRepository`] — write slow/fast chain spot prices
+//! - [`SignalRepository`] — insert generated arbitrage signals
+//! - [`TradeRepository`] — insert trade results
+//!
+//! ## Fire-and-forget write pattern
+//!
+//! All writes in the strategy and execution workers are pushed into a `FuturesUnordered`
+//! and polled in the `select!` loop. Errors are logged but never propagate — a failed DB
+//! write does not cancel a trade or stall signal generation.
+//!
+//! ## Signal FK resolution
+//!
+//! Signal rows reference spot price rows by foreign key. Rather than coordinating futures,
+//! the signal INSERT uses a SQL CTE to look up `spot_prices` rows by `(chain, pair, block_height)`
+//! at write time — spot-price and signal futures can be fired concurrently.
+//!
+//! See `docs/database.md` for the schema overview.
+
 use color_eyre::eyre::{self, OptionExt as _, Result, eyre};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::{str::FromStr as _, sync::Arc};

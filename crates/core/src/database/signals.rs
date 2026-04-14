@@ -1,3 +1,33 @@
+//! Signal persistence.
+//!
+//! `SignalRepository` writes and reads `CrossChainSingleHop` signals.
+//!
+//! ## Insert — spot price FK resolution via CTE
+//!
+//! The `insert` method resolves four spot-price foreign keys (`slow_prices_a_b_id`,
+//! `slow_prices_a_usdc_id`, `slow_prices_b_usdc_id`, `slow_prices_eth_usdc_id`) at
+//! write time using a single query with four CTEs, each doing:
+//!
+//! ```sql
+//! SELECT id FROM spot_prices
+//! WHERE chain = $slow_chain AND block_height = $slow_height
+//!   AND token_a_symbol = $a AND token_b_symbol = $b
+//! LIMIT 1
+//! ```
+//!
+//! This means spot-price writes and signal writes can be fired concurrently from the
+//! strategy worker's `FuturesUnordered` — no ordering or coordination required.
+//!
+//! ## Read — two-phase spot price hydration
+//!
+//! `get_by_symbols` / `get_by_id` fetch signal rows and their spot-price FK IDs in one
+//! query, then call `fetch_spot_prices_for_rows` to batch-fetch all referenced spot price
+//! rows in a second query (`WHERE id = ANY($1)`), avoiding N+1 queries.
+//!
+//! Signal rows also carry an inline subquery for `fast_prices_a_b_created_at` — the
+//! timestamp of the fast chain spot price at the signal's fast block height, used by the
+//! webapp to display when the fast chain price was observed.
+
 use std::{collections::HashMap, collections::HashSet, str::FromStr, sync::Arc};
 
 use color_eyre::eyre::{self, Context, eyre};
@@ -256,6 +286,11 @@ impl SignalRepository {
         }
     }
 
+    /// Persist a signal and return its database ID.
+    ///
+    /// Spot price FKs (`slow_prices_a_b_id` etc.) are resolved at insert time via four CTEs,
+    /// each looking up `spot_prices` by `(chain, block_height, token_a_symbol, token_b_symbol)`.
+    /// No pre-fetched IDs needed — spot price writes and signal writes can fire concurrently.
     #[instrument(skip(self, signal))]
     pub async fn insert(&self, signal: signals::CrossChainSingleHop) -> eyre::Result<i64> {
         let ep = &signal.expected_profit;
@@ -424,6 +459,12 @@ impl SignalRepository {
         Ok(count as u64)
     }
 
+    /// Fetch paginated signals for a pair ordered by `created_at DESC`.
+    ///
+    /// Returns `(id, signal, slow_spot_price_ts, fast_spot_price_ts)` tuples.
+    /// Spot price rows are batch-fetched in a second query to avoid N+1.
+    /// The `fast_prices_a_b_created_at` field is resolved inline via a subquery on the fast chain's
+    /// spot price at `fast_height`.
     #[allow(clippy::type_complexity)]
     pub async fn get_by_symbols(
         &self,

@@ -1,3 +1,16 @@
+//! On-chain state types used throughout the pipeline.
+//!
+//! | Module | Contents |
+//! |--------|----------|
+//! | [`block`] | `Block`, `BlockState`, `BlockStateStream` — assembled per-block state for strategies |
+//! | [`tycho`] | `BlockSim` — snapshot of all DEX pool states at a block, updated from Tycho |
+//! | [`pair`] | `Pair` (static token config), `PairState` (live pool map for a pair) |
+//! | [`swap`] | `Swap` — actual on-chain swap amounts parsed from receipt logs |
+//! | [`erc20`] | ERC20 `Transfer` event parsing |
+//! | [`balances`] | `TokenBalances` — tracked token balances for the trading account |
+//!
+//! `PoolId` is the canonical pool identifier used as map keys throughout.
+
 use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};

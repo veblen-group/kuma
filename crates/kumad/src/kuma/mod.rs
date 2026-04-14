@@ -1,3 +1,31 @@
+//! Top-level orchestrator for the Kuma daemon.
+//!
+//! `Kuma` wires together all subsystems and manages their lifetimes. It is constructed once
+//! in `main` and drives the system until a shutdown signal is received or a subsystem fails.
+//!
+//! ## Startup order (`Kuma::new`)
+//!
+//! For each configured strategy:
+//! 1. A **collector set** is started per chain (ETH + Tycho + block multiplexer).
+//!    Chains shared across strategies reuse the same collector — one collector per chain.
+//! 2. A **strategy worker** is started, receiving `BlockStateStream`s for the slow and
+//!    fast chains and a `db::Handle` for persisting spot prices and signals.
+//! 3. Signal receivers from each strategy are collected for the execution worker.
+//!
+//! After all strategies are wired:
+//! 4. A **trade execution worker** is started, receiving all signal channels.
+//!
+//! ## Run loop (`Kuma::run`)
+//!
+//! Polls all subsystem futures concurrently via `select!`. The first future to complete
+//! (with either success or error) triggers graceful shutdown of all other subsystems.
+//!
+//! ## Shutdown (`Kuma::shutdown`)
+//!
+//! Cancels the shared `CancellationToken`, then sequentially awaits each subsystem handle
+//! with a 25-second deadline before aborting. Shutdown order: strategy workers → block
+//! collectors → trade execution → ETH collectors → Tycho collectors.
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{self, Context, eyre};

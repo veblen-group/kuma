@@ -1,3 +1,23 @@
+//! Block-level state assembly for strategies.
+//!
+//! ## `Block`
+//!
+//! A fully assembled block: header (base fee, block number), trading account token balances,
+//! and all DEX pool states (`BlockSim`). Produced by the block multiplexer and broadcast
+//! to all strategies on a `watch` channel — strategies always see the latest, not a queue.
+//!
+//! ## `BlockState`
+//!
+//! A strategy-specific projection of a `Block`. Contains only the pool states relevant to
+//! one pair (plus USDC conversion pools and ETH/USDC), the token balances, and the base fee.
+//! Produced by `BlockStateStream` on each new block.
+//!
+//! ## `BlockStateStream`
+//!
+//! An async `Stream` that wraps the block `watch::Receiver` and extracts `BlockState` items
+//! for a specific trading pair. Each strategy gets its own `BlockStateStream`; multiple
+//! strategies on the same chain share the underlying broadcast without duplication.
+
 use std::{
     pin::Pin,
     sync::Arc,

@@ -1,3 +1,13 @@
+//! ERC20 contract bindings and Transfer event helpers.
+//!
+//! Provides three things:
+//! - [`IERC20Contract`] — a thin handle around the alloy-generated `IERC20` binding,
+//!   supporting `balanceOf` for both ERC20 tokens and native ETH (`Address::ZERO`).
+//! - [`Transfer`] — decoded ERC20 Transfer event (`from`, `to`, `amount`), used by
+//!   `state::swap` to parse realized swap amounts from receipts.
+//! - [`latest_from_filter`] / [`latest_to_filter`] — log filter builders for
+//!   monitoring Transfer events to/from a given account, used by `TokenBalances`.
+
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::Address,
