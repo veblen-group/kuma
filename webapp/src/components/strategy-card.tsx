@@ -3,7 +3,6 @@
 import { TOKEN_INFO } from '@/lib/token-config'
 import { useStrategy, TOKEN_NAMES, CHAIN_NAMES } from '@/components/strategy-provider'
 import config from '@/generated/kuma.config.json'
-import { useTokenPrices } from '@/lib/use-token-prices'
 import { useTokenList } from '@/lib/use-token-list'
 import { getChainName, getChainLogoUrl } from '@/lib/chains'
 import {
@@ -59,14 +58,6 @@ export function StrategyCard() {
   const { strategy, setStrategy } = useStrategy()
   const tokenList = useTokenList()
 
-  const tokenA = TOKEN_INFO[strategy.tokenA]
-  const tokenB = TOKEN_INFO[strategy.tokenB]
-
-  const prices = useTokenPrices([
-    tokenA?.ethereumAddress ?? null,
-    tokenB?.ethereumAddress ?? null,
-  ])
-
   // Pre-compute logo URLs for all tokens so we can show them in the dropdown
   const tokenLogoMap = React.useMemo(() => {
     const map: Record<string, string | undefined> = {}
@@ -77,123 +68,119 @@ export function StrategyCard() {
     return map
   }, [tokenList])
 
-  const priceA = tokenA?.ethereumAddress ? prices[tokenA.ethereumAddress] : undefined
-  const priceB = tokenB?.ethereumAddress ? prices[tokenB.ethereumAddress] : undefined
-
-  const fmtPrice = (p: number | undefined) =>
-    p !== undefined
-      ? p.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 })
-      : '—'
-
   return (
-    <div className="space-y-3">
-      {/* Token selectors */}
-      <div className="grid grid-cols-2 gap-3 px-12">
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-[10px] text-muted-foreground">Token A</p>
-          <Select value={strategy.tokenA} onValueChange={(v) => setStrategy({ ...strategy, tokenA: v })}>
-            <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-semibold text-sm focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TOKEN_NAMES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  <span className="flex items-center gap-2">
-                    <TokenLogo symbol={t} logoUrl={tokenLogoMap[t]} />
-                    <span>{t}</span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">{fmtPrice(priceA)}</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-[10px] text-muted-foreground">Token B</p>
-          <Select value={strategy.tokenB} onValueChange={(v) => setStrategy({ ...strategy, tokenB: v })}>
-            <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-semibold text-sm focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TOKEN_NAMES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  <span className="flex items-center gap-2">
-                    <TokenLogo symbol={t} logoUrl={tokenLogoMap[t]} />
-                    <span>{t}</span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <span className="text-xs text-muted-foreground">{fmtPrice(priceB)}</span>
-        </div>
+    <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-2 items-center text-xs">
+
+      {/* Token row */}
+      <span className="text-[10px] text-muted-foreground">Token A</span>
+      <div className="flex justify-center">
+        <Select value={strategy.tokenA} onValueChange={(v) => setStrategy({ ...strategy, tokenA: v })}>
+          <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-semibold text-sm focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TOKEN_NAMES.map((t) => (
+              <SelectItem key={t} value={t}>
+                <span className="flex items-center gap-2">
+                  <TokenLogo symbol={t} logoUrl={tokenLogoMap[t]} />
+                  <span>{t}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <span className="text-[10px] text-muted-foreground">Token B</span>
+      <div className="flex justify-center">
+        <Select value={strategy.tokenB} onValueChange={(v) => setStrategy({ ...strategy, tokenB: v })}>
+          <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-semibold text-sm focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TOKEN_NAMES.map((t) => (
+              <SelectItem key={t} value={t}>
+                <span className="flex items-center gap-2">
+                  <TokenLogo symbol={t} logoUrl={tokenLogoMap[t]} />
+                  <span>{t}</span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Chain selectors + inventory */}
-      <div className="border-t pt-2 text-xs">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-12">
-          {/* Column headers */}
-          <p className="text-[10px] text-muted-foreground text-center">Slow Chain</p>
-          <p className="text-[10px] text-muted-foreground text-center">Fast Chain</p>
+      {/* Separator */}
+      <div className="col-span-4 border-t border-border" />
 
-          {/* Selectors */}
-          <div className="flex items-center justify-center">
-            <Select value={strategy.slowChain} onValueChange={(v) => setStrategy({ ...strategy, slowChain: v })}>
-              <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 text-xs font-medium focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
-                <SelectValue><ChainOption chain={strategy.slowChain} /></SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {CHAIN_NAMES.map((c) => <SelectItem key={c} value={c}><ChainOption chain={c} /></SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-center">
-            <Select value={strategy.fastChain} onValueChange={(v) => setStrategy({ ...strategy, fastChain: v })}>
-              <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 text-xs font-medium focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
-                <SelectValue><ChainOption chain={strategy.fastChain} /></SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {CHAIN_NAMES.map((c) => <SelectItem key={c} value={c}><ChainOption chain={c} /></SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="col-span-2 border-t border-border -mx-12 mt-1" />
-
-          {/* Inventory rows — "Inventory" is absolutely positioned so it doesn't affect grid centering */}
-          <div className="col-span-2 relative pt-1">
-            <span className="absolute -left-6 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">Inventory</span>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-              {([
-                { symbol: strategy.tokenA, logo: tokenLogoMap[strategy.tokenA] },
-                { symbol: strategy.tokenB, logo: tokenLogoMap[strategy.tokenB] },
-              ] as { symbol: TokenKey; logo: string | undefined }[]).map(({ symbol, logo }) => {
-                const tokenCfg = config.tokens[symbol]
-                if (!tokenCfg) return null
-                return (
-                  <React.Fragment key={symbol}>
-                    {[strategy.slowChain, strategy.fastChain].map(chain => {
-                      const inv = (tokenCfg.inventory as Record<string, string>)[chain]
-                      return (
-                        <div key={chain} className="flex items-center justify-center gap-1.5">
-                          <span className="tabular-nums font-medium">{inv ? fmtInventory(inv, tokenCfg.decimals) : '—'}</span>
-                          <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            {logo
-                              ? <img src={logo} alt={symbol} width={14} height={14} className="rounded-full shrink-0" />
-                              : <span className="w-3.5 h-3.5 rounded-full bg-muted shrink-0" />
-                            }
-                            {symbol}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </React.Fragment>
-                )
-              })}
-            </div>
-          </div>
-        </div>
+      {/* Chain row */}
+      <span className="text-[10px] text-muted-foreground">Slow Chain</span>
+      <div className="flex justify-center">
+        <Select value={strategy.slowChain} onValueChange={(v) => setStrategy({ ...strategy, slowChain: v })}>
+          <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-medium focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
+            <SelectValue><ChainOption chain={strategy.slowChain} /></SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {CHAIN_NAMES.map((c) => <SelectItem key={c} value={c}><ChainOption chain={c} /></SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
+      <span className="text-[10px] text-muted-foreground">Fast Chain</span>
+      <div className="flex justify-center">
+        <Select value={strategy.fastChain} onValueChange={(v) => setStrategy({ ...strategy, fastChain: v })}>
+          <SelectTrigger className="h-auto w-auto border-0 shadow-none px-1.5 py-0.5 gap-0.5 font-medium focus:ring-0 rounded-md hover:bg-muted transition-colors [&>span]:line-clamp-none">
+            <SelectValue><ChainOption chain={strategy.fastChain} /></SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {CHAIN_NAMES.map((c) => <SelectItem key={c} value={c}><ChainOption chain={c} /></SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Separator */}
+      <div className="col-span-4 border-t border-border" />
+
+      {/* Inventory rows — 8 explicit cells (2 tokens × 4 cols), no spanning */}
+      {([
+        { symbol: strategy.tokenA, logo: tokenLogoMap[strategy.tokenA] },
+        { symbol: strategy.tokenB, logo: tokenLogoMap[strategy.tokenB] },
+      ] as { symbol: TokenKey; logo: string | undefined }[]).map(({ symbol, logo }, tokenIdx) => {
+        const tokenCfg = config.tokens[symbol]
+        if (!tokenCfg) return null
+        const slowInv = (tokenCfg.inventory as Record<string, string>)[strategy.slowChain]
+        const fastInv = (tokenCfg.inventory as Record<string, string>)[strategy.fastChain]
+        const amountCell = (inv: string | undefined) => (
+          <div className="flex items-center justify-center gap-1">
+            <span className="tabular-nums font-medium">{inv ? fmtInventory(inv, tokenCfg.decimals) : '—'}</span>
+            <span className="inline-flex items-center gap-1 text-muted-foreground">
+              {logo
+                ? <img src={logo} alt={symbol} width={14} height={14} className="rounded-full shrink-0" />
+                : <span className="w-3.5 h-3.5 rounded-full bg-muted shrink-0" />
+              }
+              {symbol}
+            </span>
+          </div>
+        )
+        return (
+          <React.Fragment key={symbol}>
+            {/* col 1: "Inventory" label on first token row, empty on second */}
+            {tokenIdx === 0
+              ? <span className="text-[10px] text-muted-foreground">Inventory</span>
+              : <div />
+            }
+            {amountCell(slowInv)}
+            <div /> {/* col 3 empty */}
+            {amountCell(fastInv)}
+          </React.Fragment>
+        )
+      })}
+      {/* Separator */}
+      <div className="col-span-4 border-t border-border" />
+
+      {/* Params rows */}
+      <span className="text-[10px] text-muted-foreground">Slippage Tolerance</span>
+      <span className="font-medium text-center">{config.max_slippage_bps} bps</span>
+      <span className="text-[10px] text-muted-foreground">Congestion Discount</span>
+      <span className="font-medium text-center">{config.congestion_risk_discount_bps} bps</span>
     </div>
   )
 }

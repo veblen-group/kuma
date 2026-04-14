@@ -19,7 +19,7 @@ export function SpotPriceChartCard() {
   const priceTo   = strategy.tokenA === 'USDC' ? strategy.tokenA : strategy.tokenB
 
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader className="py-3 px-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -41,8 +41,8 @@ export function SpotPriceChartCard() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="px-4 pb-4">
-        <div className="h-[480px]">
+      <CardContent className="px-4 pb-4 flex-1 min-h-0">
+        <div className="h-full">
           <SpotPriceChart />
         </div>
       </CardContent>

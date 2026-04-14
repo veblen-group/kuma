@@ -122,12 +122,7 @@ function PriceTooltip({
 }
 
 export function SpotPriceChart() {
-  const { strategy, pair } = useStrategy()
-  // Mirrors Rust's token_a_b_adjusted_for_usdc() + ProtocolSim::spot_price(base, quote):
-  // USDC is always the quote (price unit), so prices are expressed as "USDC per non-USDC".
-  // e.g. USDC/WETH strategy → base=WETH, quote=USDC → price ≈ 3000 (not ~0.000333).
-  const priceFrom = strategy.tokenA === 'USDC' ? strategy.tokenB : strategy.tokenA
-  const priceTo   = strategy.tokenA === 'USDC' ? strategy.tokenA : strategy.tokenB
+  const { pair } = useStrategy()
   const { data, isLoading, isError } = useSpotPricesChart();
   const prices = data?.data ?? [];
 
@@ -166,13 +161,6 @@ export function SpotPriceChart() {
             allowDataOverflow
             tickFormatter={(v: number) => v.toFixed(5)}
             width={70}
-            label={{
-              value: `${priceTo} / ${priceFrom}`,
-              angle: -90,
-              position: 'insideLeft',
-              offset: 14,
-              style: { fontSize: 9, fill: 'hsl(var(--muted-foreground))' },
-            }}
           />
           <Tooltip content={<PriceTooltip rawByBucket={rawByBucket} />} />
           <Legend
