@@ -32,9 +32,6 @@ Kuma is an automated cross-chain arbitrage bot that exploits price discrepancies
 - [Price direction & spot prices](price-direction.md)
 - [Expected profit & discounting](signal-profit.md)
 - [Collector pipeline](collector.md)
-- [Configuration](configuration.md)
-- [Database](database.md)
-- [HTTP API](api.md)
 - [Tycho integration](tycho-integration.md)
 - [Deployment](DEPLOYMENT.md)
 

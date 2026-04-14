@@ -1,3 +1,16 @@
+//! Builder for the `CrossChainSingleHop` strategy.
+//!
+//! [`Builder`] reads chain, token pair, inventory, and profit-flag configuration
+//! from `kuma.yaml` (via [`Config`]) and constructs a fully-wired
+//! [`CrossChainSingleHop`] strategy instance. Key responsibilities:
+//!
+//! - Looks up per-chain `Pair` objects from the inventory map.
+//! - Resolves the ETH and USDC token handles for gas-cost conversion.
+//! - Constructs optional auxiliary pairs (A/USDC, B/USDC, ETH/USDC) for spot
+//!   price tracking; skips them when the primary pair leg already *is* USDC.
+//! - Passes through all `ignore_*_in_profit` flags that control which cost
+//!   components are excluded from the profit calculation.
+
 use color_eyre::eyre::{self, OptionExt};
 
 use crate::{

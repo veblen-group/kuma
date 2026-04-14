@@ -48,20 +48,20 @@ Priority-ordered. Check off as you go.
 
 ### Lower priority (thin modules or boilerplate)
 
-- [ ] `crates/core/src/state/swap.rs` — `//!` module doc
-- [ ] `crates/core/src/state/erc20.rs` — `//!` module doc
-- [ ] `crates/core/src/state/balances.rs` — `//!` module doc + fn docs
-- [ ] `crates/core/src/database/spot_prices.rs` — `//!` module doc
-- [ ] `crates/core/src/database/signals.rs` — `//!` module doc
-- [ ] `crates/core/src/database/trade.rs` — `//!` module doc
-- [ ] `crates/core/src/strategy/builder.rs` — `//!` module doc
-- [ ] `crates/core/src/collector/builder.rs` — `//!` module doc
-- [ ] `crates/kumad/src/telemetry.rs` — `//!` module doc
-- [ ] `crates/backend/src/routes/spot_prices.rs` — `//!` module doc
-- [ ] `crates/backend/src/routes/signals.rs` — `//!` module doc
-- [ ] `crates/backend/src/routes/trades.rs` — `//!` module doc
-- [ ] `crates/backend/src/models.rs` — `//!` module doc
-- [ ] `crates/backend/src/pair.rs` — `//!` module doc
+- [x] `crates/core/src/state/swap.rs` — `//!` module doc
+- [x] `crates/core/src/state/erc20.rs` — `//!` module doc
+- [x] `crates/core/src/state/balances.rs` — `//!` module doc + fn docs
+- [x] `crates/core/src/database/spot_prices.rs` — `//!` module doc
+- [x] `crates/core/src/database/signals.rs` — `//!` module doc
+- [x] `crates/core/src/database/trade.rs` — `//!` module doc
+- [x] `crates/core/src/strategy/builder.rs` — `//!` module doc
+- [x] `crates/core/src/collector/builder.rs` — `//!` module doc
+- [x] `crates/kumad/src/telemetry.rs` — `//!` module doc
+- [x] `crates/backend/src/routes/spot_prices.rs` — `//!` module doc
+- [x] `crates/backend/src/routes/signals.rs` — `//!` module doc
+- [x] `crates/backend/src/routes/trades.rs` — `//!` module doc
+- [x] `crates/backend/src/models.rs` — `//!` module doc
+- [x] `crates/backend/src/pair.rs` — `//!` module doc
 
 ---
 
@@ -82,9 +82,6 @@ These need both a docs `.md` file AND updated docstrings to be consistent:
 
 ```bash
 just docs             # builds kuma-core docs, opens browser
-just docs kuma-core   # explicit (same as default)
-just docs kumad       # scope to kumad binary crate
-just docs kuma-backend
 ```
 
 `cargo doc --no-deps` output lands in `target/doc/`. Key entry points:

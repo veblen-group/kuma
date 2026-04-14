@@ -1,3 +1,14 @@
+//! Realized swap data parsed from on-chain transaction receipts.
+//!
+//! [`Swap`] holds the actual amounts transferred in a completed trade, extracted
+//! from ERC20 `Transfer` events in the transaction logs. It is distinct from
+//! [`strategy::Swap`] which holds simulated/expected values computed before
+//! execution. Used by the execution worker to compute `RealizedProfit`.
+//!
+//! Native ETH inputs/outputs do not emit Transfer events — for those legs the
+//! expected amounts from the simulation are used as a fallback (see TODO in
+//! `try_from_receipts`).
+
 use crate::{
     state::{erc20::Transfer, pair::Pair},
     strategy,

@@ -1,3 +1,18 @@
+//! HTTP handlers for trade result endpoints.
+//!
+//! Exposes four routes (all under `/trades`):
+//! - `GET /` — all outcomes merged, tagged with `trade_type`
+//! - `GET /successful`
+//! - `GET /failed-on-slow`
+//! - `GET /failed-on-fast`
+//!
+//! Each trade row from the DB contains only a `signal_id` FK — the full signal
+//! is fetched via `SignalRepository::get_by_id` in `enrich_rows`, which
+//! fans out concurrent fetches for a page of trade rows. Response types
+//! (`SuccessfulTradeResponse`, `FailedOnSlowTradeResponse`,
+//! `FailedOnFastTradeResponse`) embed the full `CrossChainSingleHopResponse`
+//! alongside trade-specific fields (tx hashes, realized profit).
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,

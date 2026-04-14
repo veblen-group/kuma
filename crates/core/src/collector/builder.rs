@@ -1,3 +1,17 @@
+//! Builder for the block-collector pipeline.
+//!
+//! [`Builder`] wires the two low-level collectors — an Ethereum node WebSocket
+//! collector ([`eth::Builder`]) and a Tycho protocol-state collector
+//! ([`tycho::Builder`]) — together behind a block multiplexer ([`collector::Worker`]).
+//!
+//! The multiplexer aligns blocks from both sources (tolerance:
+//! `COLLECTOR_LAG_TOLERANCE = 1` block) and publishes merged [`Block`] values on
+//! a `watch` channel. Downstream strategies subscribe to this channel via the
+//! returned [`Handle`].
+//!
+//! Returns three handles so callers can monitor each worker independently:
+//! `(collector::Handle, eth::Handle, tycho::Handle)`.
+
 use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context as _};
