@@ -1,3 +1,9 @@
+---
+title: Collector Pipeline
+description: How ETH RPC and Tycho DEX streams are multiplexed into Block objects for strategies.
+updated: 2026-04-13
+---
+
 # Collector Pipeline
 
 The collector layer ingests real-time on-chain data and assembles it into `Block` objects that strategies can consume.

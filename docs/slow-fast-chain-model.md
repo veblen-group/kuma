@@ -1,3 +1,9 @@
+---
+title: Slow/Fast Chain Model
+description: The two-chain architecture — rationale, 75% timing deadline, and settlement risk.
+updated: 2026-04-13
+---
+
 # Slow/Fast Chain Model
 
 Kuma's strategy is built around a pair of chains with different block times.

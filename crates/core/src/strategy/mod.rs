@@ -1,8 +1,28 @@
 //! Cross-chain single-hop arbitrage strategy implementation.
 //!
-//! Detects price differences between DEX pools on slow and fast chains for a token pair.
-//! Uses precomputed swap simulations on the slow chain and real-time simulation on the fast
-//! chain to identify profitable arbitrage opportunities via binary search optimization.
+//! This module contains the core strategy logic and its central data types.
+//!
+//! ## Key types
+//!
+//! - [`CrossChainSingleHop`] (in [`crate::signals`]) — the output of the strategy: a fully
+//!   specified two-legged trade with expected profit, swap parameters, and encoded transactions.
+//! - [`Precomputes`] — slow-chain precomputed data: swap tables, spot prices, and base fee,
+//!   computed once per slow block and reused across all fast-block signal generations.
+//!
+//! ## How `CrossChainSingleHop` is used
+//!
+//! 1. On each slow block, `try_precompute` builds a `Precomputes` for the slow chain.
+//! 2. On each fast block, `generate_signal` runs a binary search over the slow chain's precomputed
+//!    swap steps and the fast chain's live state to find the direction and amount that maximises surplus.
+//! 3. The resulting `CrossChainSingleHop` signal is emitted to the execution worker, which calls
+//!    `try_promote()` to encode both legs as `UnsignedTransaction`s and run the `Trade`.
+//!
+//! ## Binary search
+//!
+//! Swap simulations for the slow chain are precomputed at `binary_search_steps` inventory points
+//! (evenly spaced from 0 to available inventory). On a fast block, the fast chain is simulated
+//! using the slow chain's `amount_out` as `amount_in` for each step. The optimal step is found
+//! by searching for the peak surplus across both trade directions (A→B and B→A).
 
 use std::{collections::HashMap, sync::Arc};
 

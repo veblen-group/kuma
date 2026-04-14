@@ -1,8 +1,33 @@
-//! Block collector that synchronizes Ethereum on-chain data with Tycho DEX state.
+//! Block collector — synchronises Ethereum RPC data with Tycho DEX state.
 //!
-//! Multiplexes streams from the Ethereum RPC collector (block headers and token balances)
-//! and Tycho simulation collector (DEX pool states), ensuring block height alignment with
-//! configurable lag tolerance. Provides unified `Block` objects and pair-specific state streams.
+//! Two independent streams feed the collector:
+//! - The **ETH collector** ([`eth`]) subscribes to block headers via WebSocket and tracks
+//!   token balances by scanning Transfer logs.
+//! - The **Tycho collector** ([`tycho`]) subscribes to `ProtocolStream` and maintains a
+//!   `BlockSim` snapshot of all DEX pool states.
+//!
+//! ## Worker logic
+//!
+//! The multiplexer `Worker` holds the latest update from each stream in `curr_eth_block` and
+//! `curr_block_sim`. When either arrives it checks whether the other is already waiting:
+//!
+//! ```text
+//! ETH block arrives  →  Tycho already waiting?  →  try_block_from_components
+//! Tycho update arrives →  ETH already waiting?  →  try_block_from_components
+//! ```
+//!
+//! `try_block_from_components` compares block heights:
+//! - **Same height** → assemble a `Block` and broadcast it on the `watch` channel.
+//! - **Tycho lagging** → warn, stash the ETH block, wait for Tycho to catch up.
+//!   If the lag exceeds `collector_lag_tolerance`, shut down.
+//! - **ETH lagging** → discard the stale ETH block, stash the Tycho update.
+//!   Same tolerance check.
+//!
+//! ## Output
+//!
+//! `Block` is broadcast on a `watch::Sender<Arc<Option<Block>>>`. Multiple strategies share
+//! one receiver per chain — `Handle::get_block_state_stream` wraps the receiver in a
+//! `BlockStateStream` that projects only the pair-relevant state for each strategy.
 use std::{pin::Pin, sync::Arc};
 
 use color_eyre::eyre::{self};

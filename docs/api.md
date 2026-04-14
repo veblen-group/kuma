@@ -1,3 +1,9 @@
+---
+title: HTTP API
+description: REST API reference for the kuma-backend monitoring endpoints.
+updated: 2026-04-13
+---
+
 # HTTP API
 
 `kuma-backend` exposes a read-only JSON API for monitoring. All endpoints are served under the root path (no `/api` prefix at the Rust level — the Caddyfile strips `/api` before proxying).

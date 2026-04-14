@@ -67,49 +67,82 @@ impl Display for Direction {
     }
 }
 
+/// A fully specified cross-chain single-hop arbitrage signal.
+///
+/// Produced by `strategy::CrossChainSingleHop::generate_signal()` and consumed by the
+/// execution worker via `try_promote()` → `Trade::run()`.
+///
+/// The trade structure is always:
+/// 1. Sell `slow_swap_sim.token_in` → receive `slow_swap_sim.token_out` on the **slow chain**.
+/// 2. Sell `fast_swap_sim.token_in` → receive `fast_swap_sim.token_out` on the **fast chain**.
+///
+/// The fast leg's `amount_in` is set to the slow leg's `amount_out` (after slippage),
+/// so the intermediate token cancels out and the surplus is denominated in the input token.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrossChainSingleHop {
-    /// The chain with longer block times where the first leg of the arbitrage executes.
+    // ── Slow chain ────────────────────────────────────────────────────────────
+    /// The chain with longer block times where the first leg executes.
+    /// Executing here first reduces settlement risk — if this leg fails, the fast leg
+    /// is never submitted.
     pub slow_chain: Chain,
-    /// Block height on the slow chain when this signal was generated.
+    /// Block height on the slow chain at which `slow_swap_sim` was precomputed.
     pub slow_height: u64,
-    /// The token pair being traded on the slow chain (e.g., WETH/USDC).
+    /// Token pair for the slow chain leg (strategy ordering, e.g. USDC/WETH).
     pub slow_pair: Pair,
-    /// Unique identifier for the AMM pool on the slow chain.
+    /// AMM pool selected for the slow leg (the pool with the most favourable price).
     pub slow_pool_id: state::PoolId,
-    /// Protocol component metadata for the slow chain pool, used for transaction encoding.
+    /// Tycho `ProtocolComponent` metadata for the slow pool — needed by the encoder to
+    /// build the `Solution` for the Tycho Router. `None` when the signal is read back
+    /// from the database (metadata is not persisted).
     pub slow_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// Simulated swap parameters for the slow chain leg (token_in, amount_in, token_out, amount_out).
+    /// Simulated swap for the slow leg: `token_in → token_out` at `amount_in`/`amount_out`.
+    /// These are the amounts the router will be asked to execute — `amount_out` becomes
+    /// the fast leg's `amount_in` (adjusted for slippage).
     pub slow_swap_sim: Swap,
-    /// Base fee in wei for slow chain
+    /// Block base fee in wei on the slow chain, used to estimate gas cost in USDC.
     pub slow_base_fee: u64,
-    /// The chain with shorter block times where the second leg of the arbitrage executes.
+
+    // ── Fast chain ────────────────────────────────────────────────────────────
+    /// The chain with shorter block times where the second leg executes.
     pub fast_chain: Chain,
-    /// Block height on the fast chain when this signal was generated.
+    /// Block height on the fast chain used when generating this signal.
     pub fast_height: u64,
-    /// The token pair being traded on the fast chain (mirrors slow_pair tokens).
+    /// Token pair for the fast chain leg. Tokens are the same as `slow_pair`; the order
+    /// is reversed relative to the slow leg (sell what was bought, buy what was sold).
     pub fast_pair: Pair,
-    /// Unique identifier for the AMM pool on the fast chain.
+    /// AMM pool selected for the fast leg.
     pub fast_pool_id: state::PoolId,
-    /// Protocol component metadata for the fast chain pool, used for transaction encoding.
+    /// Tycho `ProtocolComponent` metadata for the fast pool. `None` after DB round-trip.
     pub fast_protocol_component: Option<Arc<ProtocolComponent>>,
-    /// Simulated swap parameters for the fast chain leg (token_in, amount_in, token_out, amount_out).
+    /// Simulated swap for the fast leg. `amount_in = slow_swap_sim.amount_out * (1 - slippage)`.
     pub fast_swap_sim: Swap,
-    /// Base fee in wei for fast chain
+    /// Block base fee in wei on the fast chain.
     pub fast_base_fee: u64,
-    /// Spot prices between token A and token B on the slow chain, used for profit calculation.
+
+    // ── Spot prices (from slow chain precompute) ──────────────────────────────
+    /// Slow chain spot prices for the primary pair (A/B), used to detect price discrepancy
+    /// and as a reference for the webapp chart.
     pub slow_prices_a_b: SpotPrices,
-    /// Spot prices for token A to USDC conversion, None if token A is USDC.
+    /// Slow chain A→USDC prices for converting token A surplus to USDC profit.
+    /// `None` when token A is USDC (price is implicitly 1.0).
     pub slow_prices_a_usdc: Option<SpotPrices>,
-    /// Spot prices for token B to USDC conversion, None if token B is USDC.
+    /// Slow chain B→USDC prices for converting token B surplus to USDC profit.
+    /// `None` when token B is USDC.
     pub slow_prices_b_usdc: Option<SpotPrices>,
-    /// Spot prices for ETH to USDC conversion, used for gas cost calculation.
+    /// Slow chain ETH→USDC prices for converting gas cost from wei to USDC.
+    /// `None` when the primary pair is already ETH/USDC.
     pub slow_prices_eth_usdc: Option<SpotPrices>,
-    /// Maximum acceptable slippage in basis points (1 bps = 0.01%).
+
+    // ── Risk parameters ───────────────────────────────────────────────────────
+    /// Slippage tolerance applied to both legs' `amount_out` values, in basis points
+    /// (1 bps = 0.01%). The fast leg's `amount_in` is reduced accordingly.
     pub max_slippage_bps: u64,
-    /// Discount applied to expected profit to account for congestion/settlement risk, in basis points.
+    /// Flat discount on the expected surplus to account for the probability that another
+    /// transaction trades against the same pool first, in basis points.
     pub congestion_risk_discount_bps: u64,
-    /// Calculated expected profit after applying slippage and congestion discounts.
+    /// Expected profit after all discounts (slippage, congestion, gas) are applied.
+    /// A negative or zero `expected_profit` means the signal was not profitable; in
+    /// practice only profitable signals are emitted (the strategy filters them).
     pub expected_profit: ExpectedProfit,
 }
 

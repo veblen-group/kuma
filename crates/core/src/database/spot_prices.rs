@@ -1,3 +1,23 @@
+//! Spot price persistence.
+//!
+//! `SpotPriceRepository` writes and reads `SpotPrices` rows — one row per
+//! `(chain, pair, block_height)`. Rows are deduplicated: `insert` is a no-op if
+//! the prices and pool IDs are identical to the most recent row for that pair.
+//!
+//! ## Write path (strategy worker → DB)
+//!
+//! - `write_slow_spot_prices` — called on every slow chain block; writes the primary pair
+//!   prices plus up to three auxiliary pairs (A/USDC, B/USDC, ETH/USDC).
+//! - `write_fast_spot_prices` — called on every fast chain block; writes only the A/B pair.
+//!
+//! Both are fire-and-forget: callers push them into a `FuturesUnordered` and don't await.
+//!
+//! ## Read path (backend API + signal FK resolution)
+//!
+//! - `get_by_ids` — batch fetch by primary key; used when reconstructing signals from DB
+//!   (signal rows store spot price IDs as FKs).
+//! - `get_by_symbols` / `count_by_symbols` — paginated list for the HTTP API.
+
 use std::{collections::HashMap, sync::Arc};
 
 use color_eyre::eyre::{self, Context as _, eyre};
@@ -110,6 +130,11 @@ impl SpotPriceRepository {
         Ok(())
     }
 
+    /// Insert a spot price row, skipping if prices and pool IDs are unchanged from the last row.
+    ///
+    /// The dedup check compares `(min_price, max_price, min_pool_id, max_pool_id)` against the
+    /// most recent row for the same `(chain, token_a, token_b)`. Identical consecutive readings
+    /// produce no row — this keeps the table from accumulating redundant data during quiet blocks.
     pub async fn insert(&self, spot_prices: SpotPrices) -> eyre::Result<()> {
         sqlx::query!(
             r#"
@@ -214,6 +239,9 @@ impl SpotPriceRepository {
         Ok(count as u64)
     }
 
+    /// Fetch paginated spot prices for a pair ordered by `created_at DESC`.
+    /// Token symbols are sorted alphabetically before querying so that
+    /// `(USDC, WETH)` and `(WETH, USDC)` resolve to the same rows.
     pub async fn get_by_symbols(
         &self,
         token_a_symbol: &str,

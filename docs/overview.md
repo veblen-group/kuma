@@ -1,3 +1,9 @@
+---
+title: Kuma — Cross-Chain Arbitrage Bot
+description: System overview — what Kuma is, how it works, and the crate map.
+updated: 2026-04-13
+---
+
 # Kuma — Cross-Chain Arbitrage Bot
 
 Kuma is an automated cross-chain arbitrage bot that exploits price discrepancies in AMM pools across EVM-compatible blockchains. It monitors DEX pool states in real time, identifies profitable arbitrage opportunities, and executes two-legged trades sequentially to capture the surplus.

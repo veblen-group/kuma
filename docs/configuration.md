@@ -1,3 +1,9 @@
+---
+title: Configuration
+description: kuma.yaml schema and environment variable reference.
+updated: 2026-04-13
+---
+
 # Configuration
 
 `crates/core/src/config.rs` — loaded via `Config::load()`

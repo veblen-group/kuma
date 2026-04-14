@@ -1,3 +1,9 @@
+---
+title: Signal Lifecycle
+description: End-to-end path from price discrepancy detection to persisted trade result.
+updated: 2026-04-13
+---
+
 # Signal Lifecycle
 
 A signal starts as a detected price discrepancy and ends as a persisted trade result. This document traces the full path.

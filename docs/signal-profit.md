@@ -1,3 +1,9 @@
+---
+title: Expected Profit & Discounting
+description: Profit calculation — slippage, congestion risk, and gas cost discount chain.
+updated: 2026-04-13
+---
+
 # Expected Profit & Discounting
 
 `crates/core/src/signals/profit.rs`

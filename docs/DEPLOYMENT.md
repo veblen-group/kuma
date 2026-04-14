@@ -1,3 +1,9 @@
+---
+title: GCP Deployment Guide
+description: Deploying Kuma to GCP Compute Engine with Cloud SQL and Caddy.
+updated: 2026-04-13
+---
+
 # GCP Deployment Guide
 
 Deploy the kuma monorepo to a single GCP Compute Engine VM with Cloud SQL

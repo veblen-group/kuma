@@ -1,3 +1,9 @@
+---
+title: Database
+description: PostgreSQL persistence layer — schema, write patterns, and repositories.
+updated: 2026-04-13
+---
+
 # Database
 
 Kuma uses PostgreSQL for persisting spot prices, signals, and trade results for monitoring and accounting.

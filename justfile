@@ -14,12 +14,6 @@ generate-signal token-a="usdc" token-b="weth" slow-chain="ethereum" fast-chain="
     --token-a {{ token-a }} --token-b {{ token-b }} \
     --slow-chain {{ slow-chain }} --fast-chain {{ fast-chain }} \
 
-dry-run input="signal.json" output="./trade.json":
-    echo "TODO"
-
-execute-trade input="trade.json":
-    echo "TODO"
-
 get-tokens chain="ethereum":
     cargo run -p kuma-cli tokens --chain {{ chain }}
 
@@ -173,6 +167,18 @@ docker-run:
 # Stop all services
 docker-stop:
     docker compose --profile all down
+
+# Documentation
+##################
+
+# Generate and open rustdoc HTML documentation for all workspace crates.
+docs:
+    cargo doc --no-deps --workspace
+    open "$(pwd)/target/doc/kuma_core/index.html"
+
+# Remove generated rustdoc output (target/doc/) without touching compiled artifacts.
+docs-clean:
+    cargo clean --doc
 
 # Linting & formatting
 ##################
