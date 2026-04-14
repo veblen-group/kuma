@@ -1,19 +1,66 @@
 //! Kuma daemon — the main binary crate for the cross-chain arbitrage bot.
 //!
-//! Exposes a single public entry point: [`Kuma::spawn`], which reads a [`kuma_core::config::Config`],
-//! wires together all subsystems (collectors, strategies, execution worker), and returns a
-//! [`Kuma`] handle that can be awaited or explicitly shut down.
+//! ## Binary entry point
 //!
-//! ## Internal modules
+//! `main.rs` drives the binary in four steps:
 //!
-//! | Module | Role |
-//! |--------|------|
-//! | [`kuma`](mod@kuma) | Orchestrator — starts and gracefully stops all subsystems |
-//! | [`strategy`] | Strategy worker — slow/fast chain event loop, signal generation, DB writes |
-//! | [`execution`] | Trade execution worker — promotes signals to on-chain trades |
-//! | [`telemetry`] | `tracing` subscriber setup (logging + spans) |
+//! 1. **Config** — [`Config::load()`](kuma_core::config::Config::load) reads `kuma.yaml` from the working
+//!    directory and merges any `KUMA_*` environment variable overrides (via Figment).
+//!    If loading fails the process exits immediately with a printed error.
+//! 2. **Telemetry** — [`telemetry::get_subscriber`] builds a `tracing` subscriber and
+//!    [`telemetry::init_subscriber`] registers it globally. Log level is controlled by
+//!    `RUST_LOG`; set `KUMA_SPLIT_VIEW=1` for a two-stream mode that routes INFO to stdout
+//!    and verbose/span output to stderr (useful with `tmux` split-pane monitoring).
+//! 3. **Service** — [`Kuma::spawn`] wires up all subsystems and spawns the runtime task.
+//! 4. **Shutdown** — `select!` on SIGTERM or a service error, then calls [`Kuma::shutdown`]
+//!    which cancels the shared `CancellationToken` and drains all workers.
 //!
-//! See `docs/signal-lifecycle.md` for the end-to-end data flow.
+//! ## Modules
+//!
+//! ### [`kuma`](mod@kuma) — orchestrator
+//!
+//! [`kuma::Kuma`] is the top-level coordinator. `Kuma::new` reads the config and wires:
+//! - One **collector set** per chain (ETH RPC + Tycho + block multiplexer), reusing the
+//!   same collector when multiple strategies share a chain.
+//! - One **strategy worker** per configured `(token_a, token_b, slow_chain, fast_chain)` pair,
+//!   each receiving `BlockStateStream`s for its slow and fast chains.
+//! - One **trade execution worker** subscribing to signals from all strategy workers.
+//!
+//! `Kuma::run` polls all subsystem futures concurrently; the first to complete (success or
+//! error) triggers shutdown. `Kuma::shutdown` cancels the `CancellationToken` and sequentially
+//! awaits each worker with a 25-second deadline before aborting.
+//!
+//! ### [`strategy`] — strategy worker
+//!
+//! One worker per trading pair. The event loop (`Worker::run`) uses a biased `select!` over:
+//! - **Slow block** → call `strategy.try_precompute`, write slow spot prices to DB, set 75%
+//!   submission deadline timer.
+//! - **Fast block** → call `strategy.generate_signal`, write fast spot prices; if profitable
+//!   and not deduped by `same_outcome`, queue signal and write to DB.
+//! - **Deadline fires** → emit `curr_signal` to the execution worker via `mpsc`.
+//! - **DB write completions** → drain `FuturesUnordered`, log errors.
+//!
+//! See [`kuma_core::strategy`] for the signal generation logic and
+//! `docs/signal-lifecycle.md` for the full flow.
+//!
+//! ### [`execution`] — trade execution worker
+//!
+//! A single worker receiving signals from all strategy workers via merged `select_all`. Only
+//! one trade runs at a time — if a signal arrives while a trade is in-flight it is dropped.
+//! On each signal:
+//! 1. `signal.try_promote()` encodes both transaction legs into `UnsignedTransaction`s.
+//! 2. `trade.run()` executes sequentially: slow chain first, fast chain only on confirmation.
+//! 3. The `TradeResult` is written to the database asynchronously.
+//!
+//! ### [`telemetry`] — tracing setup
+//!
+//! Builds a layered `tracing_subscriber` with noise-filtered targets (Tycho internals, Alloy
+//! transports, sqlx held at `WARN`). Supports an optional split-view mode for terminal
+//! monitoring via `KUMA_SPLIT_VIEW=1`.
+
+// Links to private modules are intentional — kumad is a binary crate and docs are always
+// built with --document-private-items so the links resolve correctly.
+#![allow(rustdoc::private_intra_doc_links)]
 
 use std::{
     future::Future,

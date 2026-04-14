@@ -172,8 +172,10 @@ docker-stop:
 ##################
 
 # Generate and open rustdoc HTML documentation for all workspace crates.
+# --document-private-items is needed so private modules in binary crates (kumad)
+# get their own pages and intra-doc links resolve.
 docs:
-    cargo doc --no-deps --workspace
+    cargo doc --no-deps --workspace --document-private-items
     open "$(pwd)/target/doc/kuma_core/index.html"
 
 # Remove generated rustdoc output (target/doc/) without touching compiled artifacts.
