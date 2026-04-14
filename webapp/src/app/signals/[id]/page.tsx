@@ -183,11 +183,17 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-x-8">
             <div>
               <p className="text-xs text-muted-foreground font-medium mb-1">Surplus</p>
-              <Row label="Surplus A">
+              <Row label={`Surplus ${ep.token_a}`}>
                 <TokenAmount amount={ep.surplus_a} symbol={ep.token_a} />
               </Row>
-              <Row label="Surplus B">
+              <Row label={`Min USDC (${ep.token_a})`}>
+                <TokenAmount amount={ep.min_usdc_amount_a} symbol="USDC" />
+              </Row>
+              <Row label={`Surplus ${ep.token_b}`}>
                 <TokenAmount amount={ep.surplus_b} symbol={ep.token_b} />
+              </Row>
+              <Row label={`Min USDC (${ep.token_b})`}>
+                <TokenAmount amount={ep.min_usdc_amount_b} symbol="USDC" />
               </Row>
               <Row label="Min Expected Profit">
                 <TokenAmount amount={ep.min_total_amount_usdc} symbol="USDC" />
@@ -218,6 +224,16 @@ export default function SignalPage({ params }: { params: Promise<{ id: string }>
               </Row>
               <Row label="Congestion Discount">
                 <span className="tabular-nums font-mono">{signal.congestion_risk_discount_bps} bps</span>
+              </Row>
+              <p className="text-xs text-muted-foreground font-medium mt-3 mb-1">Prices Used</p>
+              <Row label={`${ep.token_a}/USDC`}>
+                <span className="tabular-nums font-mono">{ep.token_usdc_price_a.toFixed(6)}</span>
+              </Row>
+              <Row label={`${ep.token_b}/USDC`}>
+                <span className="tabular-nums font-mono">{ep.token_usdc_price_b.toFixed(6)}</span>
+              </Row>
+              <Row label="ETH/USDC">
+                <span className="tabular-nums font-mono">{ep.eth_usdc_price.toFixed(2)}</span>
               </Row>
             </div>
           </div>
