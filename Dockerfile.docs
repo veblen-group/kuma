@@ -1,0 +1,31 @@
+# Dockerfile.docs — builds rustdoc and serves it as static files via Caddy.
+#
+# Uses cargo-chef so dependency compilation is cached separately from source
+# changes. After the first build, only workspace crates are re-documented.
+
+FROM lukemathwalker/cargo-chef:latest-rust-1.91-bookworm AS chef
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Compile deps without --release; cached until Cargo.toml / Cargo.lock change.
+RUN cargo chef cook --recipe-path recipe.json
+
+COPY . .
+RUN cargo doc --no-deps --workspace --document-private-items
+# Copy diagram PNGs so relative <img> links in embedded markdown resolve.
+RUN cp docs/*.png target/doc/kuma_core/
+
+FROM caddy:2-alpine
+COPY --from=builder /app/target/doc /srv/docs
+CMD ["caddy", "file-server", "--root", "/srv/docs", "--listen", ":80"]

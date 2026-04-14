@@ -1,3 +1,28 @@
+//! Trade result persistence.
+//!
+//! `TradeRepository` writes the three possible trade outcomes to separate tables:
+//!
+//! | Outcome | Table |
+//! |---------|-------|
+//! | `TradeResult::FailedSlow` | `failed_on_slow_chain_trade` |
+//! | `TradeResult::FailedFast` | `failed_on_fast_chain_trade` |
+//! | `TradeResult::Successful` | `successful_trade` |
+//!
+//! ## Signal FK lookup
+//!
+//! Trade inserts do not receive the signal's database ID directly. Instead they use a
+//! subquery to look it up at insert time by matching on
+//! `(slow_chain, slow_height, slow_pool_id, fast_chain, fast_height, fast_pool_id)`:
+//!
+//! ```sql
+//! INSERT INTO successful_trade (signal_id, ...)
+//! SELECT id, ... FROM signals
+//! WHERE slow_chain = $1 AND slow_height = $2 AND slow_pool_id = $3
+//!   AND fast_chain = $4 AND fast_height = $5 AND fast_pool_id = $6
+//! ```
+//!
+//! This avoids threading the signal DB ID through the entire execution pipeline.
+
 use std::sync::Arc;
 
 use color_eyre::eyre::{self};
@@ -45,6 +70,7 @@ impl TradeRepository {
         }
     }
 
+    /// Dispatch to the appropriate insert method based on trade outcome.
     pub async fn insert_trade_result(&self, trade_result: TradeResult) -> eyre::Result<()> {
         match trade_result {
             TradeResult::FailedSlow(t) => self.insert_failed_on_slow(t).await,
@@ -53,6 +79,9 @@ impl TradeRepository {
         }
     }
 
+    /// Record a trade where the slow-chain leg failed or was not included.
+    /// The fast-chain leg was never submitted. `slow_tx_hash` is `None` if the tx
+    /// was not included (timed out before the next block).
     #[instrument(skip(self, trade))]
     pub async fn insert_failed_on_slow(&self, trade: TradeFailedOnSlow) -> eyre::Result<()> {
         let slow_hash = trade.slow_receipt.map(|r| r.transaction_hash.to_string());
@@ -78,6 +107,8 @@ impl TradeRepository {
         Ok(())
     }
 
+    /// Record a trade where the slow-chain leg succeeded but the fast-chain leg failed.
+    /// This is the most costly failure — the slow-chain position must be unwound.
     #[instrument(skip(self, trade))]
     pub async fn insert_failed_on_fast(&self, trade: TradeFailedOnFast) -> eyre::Result<()> {
         let slow_hash = trade.slow_receipt.transaction_hash.to_string();

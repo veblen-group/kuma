@@ -1,3 +1,17 @@
+//! HTTP handlers for `GET /signals` and `GET /signals/:id`.
+//!
+//! Defines three layered response types that mirror the core signal types but
+//! strip out any credential-bearing fields:
+//! - [`SwapResponse`] — one leg of an arb (chain name, height, pool, amounts).
+//! - [`ExpectedProfitResponse`] — all profit fields with `BigUint` serialized as
+//!   decimal strings to avoid JSON precision loss.
+//! - [`CrossChainSingleHopResponse`] — the full signal, combining both legs,
+//!   spot prices, and expected profit. Also carries `fast_prices_a_b_created_at`
+//!   for the webapp timeline display.
+//!
+//! Spot price hydration is done inside `SignalRepository` (two-phase batch fetch);
+//! the route layer only maps DB results to response types.
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,

@@ -1,3 +1,25 @@
+//! Sequential two-leg trade execution.
+//!
+//! A `Trade` is produced by promoting a `signals::CrossChainSingleHop` via
+//! `CrossChainSingleHop::try_promote()`. It holds two pre-encoded `UnsignedTransaction`s
+//! (one per chain) and runs them sequentially: slow chain first, fast chain only on success.
+//!
+//! ## Execution flow (`Trade::run`)
+//!
+//! 1. Estimate gas for both legs.
+//! 2. Submit slow chain transaction and wait for a receipt.
+//! 3. If slow chain fails or times out → return `TradeResult::FailedSlow`; fast leg is never submitted.
+//! 4. If slow chain succeeds → submit fast chain transaction.
+//! 5. If fast chain fails → return `TradeResult::FailedFast` (position must be unwound manually).
+//! 6. On full success → parse `Transfer` logs from both receipts to compute `RealizedProfit`.
+//!
+//! ## Settlement risk rationale
+//!
+//! Submitting slow-first means the worst-case failure is a failed slow-leg with no open position.
+//! A failed fast-leg after a successful slow-leg is the expensive case — sequential ordering
+//! minimises this by ensuring the slow-chain price is confirmed before we commit capital on
+//! the fast chain.
+
 use alloy::rpc::types::TransactionReceipt;
 use color_eyre::eyre::{self, WrapErr as _};
 use serde::{Deserialize, Serialize};

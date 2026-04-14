@@ -1,3 +1,10 @@
+//! Pair string parser for API query parameters.
+//!
+//! [`parse_pair`] splits a `"TOKEN_A-TOKEN_B"` string (e.g. `"WETH-USDC"`) into
+//! its two symbol parts. Called by all route handlers after normalizing the
+//! input to uppercase. Returns a descriptive error for malformed inputs
+//! (empty, wrong number of `-` separators, empty token).
+
 use color_eyre::eyre::{self, eyre};
 
 /// Parses a string like "USDC-WETH" into ("USDC", "WETH").

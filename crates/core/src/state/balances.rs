@@ -1,3 +1,14 @@
+//! Live token balance tracking for the bot's signer account.
+//!
+//! [`TokenBalances`] snapshots the on-chain balances of a set of tokens at
+//! construction time via `balanceOf` RPC calls, then keeps them current by
+//! replaying ERC20 Transfer events from the latest block (via
+//! [`TokenBalances::update_from_logs`]).
+//!
+//! The log filter covers only the latest block (`BlockNumberOrTag::Latest`),
+//! so `update_from_logs` must be called once per block to stay in sync.
+//! Missed blocks mean missed balance updates.
+
 use std::{
     collections::HashMap,
     fmt::{self, Display},

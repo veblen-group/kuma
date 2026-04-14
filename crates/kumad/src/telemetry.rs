@@ -1,3 +1,16 @@
+//! Tracing subscriber setup for the kumad binary.
+//!
+//! Builds a layered `tracing_subscriber` with two modes:
+//!
+//! **Normal mode** (`KUMA_SPLIT_VIEW` unset or `0`): single compact formatter controlled by
+//! `RUST_LOG`. Noisy third-party crates (Tycho internals, Alloy transports, `sqlx`, `h2`)
+//! are capped at `WARN` regardless of `RUST_LOG`.
+//!
+//! **Split-view mode** (`KUMA_SPLIT_VIEW=1`): two formatters running simultaneously —
+//! verbose spans/debug to stderr, INFO-only to stdout. Designed for `tmux` split-pane
+//! monitoring: pipe stdout to one pane for clean signal/trade events and stderr to another
+//! for full trace output.
+
 use std::{env, ops::Not, sync::OnceLock};
 
 use tracing::{Subscriber, level_filters::LevelFilter};

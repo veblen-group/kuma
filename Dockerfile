@@ -1,7 +1,10 @@
 # Dockerfile for Kuma Rust workspace
-FROM rust:1.91-bookworm AS builder
+#
+# Uses cargo-chef to cache dependency compilation separately from source changes.
+# After the first build, subsequent builds that only change workspace source
+# (not Cargo.toml / Cargo.lock) skip the slow dep-compile step entirely.
 
-ARG BINARY
+FROM lukemathwalker/cargo-chef:latest-rust-1.91-bookworm AS chef
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -10,14 +13,26 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy Cargo files first for better caching
+# --- Planner: extract the dependency recipe from the workspace ---
+FROM chef AS planner
 COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build specific binary based on BINARY arg
+# --- Builder: compile deps (cached), then the requested binary ---
+FROM chef AS builder
+
+ARG BINARY
+
+COPY --from=planner /app/recipe.json recipe.json
+# This layer is cached as long as Cargo.toml / Cargo.lock are unchanged.
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY . .
 RUN cargo build --release --bin $BINARY
 
-# Runtime stage
+# --- Runtime: minimal image with just the binary ---
 FROM debian:bookworm-slim AS runtime
+
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -26,14 +41,11 @@ WORKDIR /app
 
 ARG BINARY
 
-# Copy the specific binary from builder stage
 COPY --from=builder /app/target/release/$BINARY /usr/local/bin/$BINARY
 
-# Copy configuration files
 COPY kuma.yaml /app/kuma.yaml
 COPY tokens.*.json /app/
 
-# Create non-root user
 RUN useradd --create-home --shell /bin/bash kuma
 USER kuma
 

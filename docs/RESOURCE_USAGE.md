@@ -1,3 +1,9 @@
+---
+title: Resource Usage Estimates
+description: Runtime memory and CPU estimates for kumad and kuma-backend.
+updated: 2026-04-13
+---
+
 # Resource Usage Estimates
 
 Runtime resource analysis for the kuma monorepo services. All estimates assume

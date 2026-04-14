@@ -1,3 +1,27 @@
+//! Trade execution worker.
+//!
+//! Receives `CrossChainSingleHop` signals from all strategy workers and executes them as
+//! sequential two-legged trades via the Tycho Router.
+//!
+//! ## One-at-a-time gate
+//!
+//! Only one trade runs at a time. If a new signal arrives while a trade is in-flight it is
+//! **dropped** — the in-flight trade takes priority. Signals are dropped rather than queued
+//! because a signal is only valid for the block it was generated on; a queued signal would
+//! be stale by the time the in-flight trade completes. This also keeps nonce management
+//! simple and avoids competing against our own transactions in the same pool.
+//!
+//! ## Trade promotion
+//!
+//! `signal.try_promote()` encodes both transaction legs and returns a `Trade`. The `Trade`
+//! then runs sequentially: slow chain transaction submitted and confirmed first, fast chain
+//! second. This minimises settlement risk from mismatched block times.
+//!
+//! ## DB writes
+//!
+//! Trade results (successful, failed-slow, failed-fast) are written to the database
+//! asynchronously via `FuturesUnordered` — failures are logged but never fatal.
+
 use std::{collections::HashMap, pin::Pin};
 
 use color_eyre::eyre::{self, WrapErr as _};

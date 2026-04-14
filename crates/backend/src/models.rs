@@ -1,3 +1,12 @@
+//! Shared pagination primitives for the kuma-backend API.
+//!
+//! - [`PaginationQuery`] — deserializes `?page=&page_size=` from query strings.
+//!   `sanitize()` clamps to `[1, MAX_PAGE_SIZE]`; `to_offset_limit()` converts
+//!   to SQL `OFFSET`/`LIMIT` values.
+//! - [`PaginatedResponse<T>`] — wraps a data vec with [`PaginationInfo`]:
+//!   total items/pages (when the caller provides a count), `has_next`,
+//!   `has_previous`. Used by all three route modules.
+
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PAGE_SIZE: u32 = 20;

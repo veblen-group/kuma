@@ -1,3 +1,16 @@
+//! HTTP handler for `GET /spot_prices`.
+//!
+//! Accepts a `?pair=TOKEN_A-TOKEN_B` query parameter with optional pagination
+//! (`?page=&page_size=`) and returns a [`PaginatedResponse<SpotPriceResponse>`].
+//!
+//! [`SpotPriceResponse`] is a safe, credential-free view of [`SpotPrices`] —
+//! only the chain *name* string is exposed, never the full `Chain` struct
+//! (which contains RPC URLs and API keys). `id` and `created_at` are `None`
+//! when the response is embedded inside a signal response.
+//!
+//! Page size is capped at 100; the total result window is capped at
+//! `page_size × 10` rows to prevent runaway queries.
+
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -58,6 +71,12 @@ pub struct SpotPriceByPairQuery {
     pub pagination: PaginationQuery,
 }
 
+/// `GET /spot_prices?pair=WETH-USDC&page=1&page_size=50&chains=ethereum,unichain`
+///
+/// Returns paginated spot prices for the given token pair. The optional `chains` parameter
+/// (comma-separated chain names) restricts results to those chains; without it all chains
+/// are included. Pairs are normalised to alphabetical symbol order in the database, so
+/// `WETH-USDC` and `USDC-WETH` return the same rows.
 pub async fn get_spot_prices_by_pair(
     State(state): State<AppState>,
     Query(params): Query<SpotPriceByPairQuery>,
