@@ -88,7 +88,7 @@ export function StrategyCard() {
   return (
     <div className="space-y-3">
       {/* Token selectors */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 px-12">
         <div className="flex flex-col items-center gap-1">
           <p className="text-[10px] text-muted-foreground">Token A</p>
           <Select value={strategy.tokenA} onValueChange={(v) => setStrategy({ ...strategy, tokenA: v })}>
@@ -131,10 +131,10 @@ export function StrategyCard() {
 
       {/* Chain selectors + inventory */}
       <div className="border-t pt-2 text-xs">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-12">
           {/* Column headers */}
-          <p className="text-[10px] text-muted-foreground text-center">Slow chain</p>
-          <p className="text-[10px] text-muted-foreground text-center">Fast chain</p>
+          <p className="text-[10px] text-muted-foreground text-center">Slow Chain</p>
+          <p className="text-[10px] text-muted-foreground text-center">Fast Chain</p>
 
           {/* Selectors */}
           <div className="flex items-center justify-center">
@@ -157,39 +157,41 @@ export function StrategyCard() {
               </SelectContent>
             </Select>
           </div>
-          {/* "Inventory" label spanning both columns */}
-          <div className="col-span-2 text-center">
-            <span className="text-[10px] text-muted-foreground">Inventory</span>
+
+          <div className="col-span-2 border-t border-border -mx-12 mt-1" />
+
+          {/* Inventory rows — "Inventory" is absolutely positioned so it doesn't affect grid centering */}
+          <div className="col-span-2 relative pt-1">
+            <span className="absolute -left-6 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">Inventory</span>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {([
+                { symbol: strategy.tokenA, logo: tokenLogoMap[strategy.tokenA] },
+                { symbol: strategy.tokenB, logo: tokenLogoMap[strategy.tokenB] },
+              ] as { symbol: TokenKey; logo: string | undefined }[]).map(({ symbol, logo }) => {
+                const tokenCfg = config.tokens[symbol]
+                if (!tokenCfg) return null
+                return (
+                  <React.Fragment key={symbol}>
+                    {[strategy.slowChain, strategy.fastChain].map(chain => {
+                      const inv = (tokenCfg.inventory as Record<string, string>)[chain]
+                      return (
+                        <div key={chain} className="flex items-center justify-center gap-1.5">
+                          <span className="tabular-nums font-medium">{inv ? fmtInventory(inv, tokenCfg.decimals) : '—'}</span>
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            {logo
+                              ? <img src={logo} alt={symbol} width={14} height={14} className="rounded-full shrink-0" />
+                              : <span className="w-3.5 h-3.5 rounded-full bg-muted shrink-0" />
+                            }
+                            {symbol}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </React.Fragment>
+                )
+              })}
+            </div>
           </div>
-
-          {/* Inventory rows */}
-          {([
-            { symbol: strategy.tokenA, logo: tokenLogoMap[strategy.tokenA] },
-            { symbol: strategy.tokenB, logo: tokenLogoMap[strategy.tokenB] },
-          ] as { symbol: TokenKey; logo: string | undefined }[]).map(({ symbol, logo }) => {
-            const tokenCfg = config.tokens[symbol]
-            if (!tokenCfg) return null
-            return (
-              <React.Fragment key={symbol}>
-                {[strategy.slowChain, strategy.fastChain].map(chain => {
-                  const inv = (tokenCfg.inventory as Record<string, string>)[chain]
-                  return (
-                    <div key={chain} className="flex items-center justify-center gap-1.5">
-                      <span className="tabular-nums font-medium">{inv ? fmtInventory(inv, tokenCfg.decimals) : '—'}</span>
-                      <span className="inline-flex items-center gap-1 text-muted-foreground">
-                        {logo
-                          ? <img src={logo} alt={symbol} width={14} height={14} className="rounded-full shrink-0" />
-                          : <span className="w-3.5 h-3.5 rounded-full bg-muted shrink-0" />
-                        }
-                        {symbol}
-                      </span>
-                    </div>
-                  )
-                })}
-              </React.Fragment>
-            )
-          })}
-
         </div>
       </div>
     </div>
