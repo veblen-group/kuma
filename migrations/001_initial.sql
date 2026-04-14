@@ -122,7 +122,17 @@ CREATE TABLE IF NOT EXISTS successful_trade (
     signal_id BIGINT NOT NULL REFERENCES signals(id),
     slow_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
     fast_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
-    realized_profit_str TEXT NOT NULL, -- BigUint as string
+    realized_profit_str TEXT NOT NULL, -- BigUint as string (total USDC)
+    -- Realized profit detail (nullable for backward compat)
+    realized_surplus_a TEXT,           -- per-token surplus, BigUint as string
+    realized_surplus_b TEXT,
+    realized_usdc_amount_a TEXT,       -- token surplus converted to USDC, BigUint as string
+    realized_usdc_amount_b TEXT,
+    realized_gas_amount_eth TEXT,      -- total gas in wei, BigUint as string
+    realized_gas_amount_usdc TEXT,     -- total gas in USDC, BigUint as string
+    realized_token_usdc_price_a DOUBLE PRECISION,
+    realized_token_usdc_price_b DOUBLE PRECISION,
+    realized_gas_price_usdc DOUBLE PRECISION,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

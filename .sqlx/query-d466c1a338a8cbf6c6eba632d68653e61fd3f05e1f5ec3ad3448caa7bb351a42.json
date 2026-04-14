@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT st.id, st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str,\n                   st.realized_surplus_a, st.realized_surplus_b,\n                   st.realized_usdc_amount_a, st.realized_usdc_amount_b,\n                   st.realized_gas_amount_eth, st.realized_gas_amount_usdc,\n                   st.realized_token_usdc_price_a, st.realized_token_usdc_price_b,\n                   st.realized_gas_price_usdc\n            FROM successful_trade st\n            JOIN signals s ON st.signal_id = s.id\n            WHERE (\n                (s.slow_swap_token_in_symbol = $1 AND s.slow_swap_token_out_symbol = $2)\n                OR (s.slow_swap_token_in_symbol = $2 AND s.slow_swap_token_out_symbol = $1)\n            )\n            ORDER BY st.created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "signal_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_tx_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "fast_tx_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "realized_profit_str",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "realized_surplus_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "realized_surplus_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "realized_usdc_amount_a",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "realized_usdc_amount_b",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "realized_gas_amount_eth",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "realized_gas_amount_usdc",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "realized_token_usdc_price_a",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 12,
+        "name": "realized_token_usdc_price_b",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 13,
+        "name": "realized_gas_price_usdc",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d466c1a338a8cbf6c6eba632d68653e61fd3f05e1f5ec3ad3448caa7bb351a42"
+}
