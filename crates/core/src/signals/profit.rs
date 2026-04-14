@@ -1,3 +1,35 @@
+//! Profit calculation for arbitrage signals: expected and realized.
+//!
+//! ## ExpectedProfit
+//!
+//! Computed at signal generation time from simulated swap amounts. Three discount layers
+//! are applied in order:
+//!
+//! 1. **Slippage** (`max_slippage_bps`) — `amount_out * (1 - bps/10_000)` on both legs,
+//!    modelling worst-case execution against the slippage tolerance.
+//! 2. **Congestion risk** (`congestion_risk_discount_bps`) — flat discount on surplus,
+//!    modelling the probability that another transaction takes the pool first.
+//! 3. **Gas cost** — `(slow_gas + fast_gas) * base_fee`, converted to USDC via the
+//!    ETH/USDC spot price from the slow chain precompute.
+//!
+//! Each discount can be disabled via the `ignore_*_in_profit` config flags without
+//! removing the underlying calculation — values are still tracked for reporting.
+//!
+//! All amounts are ultimately converted to USDC using **pessimistic (min) spot prices**
+//! from the slow chain precompute. If a token is USDC the price is `1.0`.
+//!
+//! ## RealizedProfit
+//!
+//! Computed after trade execution from on-chain receipt logs. `Transfer` events are parsed
+//! to get actual amounts, and gas cost uses `gas_used * effective_gas_price` from the receipt.
+//! Same USDC conversion logic as `ExpectedProfit`.
+//!
+//! ## same_outcome
+//!
+//! `ExpectedProfit::same_outcome()` drives signal dedup in the strategy worker — if the
+//! new signal has the same direction and profitability bucket as the previous one, it is
+//! dropped without a DB write or emission.
+
 use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _, eyre};
 use num_bigint::{BigInt, BigUint};
 use num_rational::BigRational;

@@ -1,3 +1,20 @@
+//! Token pair types: static configuration and live pool state.
+//!
+//! ## `Pair` — static token config
+//!
+//! A `Pair` is an ordered `(token_a, token_b)` tuple as defined in `kuma.yaml`. The order
+//! is the strategy order, not necessarily the Uniswap address order. `Pair` is cheap to
+//! clone and used as a key throughout the pipeline.
+//!
+//! `token_a_b_adjusted_for_usdc()` reorders the pair so USDC is always the quote (second)
+//! token, making spot prices human-readable. See `docs/price-direction.md`.
+//!
+//! ## `PairState` — live pool map
+//!
+//! `PairState` holds the current `ProtocolSim` states for all pools that contain both tokens
+//! of the pair, filtered from the latest `BlockSim`. It is produced by
+//! `BlockSim::get_pair_state()` on every block and consumed by strategies.
+
 use std::{
     collections::HashMap,
     fmt::Display,

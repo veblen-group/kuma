@@ -1,3 +1,19 @@
+//! Configuration schema and loader for `kuma.yaml`.
+//!
+//! Configuration is loaded via [Figment](https://docs.rs/figment): `kuma.yaml` is the base,
+//! and environment variables prefixed `KUMA_` with `__` as separator override any key.
+//!
+//! ## Key knobs
+//!
+//! | Field | Effect |
+//! |-------|--------|
+//! | `binary_search_steps` | Number of inventory amounts precomputed per pool on the slow chain. Higher = finer optimal-size search, slower precompute. |
+//! | `max_slippage_bps` | Slippage tolerance applied to `amount_out` when constructing the fast leg. |
+//! | `congestion_risk_discount_bps` | Flat discount on surplus to account for pool congestion risk. |
+//! | `ignore_*_in_profit` | Disable individual discount components without removing their calculation. |
+//!
+//! See `docs/configuration.md` for the full YAML reference.
+
 use crate::{chain::Chain, state::pair::Pair};
 use color_eyre::eyre::{self, Context as _, OptionExt as _, eyre};
 use figment::{
