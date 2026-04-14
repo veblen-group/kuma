@@ -1,3 +1,20 @@
+//! Kuma daemon — the main binary crate for the cross-chain arbitrage bot.
+//!
+//! Exposes a single public entry point: [`Kuma::spawn`], which reads a [`kuma_core::config::Config`],
+//! wires together all subsystems (collectors, strategies, execution worker), and returns a
+//! [`Kuma`] handle that can be awaited or explicitly shut down.
+//!
+//! ## Internal modules
+//!
+//! | Module | Role |
+//! |--------|------|
+//! | [`kuma`](mod@kuma) | Orchestrator — starts and gracefully stops all subsystems |
+//! | [`strategy`] | Strategy worker — slow/fast chain event loop, signal generation, DB writes |
+//! | [`execution`] | Trade execution worker — promotes signals to on-chain trades |
+//! | [`telemetry`] | `tracing` subscriber setup (logging + spans) |
+//!
+//! See `docs/signal-lifecycle.md` for the end-to-end data flow.
+
 use std::{
     future::Future,
     pin::Pin,
