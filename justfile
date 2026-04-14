@@ -4,7 +4,7 @@ default:
 set fallback := true
 
 registry := env("REGISTRY", "ghcr.io/veblen-group")
-remote_user := env("REMOTE_USER", "whoami")
+remote_user := env("REMOTE_USER", `whoami`)
 
 # CLI commands
 

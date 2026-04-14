@@ -100,6 +100,7 @@ services:
       - kuma-backend
     environment:
       - BACKEND_URL=http://kuma-backend:8080
+      - NEXT_PUBLIC_API_URL=/api
     restart: unless-stopped
     networks:
       - kuma-network
