@@ -1,16 +1,10 @@
----
-title: Price Direction & Spot Prices
-description: Spot price semantics — base/quote ordering, USDC-as-quote invariant, and webapp mirroring.
-updated: 2026-04-13
----
-
 # Price Direction & Spot Prices
 
 This document explains how spot prices are computed and what direction (base/quote) they represent. Getting this wrong leads to prices like 0.000333 instead of 3000 for ETH/USDC — a common source of confusion.
 
 ## The call chain
 
-```
+```text
 try_make_sorted_spot_prices(state, pair)
   └─ pair.token_a_b_adjusted_for_usdc()  →  (base, quote)
   └─ pool.spot_price(base, quote)         →  f64  (quote per base)

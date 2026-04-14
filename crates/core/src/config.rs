@@ -10,9 +10,7 @@
 //! | `binary_search_steps` | Number of inventory amounts precomputed per pool on the slow chain. Higher = finer optimal-size search, slower precompute. |
 //! | `max_slippage_bps` | Slippage tolerance applied to `amount_out` when constructing the fast leg. |
 //! | `congestion_risk_discount_bps` | Flat discount on surplus to account for pool congestion risk. |
-//! | `ignore_*_in_profit` | Disable individual discount components without removing their calculation. |
-//!
-//! See `docs/configuration.md` for the full YAML reference.
+//! | `ignore_*_in_profit` | Disable individual discount components without removing their calculation — useful for isolating which cost is suppressing signal emission. |
 
 use crate::{chain::Chain, state::pair::Pair};
 use color_eyre::eyre::{self, Context as _, OptionExt as _, eyre};

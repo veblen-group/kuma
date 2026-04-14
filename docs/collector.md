@@ -1,9 +1,3 @@
----
-title: Collector Pipeline
-description: How ETH RPC and Tycho DEX streams are multiplexed into Block objects for strategies.
-updated: 2026-04-13
----
-
 # Collector Pipeline
 
 The collector layer ingests real-time on-chain data and assembles it into `Block` objects that strategies can consume.
@@ -12,7 +6,7 @@ The collector layer ingests real-time on-chain data and assembles it into `Block
 
 Each chain runs three parallel workers:
 
-```
+```text
 ETH collector (eth.rs)
   ├─ subscribes to block headers (WebSocket)         → Header (base fee, block number)
   └─ monitors Transfer events for token balances     → TokenBalances
@@ -37,13 +31,7 @@ Subscribes to `eth_subscribe("newHeads")` via WebSocket. For each new block head
 
 ## Tycho collector (`crates/core/src/collector/tycho.rs`)
 
-Subscribes to Tycho's `ProtocolStreamBuilder` for all registered DEX protocols on the chain:
-
-| Chain | Protocols |
-|-------|-----------|
-| Ethereum | UniswapV2, SushiswapV2, PancakeswapV2, UniswapV3, PancakeswapV3, UniswapV4 |
-| Base | UniswapV2, UniswapV3, UniswapV4 |
-| Unichain | UniswapV4 |
+Subscribes to Tycho's `ProtocolStreamBuilder` for all registered DEX protocols on the chain. For the current protocol coverage by chain, see `kuma_core::collector::tycho` in the rustdoc.
 
 TVL filters (`add_tvl_threshold`, `remove_tvl_threshold`) gate which pools are tracked. Pools are added when their TVL exceeds the add threshold and removed when they fall below the remove threshold.
 

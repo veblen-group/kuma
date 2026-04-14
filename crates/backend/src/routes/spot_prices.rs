@@ -4,7 +4,7 @@
 //! (`?page=&page_size=`) and returns a [`PaginatedResponse<SpotPriceResponse>`].
 //!
 //! [`SpotPriceResponse`] is a safe, credential-free view of [`SpotPrices`] —
-//! only the chain *name* string is exposed, never the full [`Chain`] struct
+//! only the chain *name* string is exposed, never the full `Chain` struct
 //! (which contains RPC URLs and API keys). `id` and `created_at` are `None`
 //! when the response is embedded inside a signal response.
 //!

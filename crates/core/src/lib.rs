@@ -28,3 +28,35 @@ pub mod spot_prices;
 pub mod state;
 pub mod strategy;
 pub mod trade;
+
+/// Human-readable architecture and concept guides.
+///
+/// These modules contain prose documentation embedded from `docs/` — they are
+/// compiled only when building documentation and have no runtime impact.
+#[cfg(doc)]
+pub mod docs {
+    pub mod overview {
+        //! What Kuma is and how its components fit together.
+        #![doc = include_str!("../../../docs/overview.md")]
+    }
+    pub mod slow_fast_chain_model {
+        //! Why two chains, the 75% timing deadline, and settlement risk.
+        #![doc = include_str!("../../../docs/slow-fast-chain-model.md")]
+    }
+    pub mod signal_lifecycle {
+        //! End-to-end: precompute → signal → execution → DB write.
+        #![doc = include_str!("../../../docs/signal-lifecycle.md")]
+    }
+    pub mod signal_profit {
+        //! Expected profit: surplus, slippage, congestion, and gas discounts.
+        #![doc = include_str!("../../../docs/signal-profit.md")]
+    }
+    pub mod price_direction {
+        //! Spot price convention: USDC as quote, quote-per-base throughout.
+        #![doc = include_str!("../../../docs/price-direction.md")]
+    }
+    pub mod collector {
+        //! Block data pipeline: ETH headers, Tycho DEX state, and block multiplexer.
+        #![doc = include_str!("../../../docs/collector.md")]
+    }
+}

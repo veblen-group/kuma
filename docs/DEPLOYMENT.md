@@ -11,24 +11,25 @@ for managed PostgreSQL and Caddy for automatic HTTPS.
 
 ## Architecture
 
-```
+```text
 Internet
   |
   | HTTPS (443)
   v
 +--------------------------------------------------+
-|  GCP e2-small VM (us-central1)                      |
+|  GCP e2-small VM (us-central1)                   |
 |                                                  |
 |  +----------+                                    |
-|  |  Caddy    | :443 /api/* -> kuma-backend:8080  |
-|  |           |       /*    -> kuma-webapp:3000   |
+|  |  Caddy    | :443 /docs/* -> kuma-docs:80      |
+|  |           |       /api/* -> kuma-backend:8080  |
+|  |           |          /*  -> kuma-webapp:3000   |
 |  +-----+----+                                    |
 |        |                                         |
-|  +-----v------+              +--------------+    |
-|  | kuma-webapp |             | kuma-backend |    |
-|  |  :3000      |             | :8080        |    |
-|  +-------------+             +-------+------+    |
-|                                       |           |
+|  +-----v------+   +-----------+  +-----------+   |
+|  | kuma-webapp |   | kuma-docs |  | kuma-     |   |
+|  |  :3000      |   | :80       |  | backend   |   |
+|  +-------------+   +-----------+  | :8080     |   |
+|                                   +-----+-----+   |
 |  +-------------+              +-------v-------+  |
 |  |   kumad      |------------>| cloud-sql-    |  |
 |  |  (optional)  | (Docker DNS)|   proxy :5432 |  |
@@ -45,7 +46,7 @@ Internet
 ```
 
 **Public:** Only Caddy (ports 80/443) is exposed to the internet.
-Backend, kumad, Cloud SQL Proxy, and the database are internal-only.
+Backend, docs, kumad, Cloud SQL Proxy, and the database are internal-only.
 
 ## Cost
 
@@ -285,10 +286,10 @@ cd ~/kuma
 Images are hosted on GitHub Container Registry (`ghcr.io/veblen-group/`).
 
 ```bash
-# Pull images
-docker compose -f docker-compose.prod.yml --profile frontend pull
+# Pull all images (frontend, backend, docs)
+just prod-pull
 
-# Start core services (caddy, frontend, backend)
+# Start core services (caddy, frontend, backend, docs)
 docker compose -f docker-compose.prod.yml --profile frontend up -d
 ```
 
@@ -306,7 +307,8 @@ docker compose -f docker-compose.prod.yml --profile kumad up -d
 
 ### Verify
 
-Visit `https://kuma.veblen.group` -- you should see the kuma dashboard.
+Visit `https://kuma.veblen.group` — you should see the kuma dashboard.
+Visit `https://kuma.veblen.group/docs` — redirects to the rustdoc entry point.
 
 Check service health:
 
@@ -320,18 +322,24 @@ docker compose -f docker-compose.prod.yml --profile frontend logs --tail=20
 When you fix a bug or add a feature:
 
 ```bash
-# 1. SSH into the VM
+# 1. Build and push images from local machine
+just prod-build
+just prod-push
+
+# 2. Push an updated Caddyfile if routing changed
+just push-caddyfile
+
+# 3. SSH into the VM
 gcloud compute ssh kuma --zone=us-central1-c
 cd ~/kuma
 
-# 2. Pull and restart core services
-docker compose -f docker-compose.prod.yml --profile frontend pull
-docker compose -f docker-compose.prod.yml --profile frontend up -d
-
-# If kumad is also running:
-docker compose -f docker-compose.prod.yml --profile all pull
+# 4. Pull and restart
+just prod-pull
 docker compose -f docker-compose.prod.yml --profile all up -d
 ```
+
+`up -d` only restarts containers whose image has changed — unchanged services
+(e.g. kumad) keep running.
 
 ## Managing kumad
 
@@ -383,7 +391,7 @@ Set up a free GCP uptime check:
 
 ### Images fail to pull
 
-- Verify the image tags exist on `ghcr.io/veblen-group/`
+- Verify the image tags exist on `ghcr.io/veblen-group/` (kumad, backend, frontend, docs)
 - If the packages are private, authenticate Docker: `echo $GHCR_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`
 
 ## Future improvements

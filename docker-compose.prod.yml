@@ -104,6 +104,16 @@ services:
     networks:
       - kuma-network
 
+  kuma-docs:
+    image: ghcr.io/veblen-group/docs:latest
+    profiles:
+      - frontend
+      - all
+    container_name: kuma-docs
+    restart: unless-stopped
+    networks:
+      - kuma-network
+
   caddy:
     image: caddy:2-alpine
     profiles:

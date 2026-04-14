@@ -6,8 +6,10 @@
 //! ## One-at-a-time gate
 //!
 //! Only one trade runs at a time. If a new signal arrives while a trade is in-flight it is
-//! **dropped** — the in-flight trade takes priority. This keeps nonce management simple and
-//! avoids competing against our own transactions in the same pool.
+//! **dropped** — the in-flight trade takes priority. Signals are dropped rather than queued
+//! because a signal is only valid for the block it was generated on; a queued signal would
+//! be stale by the time the in-flight trade completes. This also keeps nonce management
+//! simple and avoids competing against our own transactions in the same pool.
 //!
 //! ## Trade promotion
 //!

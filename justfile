@@ -111,12 +111,14 @@ prod-build version="latest":
     docker build --platform linux/amd64 --build-arg BINARY=kumad -t {{ registry }}/kumad:{{ version }} .
     docker build --platform linux/amd64 --build-arg BINARY=kuma-backend -t {{ registry }}/backend:{{ version }} .
     cd webapp && docker build --platform linux/amd64 -t {{ registry }}/frontend:{{ version }} .
+    docker build --platform linux/amd64 -f Dockerfile.docs -t {{ registry }}/docs:{{ version }} .
 
 # Push all production images to GitHub Container Registry
 prod-push version="latest":
     docker push {{ registry }}/kumad:{{ version }}
     docker push {{ registry }}/backend:{{ version }}
     docker push {{ registry }}/frontend:{{ version }}
+    docker push {{ registry }}/docs:{{ version }}
 
 # Build and push all production images
 prod-build-push version="latest":
@@ -127,6 +129,7 @@ prod-pull version="latest":
     docker pull {{ registry }}/kumad:{{ version }}
     docker pull {{ registry }}/backend:{{ version }}
     docker pull {{ registry }}/frontend:{{ version }}
+    docker pull {{ registry }}/docs:{{ version }}
 
 # Copy .env.example to .env for local editing
 reset-env:
@@ -176,7 +179,8 @@ docker-stop:
 # get their own pages and intra-doc links resolve.
 docs:
     cargo doc --no-deps --workspace --document-private-items
-    open "$(pwd)/target/doc/kuma_core/index.html"
+    cp docs/*.png target/doc/kuma_core/
+    open "$(pwd)/target/doc/kuma_core/docs/overview/index.html"
 
 # Remove generated rustdoc output (target/doc/) without touching compiled artifacts.
 docs-clean:

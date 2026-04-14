@@ -1,14 +1,8 @@
----
-title: Kuma — Cross-Chain Arbitrage Bot
-description: System overview — what Kuma is, how it works, and the crate map.
-updated: 2026-04-13
----
-
 # Kuma — Cross-Chain Arbitrage Bot
 
 Kuma is an automated cross-chain arbitrage bot that exploits price discrepancies in AMM pools across EVM-compatible blockchains. It monitors DEX pool states in real time, identifies profitable arbitrage opportunities, and executes two-legged trades sequentially to capture the surplus.
 
-![High-level architecture](high-level.png)
+![High-level architecture](../../high-level.png)
 
 ## How it works
 
@@ -18,23 +12,23 @@ Kuma is an automated cross-chain arbitrage bot that exploits price discrepancies
 
 ## Crate map
 
-| Crate | Role |
-|-------|------|
-| `kuma-core` | All shared logic: collectors, strategy, signals, encoding, database |
-| `kumad` | The main binary: wires everything together, runs the event loops |
-| `kuma-backend` | HTTP API for monitoring (spot prices, signals, trades) |
-| `kuma-cli` | Utilities: generate a single signal, list tokens, init Permit2 |
+| Crate | Role | Docs |
+|-------|------|------|
+| `kuma-core` | All shared logic: collectors, strategy, signals, encoding, database | [kuma_core](../../index.html) |
+| `kumad` | The main binary: wires everything together, runs the event loops | [kumad](../../../kumad/index.html) |
+| `kuma-backend` | HTTP API for monitoring (spot prices, signals, trades) | [kuma_backend](../../../kuma_backend/index.html) |
+| `kuma-cli` | Utilities: generate a single signal, list tokens, init Permit2 | [kuma_cli](../../../kuma_cli/index.html) |
 
 ## Key docs
 
-- [Slow/fast chain model](slow-fast-chain-model.md)
-- [Signal lifecycle](signal-lifecycle.md)
-- [Price direction & spot prices](price-direction.md)
-- [Expected profit & discounting](signal-profit.md)
-- [Collector pipeline](collector.md)
-- [Tycho integration](tycho-integration.md)
-- [Deployment](DEPLOYMENT.md)
+- [Slow/fast chain model][crate::docs::slow_fast_chain_model]
+- [Signal lifecycle][crate::docs::signal_lifecycle]
+- [Price direction & spot prices][crate::docs::price_direction]
+- [Expected profit & discounting][crate::docs::signal_profit]
+- [Collector pipeline][crate::docs::collector]
+- `tycho-integration.md` — Tycho indexer integration notes (source repo)
+- `docs/DEPLOYMENT.md` — GCP deployment guide (source repo)
 
 ## Original design doc
 
-See [tap6-proposal.md](tap6-proposal.md) for the full mathematical treatment of surplus calculation, profit discounting, and trade execution design.
+See `tap6-proposal.md` in the source repository for the full mathematical treatment of surplus calculation, profit discounting, and trade execution design.

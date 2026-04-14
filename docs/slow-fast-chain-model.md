@@ -1,9 +1,3 @@
----
-title: Slow/Fast Chain Model
-description: The two-chain architecture — rationale, 75% timing deadline, and settlement risk.
-updated: 2026-04-13
----
-
 # Slow/Fast Chain Model
 
 Kuma's strategy is built around a pair of chains with different block times.
@@ -19,7 +13,7 @@ Because the fast chain produces many blocks per slow block, the strategy can ref
 
 ## The timing loop
 
-```
+```text
 slow block N arrives
   └─ precompute swap tables for slow chain
   └─ start 75% timer  ──────────────────────────────────────────────────┐
@@ -52,4 +46,4 @@ Executing the slow chain leg first and waiting for confirmation before submittin
 - If the slow leg fails (e.g. slippage, congestion) → fast leg is never submitted, no open position.
 - If the fast leg fails after the slow leg succeeded → we must unwind on the slow chain. Sequential order minimises the chance of this happening.
 
-See the [signal-lifecycle](signal-lifecycle.md) for the full execution flow, and [tap6-proposal.md](tap6-proposal.md) §Congestion & Settlement Risk for the mathematical treatment.
+See [signal lifecycle][crate::docs::signal_lifecycle] for the full execution flow, and `tap6-proposal.md` §Congestion & Settlement Risk in the source repository for the mathematical treatment.

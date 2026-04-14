@@ -27,8 +27,8 @@
 //! ## same_outcome
 //!
 //! `ExpectedProfit::same_outcome()` drives signal dedup in the strategy worker — if the
-//! new signal has the same direction and profitability bucket as the previous one, it is
-//! dropped without a DB write or emission.
+//! new signal has the same direction and exact `min_total_amount_usdc` as the previous
+//! one, it is dropped without a DB write or emission.
 
 use color_eyre::eyre::{self, ContextCompat as _, OptionExt as _, eyre};
 use num_bigint::{BigInt, BigUint};

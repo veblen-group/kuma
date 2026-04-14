@@ -7,7 +7,7 @@
 //! The multiplexer aligns blocks from both sources (tolerance:
 //! `COLLECTOR_LAG_TOLERANCE = 1` block) and publishes merged [`Block`] values on
 //! a `watch` channel. Downstream strategies subscribe to this channel via the
-//! returned [`Handle`].
+//! returned `Handle`.
 //!
 //! Returns three handles so callers can monitor each worker independently:
 //! `(collector::Handle, eth::Handle, tycho::Handle)`.

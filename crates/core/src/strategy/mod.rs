@@ -23,6 +23,13 @@
 //! (evenly spaced from 0 to available inventory). On a fast block, the fast chain is simulated
 //! using the slow chain's `amount_out` as `amount_in` for each step. The optimal step is found
 //! by searching for the peak surplus across both trade directions (A→B and B→A).
+//!
+//! ## Emission timing — the 75% deadline
+//!
+//! Signal emission is triggered when 75% of the slow block's expected duration has elapsed
+//! since the slow block arrived. This gives time for several fast-chain blocks to arrive
+//! (sharpening the signal) while leaving headroom to submit the slow-chain transaction
+//! before the next slow block. See `kuma_core::docs::slow_fast_chain_model` for the full rationale.
 
 use std::{collections::HashMap, sync::Arc};
 

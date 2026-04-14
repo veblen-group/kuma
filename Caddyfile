@@ -2,6 +2,17 @@
 # Use `just push-caddyfile` to copy the updated file to the VM.
 # Caddy automatically provisions and renews Let's Encrypt TLS certificates.
 kuma.veblen.group {
+    # Redirect bare /docs to the kuma-core entry point.
+    handle /docs {
+        redir /docs/kuma_core/docs/overview/index.html permanent
+    }
+
+    # Rustdoc static site — strip /docs prefix and serve from kuma-docs container.
+    handle /docs/* {
+        uri strip_prefix /docs
+        reverse_proxy kuma-docs:80
+    }
+
     # Browser API calls hit /api/* — strip the prefix and proxy to the backend.
     # Server-side (SSR) Next.js fetches go directly to kuma-backend:8080 via
     # Docker DNS without touching this route.
