@@ -236,7 +236,12 @@ impl CrossChainSingleHop {
                 .ok_or_eyre("missing protocol component")?
                 .as_ref()
                 .clone();
-            create_solution(slow_component, slow_swap_sim, slow_chain.signer().clone())?
+            create_solution(
+                slow_component,
+                slow_swap_sim,
+                slow_chain.signer().clone(),
+                slow_chain.name.native_token().address,
+            )?
         };
         let slow_unsigned_tx =
             UnsignedTransaction::try_from_solution(&slow_solution, slow_chain)
@@ -248,7 +253,12 @@ impl CrossChainSingleHop {
                 .ok_or_eyre("missing protocol component")?
                 .as_ref()
                 .clone();
-            create_solution(fast_component, fast_swap_sim, fast_chain.signer().clone())?
+            create_solution(
+                fast_component,
+                fast_swap_sim,
+                fast_chain.signer().clone(),
+                fast_chain.name.native_token().address,
+            )?
         };
 
         let fast_unsigned_tx =
