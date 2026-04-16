@@ -212,6 +212,7 @@ pub(crate) fn create_solution(
     component: ProtocolComponent,
     swap: &Swap,
     signer: PrivateKeySigner,
+    native_address: Bytes,
 ) -> eyre::Result<Solution> {
     let signer_address_bytes =
         tycho_common::models::Address::from_str(signer.address().to_string().as_str())
@@ -223,6 +224,12 @@ pub(crate) fn create_solution(
         swap.token_out.address.clone(),
     );
 
+    let transfer_type = if swap.token_in.address == native_address {
+        UserTransferType::TransferFrom
+    } else {
+        UserTransferType::TransferFromPermit2
+    };
+
     let sol = Solution::new(
         signer_address_bytes.clone(),
         signer_address_bytes.clone(),
@@ -232,7 +239,7 @@ pub(crate) fn create_solution(
         swap.amount_out.clone(),
         vec![simple_swap],
     )
-    .with_user_transfer_type(UserTransferType::TransferFromPermit2);
+    .with_user_transfer_type(transfer_type);
 
     Ok(sol)
 }
