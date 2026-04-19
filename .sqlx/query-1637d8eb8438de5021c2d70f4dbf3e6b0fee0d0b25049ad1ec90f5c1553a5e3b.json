@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT fst.id, fst.signal_id, fst.slow_tx_hash, fst.failure_reason\n            FROM failed_on_slow_chain_trade fst\n            JOIN signals s ON fst.signal_id = s.id\n            WHERE (\n                (s.slow_swap_token_in_symbol = $1 AND s.slow_swap_token_out_symbol = $2)\n                OR (s.slow_swap_token_in_symbol = $2 AND s.slow_swap_token_out_symbol = $1)\n            )\n            ORDER BY fst.created_at DESC\n            LIMIT $3 OFFSET $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "signal_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "slow_tx_hash",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "failure_reason",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "1637d8eb8438de5021c2d70f4dbf3e6b0fee0d0b25049ad1ec90f5c1553a5e3b"
+}

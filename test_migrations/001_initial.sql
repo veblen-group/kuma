@@ -95,6 +95,9 @@ CREATE TABLE IF NOT EXISTS failed_on_slow_chain_trade (
     id BIGSERIAL PRIMARY KEY,
     signal_id BIGINT NOT NULL REFERENCES signals(id), -- Changed to NOT NULL
     slow_tx_hash VARCHAR(66), -- 0x + 64 hex chars, nullable
+    failure_reason VARCHAR(32) NOT NULL CHECK (failure_reason IN (
+        'slippage', 'insufficient_inventory', 'reverted', 'submission_error'
+    )),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -108,6 +111,9 @@ CREATE TABLE IF NOT EXISTS failed_on_fast_chain_trade (
     signal_id BIGINT NOT NULL REFERENCES signals(id),
     slow_tx_hash VARCHAR(66) NOT NULL, -- 0x + 64 hex chars
     fast_tx_hash VARCHAR(66), -- 0x + 64 hex chars, nullable
+    failure_reason VARCHAR(32) NOT NULL CHECK (failure_reason IN (
+        'slippage', 'insufficient_inventory', 'reverted', 'submission_error'
+    )),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

@@ -38,6 +38,7 @@ pub struct TradeFailedOnSlowRow {
     pub id: i64,
     pub signal_id: i64,
     pub slow_tx_hash: Option<String>,
+    pub failure_reason: String,
 }
 
 pub struct TradeFailedOnFastRow {
@@ -45,6 +46,7 @@ pub struct TradeFailedOnFastRow {
     pub signal_id: i64,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
+    pub failure_reason: String,
 }
 
 pub struct TradeSuccessRow {
@@ -85,11 +87,12 @@ impl TradeRepository {
     #[instrument(skip(self, trade))]
     pub async fn insert_failed_on_slow(&self, trade: TradeFailedOnSlow) -> eyre::Result<()> {
         let slow_hash = trade.slow_receipt.map(|r| r.transaction_hash.to_string());
+        let failure_reason = trade.failure_reason.as_str();
 
         sqlx::query!(
             r#"
-                INSERT INTO failed_on_slow_chain_trade (signal_id, slow_tx_hash)
-                SELECT id, $7 FROM signals
+                INSERT INTO failed_on_slow_chain_trade (signal_id, slow_tx_hash, failure_reason)
+                SELECT id, $7, $8 FROM signals
                 WHERE slow_chain = $1 AND slow_height = $2 AND slow_pool_id = $3
                   AND fast_chain = $4 AND fast_height = $5 AND fast_pool_id = $6
                 "#,
@@ -99,7 +102,8 @@ impl TradeRepository {
             trade.signal.fast_chain.name.to_string(), // $4
             trade.signal.fast_height as i64,          // $5
             trade.signal.fast_pool_id.to_string(),    // $6
-            slow_hash                                 // $7
+            slow_hash,                                // $7
+            failure_reason                            // $8
         )
         .execute(self.pool.as_ref())
         .await?;
@@ -113,11 +117,12 @@ impl TradeRepository {
     pub async fn insert_failed_on_fast(&self, trade: TradeFailedOnFast) -> eyre::Result<()> {
         let slow_hash = trade.slow_receipt.transaction_hash.to_string();
         let fast_hash = trade.fast_receipt.map(|r| r.transaction_hash.to_string());
+        let failure_reason = trade.failure_reason.as_str();
 
         sqlx::query!(
             r#"
-            INSERT INTO failed_on_fast_chain_trade (signal_id, slow_tx_hash, fast_tx_hash)
-            SELECT id, $7, $8 FROM signals
+            INSERT INTO failed_on_fast_chain_trade (signal_id, slow_tx_hash, fast_tx_hash, failure_reason)
+            SELECT id, $7, $8, $9 FROM signals
             WHERE slow_chain = $1 AND slow_height = $2 AND slow_pool_id = $3
               AND fast_chain = $4 AND fast_height = $5 AND fast_pool_id = $6
             "#,
@@ -128,7 +133,8 @@ impl TradeRepository {
             trade.signal.fast_height as i64,          // $5
             trade.signal.fast_pool_id.to_string(),    // $6
             slow_hash,                                // $7
-            fast_hash                                 // $8
+            fast_hash,                                // $8
+            failure_reason                            // $9
         )
         .execute(self.pool.as_ref())
         .await?;
@@ -289,7 +295,7 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeFailedOnSlowRow,
             r#"
-            SELECT fst.id, fst.signal_id, fst.slow_tx_hash
+            SELECT fst.id, fst.signal_id, fst.slow_tx_hash, fst.failure_reason
             FROM failed_on_slow_chain_trade fst
             JOIN signals s ON fst.signal_id = s.id
             WHERE (
@@ -319,7 +325,7 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeFailedOnFastRow,
             r#"
-            SELECT fft.id, fft.signal_id, fft.slow_tx_hash, fft.fast_tx_hash
+            SELECT fft.id, fft.signal_id, fft.slow_tx_hash, fft.fast_tx_hash, fft.failure_reason
             FROM failed_on_fast_chain_trade fft
             JOIN signals s ON fft.signal_id = s.id
             WHERE (

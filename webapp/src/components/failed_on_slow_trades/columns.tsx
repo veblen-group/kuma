@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { FailedOnSlowTrade } from "@/lib/types"
 import { ExplorerLink } from "@/components/ui/explorer-link"
 import { ChainBadge } from "@/components/ui/chain-badge"
+import { FailureReasonBadge } from "@/components/ui/failure-reason-badge"
 
 export const columns: ColumnDef<FailedOnSlowTrade>[] = [
   {
@@ -34,5 +35,10 @@ export const columns: ColumnDef<FailedOnSlowTrade>[] = [
     cell: ({ row }) => (
       <ChainBadge chain={row.original.signal.fast.chain} />
     ),
+  },
+  {
+    header: "Failure Reason",
+    id: "failure_reason",
+    cell: ({ row }) => <FailureReasonBadge reason={row.original.failure_reason} />,
   },
 ]

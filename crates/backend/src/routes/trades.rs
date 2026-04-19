@@ -65,6 +65,8 @@ pub struct FailedOnSlowTradeResponse {
     pub id: i64,
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: Option<String>,
+    /// One of: `slippage`, `insufficient_inventory`, `reverted`, `submission_error`.
+    pub failure_reason: String,
 }
 
 impl FailedOnSlowTradeResponse {
@@ -78,6 +80,7 @@ impl FailedOnSlowTradeResponse {
             id: row.id,
             signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
+            failure_reason: row.failure_reason,
         }
     }
 }
@@ -88,6 +91,8 @@ pub struct FailedOnFastTradeResponse {
     pub signal: CrossChainSingleHopResponse,
     pub slow_tx_hash: String,
     pub fast_tx_hash: Option<String>,
+    /// One of: `slippage`, `insufficient_inventory`, `reverted`, `submission_error`.
+    pub failure_reason: String,
 }
 
 impl FailedOnFastTradeResponse {
@@ -102,6 +107,7 @@ impl FailedOnFastTradeResponse {
             signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
+            failure_reason: row.failure_reason,
         }
     }
 }

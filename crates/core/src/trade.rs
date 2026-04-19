@@ -31,10 +31,87 @@ use crate::{
     state,
 };
 
+/// Categorised reason a trade leg failed. Stored alongside the failed trade
+/// record so the UI and operators can distinguish unrecoverable reverts
+/// (e.g. bad slippage bound) from recoverable ones (e.g. RPC hiccup).
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FailureReason {
+    /// Transaction reverted because the realised output fell below `min_amount_out`.
+    Slippage,
+    /// Transaction reverted because the sender's token balance (or allowance)
+    /// was insufficient for the swap.
+    InsufficientInventory,
+    /// Transaction mined but reverted for a reason we could not classify.
+    Reverted,
+    /// Transaction never reached the chain — RPC rejection, signing failure,
+    /// timeout waiting for inclusion, etc.
+    SubmissionError,
+}
+
+impl FailureReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            FailureReason::Slippage => "slippage",
+            FailureReason::InsufficientInventory => "insufficient_inventory",
+            FailureReason::Reverted => "reverted",
+            FailureReason::SubmissionError => "submission_error",
+        }
+    }
+
+    /// Best-effort classification of a submission-time error by substring match.
+    /// Unknown errors fall through to `SubmissionError`.
+    pub fn classify_submission_error(error: &eyre::Report) -> Self {
+        let msg = format!("{error:#}").to_lowercase();
+        if msg.contains("insufficient") && (msg.contains("balance") || msg.contains("funds") || msg.contains("allowance")) {
+            FailureReason::InsufficientInventory
+        } else if msg.contains("slippage") || msg.contains("min_amount_out") || msg.contains("min amount out") {
+            FailureReason::Slippage
+        } else {
+            FailureReason::SubmissionError
+        }
+    }
+
+    /// Best-effort classification of an on-chain revert. Without re-simulating
+    /// the call we cannot always recover the revert string, so this is a
+    /// conservative heuristic over whatever error context we produced.
+    pub fn classify_revert(error: &eyre::Report) -> Self {
+        let msg = format!("{error:#}").to_lowercase();
+        if msg.contains("slippage") || msg.contains("min_amount_out") || msg.contains("min amount out") {
+            FailureReason::Slippage
+        } else if msg.contains("insufficient") && (msg.contains("balance") || msg.contains("funds") || msg.contains("allowance")) {
+            FailureReason::InsufficientInventory
+        } else {
+            FailureReason::Reverted
+        }
+    }
+}
+
+impl std::fmt::Display for FailureReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for FailureReason {
+    type Err = eyre::Report;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "slippage" => Ok(FailureReason::Slippage),
+            "insufficient_inventory" => Ok(FailureReason::InsufficientInventory),
+            "reverted" => Ok(FailureReason::Reverted),
+            "submission_error" => Ok(FailureReason::SubmissionError),
+            other => Err(eyre::eyre!("unknown failure reason: {other}")),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TradeFailedOnSlow {
     pub(crate) signal: signals::CrossChainSingleHop,
     pub(crate) slow_receipt: Option<TransactionReceipt>,
+    pub(crate) failure_reason: FailureReason,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -42,6 +119,7 @@ pub struct TradeFailedOnFast {
     pub(crate) signal: signals::CrossChainSingleHop,
     pub(crate) slow_receipt: TransactionReceipt,
     pub(crate) fast_receipt: Option<TransactionReceipt>,
+    pub(crate) failure_reason: FailureReason,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -111,24 +189,29 @@ impl Trade {
         {
             Ok(receipt) => receipt,
             Err(error) => {
+                let failure_reason = FailureReason::classify_submission_error(&error);
                 error!(
                     chain = %self.signal.slow_chain.name,
                     %error,
+                    %failure_reason,
                     "failed to submit transaction to slow chain",
                 );
 
                 return Ok(TradeResult::FailedSlow(TradeFailedOnSlow {
                     signal: self.signal.clone(),
                     slow_receipt: None,
+                    failure_reason,
                 }));
             }
         };
 
         if let Err(error) = Self::check_transaction_success(&slow_receipt) {
-            error!(transaction.hash = %slow_receipt.transaction_hash, %error, "slow chain reverted");
+            let failure_reason = FailureReason::classify_revert(&error);
+            error!(transaction.hash = %slow_receipt.transaction_hash, %error, %failure_reason, "slow chain reverted");
             return Ok(TradeResult::FailedSlow(TradeFailedOnSlow {
                 signal: self.signal.clone(),
                 slow_receipt: Some(slow_receipt),
+                failure_reason,
             }));
         }
 
@@ -142,21 +225,25 @@ impl Trade {
         {
             Ok(receipt) => receipt,
             Err(error) => {
-                error!(chain = %self.signal.fast_chain.name, %error, "failed to submit  transaction to fast chain");
+                let failure_reason = FailureReason::classify_submission_error(&error);
+                error!(chain = %self.signal.fast_chain.name, %error, %failure_reason, "failed to submit  transaction to fast chain");
                 return Ok(TradeResult::FailedFast(TradeFailedOnFast {
                     signal: self.signal.clone(),
                     slow_receipt,
                     fast_receipt: None,
+                    failure_reason,
                 }));
             }
         };
 
         if let Err(error) = Self::check_transaction_success(&fast_receipt) {
-            error!(chain = %self.signal.fast_chain.name, %error, "failed to submit  transaction to fast chain");
+            let failure_reason = FailureReason::classify_revert(&error);
+            error!(chain = %self.signal.fast_chain.name, %error, %failure_reason, "fast chain reverted");
             return Ok(TradeResult::FailedFast(TradeFailedOnFast {
                 signal: self.signal.clone(),
                 slow_receipt,
                 fast_receipt: Some(fast_receipt),
+                failure_reason,
             }));
         }
 

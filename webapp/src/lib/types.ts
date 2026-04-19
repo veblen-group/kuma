@@ -73,11 +73,19 @@ export interface SuccessfulTrade {
   realized_profit_str: string;
 }
 
+// Matches Rust FailureReason enum (serde: snake_case).
+export type FailureReason =
+  | "slippage"
+  | "insufficient_inventory"
+  | "reverted"
+  | "submission_error";
+
 // Matches FailedOnSlowTradeResponse
 export interface FailedOnSlowTrade {
   id: number;
   signal: Signal;
   slow_tx_hash: string | null;
+  failure_reason: FailureReason;
 }
 
 // Matches FailedOnFastTradeResponse
@@ -86,6 +94,7 @@ export interface FailedOnFastTrade {
   signal: Signal;
   slow_tx_hash: string;
   fast_tx_hash: string | null;
+  failure_reason: FailureReason;
 }
 
 export interface PaginationInfo {
