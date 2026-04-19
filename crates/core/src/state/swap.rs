@@ -5,9 +5,9 @@
 //! [`strategy::Swap`] which holds simulated/expected values computed before
 //! execution. Used by the execution worker to compute `RealizedProfit`.
 //!
-//! Native ETH inputs/outputs do not emit Transfer events — for those legs the
-//! expected amounts from the simulation are used as a fallback (see TODO in
-//! `try_from_receipts`).
+//! Native ETH inputs/outputs do not emit Transfer events. For those legs the
+//! caller must supply an [`EthBalanceDiff`] (pre/post block balance of the signer),
+//! fetched asynchronously before calling `try_from_receipts`.
 
 use crate::{
     state::{erc20::Transfer, pair::Pair},
@@ -16,9 +16,19 @@ use crate::{
 use alloy::{primitives::Address, rpc::types::TransactionReceipt};
 use color_eyre::eyre::{self};
 use num_bigint::BigUint;
-use num_traits::CheckedAdd as _;
+use num_traits::{CheckedAdd as _, CheckedSub as _};
 use serde::{Deserialize, Serialize};
 use tycho_simulation::tycho_common::models::token::Token;
+
+/// Signer ETH balance immediately before and after the swap block.
+///
+/// Required when either token is native ETH (`Address::ZERO`). The caller
+/// fetches these asynchronously via `get_balance` at `block_number - 1` and
+/// `block_number` before calling `Swap::try_from_receipts`.
+pub struct EthBalanceDiff {
+    pub pre: BigUint,
+    pub post: BigUint,
+}
 
 /// Realized swap data extracted from an executed transaction receipt.
 ///
@@ -29,11 +39,11 @@ use tycho_simulation::tycho_common::models::token::Token;
 pub struct Swap {
     /// The token that was sold in the swap.
     pub token_in: Token,
-    /// Actual amount of token_in transferred (from Transfer events).
+    /// Actual amount of token_in transferred (from Transfer events or balance diff).
     pub amount_in: BigUint,
     /// The token that was received in the swap.
     pub token_out: Token,
-    /// Actual amount of token_out received (from Transfer events).
+    /// Actual amount of token_out received (from Transfer events or balance diff).
     pub amount_out: BigUint,
     /// Gas cost in wei (gas_used * effective_gas_price from receipt).
     pub gas_cost_eth: BigUint,
@@ -42,12 +52,17 @@ pub struct Swap {
 impl Swap {
     /// Parse actual swap amounts from a transaction receipt.
     ///
-    /// Iterates through the transaction logs to find ERC20 Transfer events for
-    /// the input and output tokens, summing the transferred amounts. Also extracts
-    /// the actual gas cost from the receipt.
+    /// For ERC20 tokens, iterates through the transaction logs to find Transfer
+    /// events, summing the transferred amounts. For native ETH legs, derives the
+    /// actual amount from the caller-supplied balance diff:
+    /// - ETH in:  `amount_in  = pre − post − gas_cost`
+    /// - ETH out: `amount_out = post − pre + gas_cost`
+    ///
+    /// `eth_balance_diff` must be `Some` when either token is `Address::ZERO`.
     pub fn try_from_receipts(
         receipt: &TransactionReceipt,
         swap: strategy::Swap,
+        eth_balance_diff: Option<EthBalanceDiff>,
     ) -> eyre::Result<Self> {
         let mut amount_in = BigUint::default();
         let mut amount_out = BigUint::default();
@@ -55,18 +70,33 @@ impl Swap {
         let token_in_addr = Address::from_slice(&swap.token_in.address);
         let token_out_addr = Address::from_slice(&swap.token_out.address);
 
-        // Handle native ETH input (doesn't emit Transfer events)
-        if token_in_addr == Address::ZERO {
-            // TODO: For ETH input, we should get the actual transaction value from receipt
-            // For now, use the expected amount from the swap simulation
-            amount_in = swap.amount_in.clone();
-        }
+        let gas_units = BigUint::from(receipt.gas_used);
+        let wei_per_gas = BigUint::from(receipt.effective_gas_price);
+        let gas_cost_eth = gas_units * wei_per_gas;
 
-        // Handle native ETH output (doesn't emit Transfer events)
-        if token_out_addr == Address::ZERO {
-            // For ETH output, we need to calculate from balance changes
-            // This is more complex - for now use the expected amount from swap
-            amount_out = swap.amount_out.clone();
+        if token_in_addr == Address::ZERO || token_out_addr == Address::ZERO {
+            let diff = eth_balance_diff
+                .ok_or_else(|| eyre::eyre!("eth_balance_diff required for native ETH swap leg"))?;
+
+            if token_in_addr == Address::ZERO {
+                // Signer spent amount_in + gas_cost, so balance dropped by that amount.
+                amount_in = diff
+                    .pre
+                    .checked_sub(&diff.post)
+                    .ok_or_else(|| eyre::eyre!("ETH balance increased unexpectedly on ETH-in swap"))?
+                    .checked_sub(&gas_cost_eth)
+                    .ok_or_else(|| eyre::eyre!("balance diff smaller than gas cost on ETH-in swap"))?;
+            }
+
+            if token_out_addr == Address::ZERO {
+                // Signer received amount_out and paid gas_cost, net change is amount_out - gas_cost.
+                amount_out = diff
+                    .post
+                    .checked_sub(&diff.pre)
+                    .ok_or_else(|| eyre::eyre!("ETH balance decreased unexpectedly on ETH-out swap"))?
+                    .checked_add(&gas_cost_eth)
+                    .ok_or_else(|| eyre::eyre!("overflow computing ETH amount_out"))?;
+            }
         }
 
         for log in receipt.logs() {
@@ -84,11 +114,6 @@ impl Swap {
                     .ok_or_else(|| eyre::eyre!("overflow adding amount_out"))?;
             }
         }
-
-        let gas_units = BigUint::from(receipt.gas_used);
-        let wei_per_gas = BigUint::from(receipt.effective_gas_price);
-        // cost in wei, e.g. 5 × 10^14 wei = 500,000 Gwei ~ 0.0005 ETH
-        let gas_cost_eth = gas_units * wei_per_gas;
 
         Ok(Swap {
             token_in: swap.token_in,
