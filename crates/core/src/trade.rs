@@ -20,15 +20,18 @@
 //! minimises this by ensuring the slow-chain price is confirmed before we commit capital on
 //! the fast chain.
 
+use alloy::primitives::Address;
+use alloy::providers::Provider as _;
 use alloy::rpc::types::TransactionReceipt;
 use color_eyre::eyre::{self, WrapErr as _};
+use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
 use tracing::{error, instrument};
 
 use crate::{
     encoder::{SignedTransaction, UnsignedTransaction, execute_tx, get_tx_request},
     signals::{self, CrossChainSingleHop, RealizedProfit},
-    state,
+    state::{self, swap::EthBalanceDiff},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -160,7 +163,24 @@ impl Trade {
             }));
         }
 
-        let realized_profit = self.calculate_realized_profit(&slow_receipt, &fast_receipt)?;
+        let slow_eth_diff = fetch_eth_balance_diff_if_needed(
+            &slow_receipt,
+            &self.signal.slow_swap_sim,
+            &self.signal.slow_chain.rpc_url,
+        )
+        .await
+        .wrap_err("failed to fetch ETH balance diff for slow swap")?;
+
+        let fast_eth_diff = fetch_eth_balance_diff_if_needed(
+            &fast_receipt,
+            &self.signal.fast_swap_sim,
+            &self.signal.fast_chain.rpc_url,
+        )
+        .await
+        .wrap_err("failed to fetch ETH balance diff for fast swap")?;
+
+        let realized_profit =
+            self.calculate_realized_profit(&slow_receipt, &fast_receipt, slow_eth_diff, fast_eth_diff)?;
 
         Ok(TradeResult::Successful(TradeSuccess {
             signal: self.signal,
@@ -182,12 +202,14 @@ impl Trade {
         &self,
         slow_receipt: &TransactionReceipt,
         fast_receipt: &TransactionReceipt,
+        slow_eth_diff: Option<EthBalanceDiff>,
+        fast_eth_diff: Option<EthBalanceDiff>,
     ) -> eyre::Result<RealizedProfit> {
         let slow_swap =
-            state::swap::Swap::try_from_receipts(slow_receipt, self.signal.slow_swap_sim.clone())
+            state::swap::Swap::try_from_receipts(slow_receipt, self.signal.slow_swap_sim.clone(), slow_eth_diff)
                 .wrap_err("failed to parse slow swap from receipt")?;
         let fast_swap =
-            state::swap::Swap::try_from_receipts(fast_receipt, self.signal.fast_swap_sim.clone())
+            state::swap::Swap::try_from_receipts(fast_receipt, self.signal.fast_swap_sim.clone(), fast_eth_diff)
                 .wrap_err("failed to parse fast swap from receipt")?;
 
         let profit = RealizedProfit::try_from_swaps(
@@ -201,4 +223,46 @@ impl Trade {
 
         Ok(profit)
     }
+}
+
+/// Fetches the signer's ETH balance at block N-1 and block N when the swap has a
+/// native ETH leg. Returns `None` for ERC20-only swaps (no RPC call needed).
+async fn fetch_eth_balance_diff_if_needed(
+    receipt: &TransactionReceipt,
+    swap_sim: &crate::strategy::Swap,
+    rpc_url: &str,
+) -> eyre::Result<Option<EthBalanceDiff>> {
+    let token_in_addr = Address::from_slice(&swap_sim.token_in.address);
+    let token_out_addr = Address::from_slice(&swap_sim.token_out.address);
+
+    if token_in_addr != Address::ZERO && token_out_addr != Address::ZERO {
+        return Ok(None);
+    }
+
+    let provider = alloy::providers::ProviderBuilder::new()
+        .connect_http(rpc_url.parse().wrap_err("invalid RPC URL")?);
+
+    let from = receipt.from;
+    let block_number = receipt
+        .block_number
+        .ok_or_else(|| eyre::eyre!("receipt missing block number"))?;
+    let pre_block = block_number
+        .checked_sub(1)
+        .ok_or_else(|| eyre::eyre!("block number is 0, cannot query pre-block balance"))?;
+
+    let pre_balance = provider
+        .get_balance(from)
+        .block_id(pre_block.into())
+        .await
+        .map_err(|e| eyre::eyre!("failed to get pre-block ETH balance: {e}"))?;
+    let post_balance = provider
+        .get_balance(from)
+        .block_id(block_number.into())
+        .await
+        .map_err(|e| eyre::eyre!("failed to get post-block ETH balance: {e}"))?;
+
+    Ok(Some(EthBalanceDiff {
+        pre: BigUint::from_bytes_be(&pre_balance.to_be_bytes::<32>()),
+        post: BigUint::from_bytes_be(&post_balance.to_be_bytes::<32>()),
+    }))
 }
