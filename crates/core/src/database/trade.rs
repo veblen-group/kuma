@@ -53,6 +53,15 @@ pub struct TradeSuccessRow {
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
     pub realized_profit_str: String,
+    pub realized_surplus_a: Option<String>,
+    pub realized_surplus_b: Option<String>,
+    pub realized_usdc_amount_a: Option<String>,
+    pub realized_usdc_amount_b: Option<String>,
+    pub realized_gas_amount_eth: Option<String>,
+    pub realized_gas_amount_usdc: Option<String>,
+    pub realized_token_usdc_price_a: Option<f64>,
+    pub realized_token_usdc_price_b: Option<f64>,
+    pub realized_gas_price_usdc: Option<f64>,
 }
 
 #[derive(Clone)]
@@ -140,11 +149,20 @@ impl TradeRepository {
         let slow_hash = trade.slow_receipt.transaction_hash.to_string();
         let fast_hash = trade.fast_receipt.transaction_hash.to_string();
         let profit = trade.realized_profit.total_usdc.to_string();
+        let rp = &trade.realized_profit;
 
         sqlx::query!(
             r#"
-            INSERT INTO successful_trade (signal_id, slow_tx_hash, fast_tx_hash, realized_profit_str)
-            SELECT id, $7, $8, $9 FROM signals
+            INSERT INTO successful_trade (
+                signal_id, slow_tx_hash, fast_tx_hash, realized_profit_str,
+                realized_surplus_a, realized_surplus_b,
+                realized_usdc_amount_a, realized_usdc_amount_b,
+                realized_gas_amount_eth, realized_gas_amount_usdc,
+                realized_token_usdc_price_a, realized_token_usdc_price_b,
+                realized_gas_price_usdc
+            )
+            SELECT id, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+            FROM signals
             WHERE slow_chain = $1 AND slow_height = $2 AND slow_pool_id = $3
               AND fast_chain = $4 AND fast_height = $5 AND fast_pool_id = $6
             "#,
@@ -156,7 +174,16 @@ impl TradeRepository {
             trade.signal.fast_pool_id.to_string(),    // $6
             slow_hash,                                // $7
             fast_hash,                                // $8
-            profit                                    // $9
+            profit,                                   // $9
+            rp.surplus.0.to_string(),                 // $10
+            rp.surplus.1.to_string(),                 // $11
+            rp.usdc_amounts.0.to_string(),            // $12
+            rp.usdc_amounts.1.to_string(),            // $13
+            rp.gas_amount_eth.to_string(),            // $14
+            rp.gas_amount_usdc.to_string(),           // $15
+            rp.token_usdc_prices.0,                   // $16
+            rp.token_usdc_prices.1,                   // $17
+            rp.gas_price_usdc,                        // $18
         )
         .execute(self.pool.as_ref())
         .await?;
@@ -259,7 +286,12 @@ impl TradeRepository {
         let rows = sqlx::query_as!(
             TradeSuccessRow,
             r#"
-            SELECT st.id, st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str
+            SELECT st.id, st.signal_id, st.slow_tx_hash, st.fast_tx_hash, st.realized_profit_str,
+                   st.realized_surplus_a, st.realized_surplus_b,
+                   st.realized_usdc_amount_a, st.realized_usdc_amount_b,
+                   st.realized_gas_amount_eth, st.realized_gas_amount_usdc,
+                   st.realized_token_usdc_price_a, st.realized_token_usdc_price_b,
+                   st.realized_gas_price_usdc
             FROM successful_trade st
             JOIN signals s ON st.signal_id = s.id
             WHERE (

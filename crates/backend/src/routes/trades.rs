@@ -39,6 +39,21 @@ use crate::{
     AppState,
 };
 
+/// Per-token and gas breakdown of realized profit. Populated for trades recorded
+/// after this field was added; older rows will have `None` here.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RealizedProfitDetail {
+    pub surplus_a: String,
+    pub surplus_b: String,
+    pub usdc_amount_a: String,
+    pub usdc_amount_b: String,
+    pub gas_amount_eth: String,
+    pub gas_amount_usdc: String,
+    pub token_usdc_price_a: f64,
+    pub token_usdc_price_b: f64,
+    pub gas_price_usdc: f64,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuccessfulTradeResponse {
     pub id: i64,
@@ -46,16 +61,53 @@ pub struct SuccessfulTradeResponse {
     pub slow_tx_hash: String,
     pub fast_tx_hash: String,
     pub realized_profit_str: String,
+    pub realized_profit_detail: Option<RealizedProfitDetail>,
 }
 
 impl SuccessfulTradeResponse {
     fn from_row_and_signal(row: TradeSuccessRow, signal: signals::CrossChainSingleHop, slow_ts: Option<DateTime<Utc>>, fast_ts: Option<DateTime<Utc>>) -> Self {
+        let realized_profit_detail = match (
+            row.realized_surplus_a,
+            row.realized_surplus_b,
+            row.realized_usdc_amount_a,
+            row.realized_usdc_amount_b,
+            row.realized_gas_amount_eth,
+            row.realized_gas_amount_usdc,
+            row.realized_token_usdc_price_a,
+            row.realized_token_usdc_price_b,
+            row.realized_gas_price_usdc,
+        ) {
+            (
+                Some(surplus_a),
+                Some(surplus_b),
+                Some(usdc_amount_a),
+                Some(usdc_amount_b),
+                Some(gas_amount_eth),
+                Some(gas_amount_usdc),
+                Some(token_usdc_price_a),
+                Some(token_usdc_price_b),
+                Some(gas_price_usdc),
+            ) => Some(RealizedProfitDetail {
+                surplus_a,
+                surplus_b,
+                usdc_amount_a,
+                usdc_amount_b,
+                gas_amount_eth,
+                gas_amount_usdc,
+                token_usdc_price_a,
+                token_usdc_price_b,
+                gas_price_usdc,
+            }),
+            _ => None,
+        };
+
         Self {
             id: row.id,
             signal: CrossChainSingleHopResponse::new(row.signal_id, signal, slow_ts, fast_ts),
             slow_tx_hash: row.slow_tx_hash,
             fast_tx_hash: row.fast_tx_hash,
             realized_profit_str: row.realized_profit_str,
+            realized_profit_detail,
         }
     }
 }

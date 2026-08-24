@@ -64,6 +64,19 @@ export interface Signal {
   fast_prices_a_b_created_at: string | null;
 }
 
+// Matches RealizedProfitDetail — present only on trades recorded after the field was added
+export interface RealizedProfitDetail {
+  surplus_a: string;
+  surplus_b: string;
+  usdc_amount_a: string;
+  usdc_amount_b: string;
+  gas_amount_eth: string;
+  gas_amount_usdc: string;
+  token_usdc_price_a: number;
+  token_usdc_price_b: number;
+  gas_price_usdc: number;
+}
+
 // Matches SuccessfulTradeResponse
 export interface SuccessfulTrade {
   id: number;
@@ -71,6 +84,7 @@ export interface SuccessfulTrade {
   slow_tx_hash: string;
   fast_tx_hash: string;
   realized_profit_str: string;
+  realized_profit_detail: RealizedProfitDetail | null;
 }
 
 // Matches FailedOnSlowTradeResponse
