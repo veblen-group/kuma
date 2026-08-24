@@ -338,4 +338,58 @@ impl TradeRepository {
         .await?;
         Ok(rows)
     }
+
+    pub async fn get_successful_by_signal_id(
+        &self,
+        signal_id: i64,
+    ) -> eyre::Result<Option<TradeSuccessRow>> {
+        let row = sqlx::query_as!(
+            TradeSuccessRow,
+            r#"
+            SELECT id, signal_id, slow_tx_hash, fast_tx_hash, realized_profit_str
+            FROM successful_trade
+            WHERE signal_id = $1
+            "#,
+            signal_id,
+        )
+        .fetch_optional(&*self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    pub async fn get_failed_on_slow_by_signal_id(
+        &self,
+        signal_id: i64,
+    ) -> eyre::Result<Option<TradeFailedOnSlowRow>> {
+        let row = sqlx::query_as!(
+            TradeFailedOnSlowRow,
+            r#"
+            SELECT id, signal_id, slow_tx_hash
+            FROM failed_on_slow_chain_trade
+            WHERE signal_id = $1
+            "#,
+            signal_id,
+        )
+        .fetch_optional(&*self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    pub async fn get_failed_on_fast_by_signal_id(
+        &self,
+        signal_id: i64,
+    ) -> eyre::Result<Option<TradeFailedOnFastRow>> {
+        let row = sqlx::query_as!(
+            TradeFailedOnFastRow,
+            r#"
+            SELECT id, signal_id, slow_tx_hash, fast_tx_hash
+            FROM failed_on_fast_chain_trade
+            WHERE signal_id = $1
+            "#,
+            signal_id,
+        )
+        .fetch_optional(&*self.pool)
+        .await?;
+        Ok(row)
+    }
 }

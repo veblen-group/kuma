@@ -14,7 +14,7 @@
 //! alongside trade-specific fields (tx hashes, realized profit).
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -462,6 +462,99 @@ pub async fn get_failed_on_fast_trade_results_by_pair(
     )))
 }
 
+/// Slim trade result for the signal detail page — omits the embedded signal since
+/// the caller already has it. Uses internally-tagged serde so `trade_type` is a
+/// top-level field alongside the trade-specific fields.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "trade_type")]
+pub enum SignalTradeResultResponse {
+    Successful {
+        id: i64,
+        slow_tx_hash: String,
+        fast_tx_hash: String,
+        realized_profit_str: String,
+    },
+    FailedOnSlow {
+        id: i64,
+        slow_tx_hash: Option<String>,
+    },
+    FailedOnFast {
+        id: i64,
+        slow_tx_hash: String,
+        fast_tx_hash: Option<String>,
+    },
+}
+
+/// `GET /trades/by-signal/:signal_id` — return the trade result(s) for a specific signal.
+///
+/// There should be at most one trade per signal in practice, but the response is a
+/// `Vec` to be forward-compatible if that assumption changes. Returns an empty list
+/// when no trade has been recorded for the signal.
+pub async fn get_trades_by_signal(
+    Path(signal_id): Path<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<SignalTradeResultResponse>>, Response> {
+    let trade_repo = state.db.trade_repository();
+
+    let (success, failed_slow, failed_fast) = tokio::join!(
+        trade_repo.get_successful_by_signal_id(signal_id),
+        trade_repo.get_failed_on_slow_by_signal_id(signal_id),
+        trade_repo.get_failed_on_fast_by_signal_id(signal_id),
+    );
+
+    let mut results: Vec<SignalTradeResultResponse> = Vec::new();
+
+    match success {
+        Ok(Some(row)) => results.push(SignalTradeResultResponse::Successful {
+            id: row.id,
+            slow_tx_hash: row.slow_tx_hash,
+            fast_tx_hash: row.fast_tx_hash,
+            realized_profit_str: row.realized_profit_str,
+        }),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!("Failed to fetch successful trade for signal {}: {}", signal_id, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Database error" })),
+            ).into_response());
+        }
+    }
+
+    match failed_slow {
+        Ok(Some(row)) => results.push(SignalTradeResultResponse::FailedOnSlow {
+            id: row.id,
+            slow_tx_hash: row.slow_tx_hash,
+        }),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!("Failed to fetch failed-on-slow trade for signal {}: {}", signal_id, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Database error" })),
+            ).into_response());
+        }
+    }
+
+    match failed_fast {
+        Ok(Some(row)) => results.push(SignalTradeResultResponse::FailedOnFast {
+            id: row.id,
+            slow_tx_hash: row.slow_tx_hash,
+            fast_tx_hash: row.fast_tx_hash,
+        }),
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!("Failed to fetch failed-on-fast trade for signal {}: {}", signal_id, e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Database error" })),
+            ).into_response());
+        }
+    }
+
+    Ok(Json(results))
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(get_all_trade_results_by_pair))
@@ -474,4 +567,5 @@ pub fn routes() -> Router<AppState> {
             "/failed-on-fast",
             get(get_failed_on_fast_trade_results_by_pair),
         )
+        .route("/by-signal/:signal_id", get(get_trades_by_signal))
 }
